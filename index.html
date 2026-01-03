@@ -1,7 +1,12 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <!-- Google tag (gtag.js) -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marcel Conde - Fotógrafo Profissional | Recife-PE</title>
+    <meta name="description" content="Fotografia profissional de eventos, casamentos, corporativo e drone em Recife-PE">
+    
+    <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -10,604 +15,973 @@
 
   gtag('config', 'G-R8TFN8B8YY');
 </script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Marcel Conde Photography</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=Montserrat:wght@300;400;500&display=swap" rel="stylesheet">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Montserrat', sans-serif;
-      font-weight: 300;
-      color: #222;
-      background: #fff;
-    }
-
-    header {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 1000;
-      background: rgba(255,255,255,0.95);
-      backdrop-filter: blur(10px);
-      transition: all 0.3s ease;
-    }
-
-    nav {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 1px 4px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .logo {
-  height: auto;
-    }
-
-    .logo img {
-  height: 55px;
-  width: auto;
-    }
-
-    .nav-links {
-      display: flex;
-      gap: 40px;
-      list-style: none;
-    }
-
-    .nav-links a {
-      text-decoration: none;
-      color: #222;
-      font-size: 13px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      position: relative;
-      transition: color 0.3s;
-    }
-
-    .nav-links a:hover {
-      color: #888;
-    }
-
-    .nav-links a::after {
-      content: '';
-      position: absolute;
-      bottom: -5px;
-      left: 0;
-      width: 0;
-      height: 1px;
-      background: #222;
-      transition: width 0.3s;
-    }
-
-    .nav-links a:hover::after {
-      width: 100%;
-    }
-
-    .menu-toggle {
-      display: none;
-      flex-direction: column;
-      gap: 5px;
-      cursor: pointer;
-      padding: 10px;
-    }
-
-    .menu-toggle span {
-      width: 25px;
-      height: 1px;
-      background: #222;
-      transition: all 0.3s;
-    }
-
-    .hero {
-      height: 100vh;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .slides {
-      height: 100%;
-      display: flex;
-      transition: transform 0.8s ease;
-    }
-
-    .slide {
-      min-width: 100%;
-      height: 100%;
-      position: relative;
-    }
-
-    .slide img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .slide-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(0,0,0,0.2);
-    }
-
-    .hero-content {
-      position: absolute;
-      bottom: 15%;
-      left: 50%;
-      transform: translateX(-50%);
-      text-align: center;
-      color: #fff;
-    }
-
-    .hero-content h1 {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 18px;
-      font-weight: 300;
-      letter-spacing: 8px;
-      text-transform: uppercase;
-      margin-bottom: 20px;
-    }
-
-    .hero-content p {
-      font-size: 13px;
-      letter-spacing: 3px;
-      opacity: 0.9;
-    }
-
-    .slider-dots {
-      position: absolute;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 12px;
-    }
-
-    .dot {
-      width: 10px;
-      height: 10px;
-      border: 1px solid #fff;
-      border-radius: 50%;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .dot.active {
-      background: #fff;
-    }
-
-    .categories {
-      padding: 100px 40px;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .section-title {
-      text-align: center;
-      margin-bottom: 60px;
-    }
-
-    .section-title h2 {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 36px;
-      font-weight: 300;
-      letter-spacing: 4px;
-      margin-bottom: 15px;
-    }
-
-    .section-title p {
-      font-size: 13px;
-      letter-spacing: 2px;
-      color: #888;
-    }
-
-    .categories-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 20px;
-    }
-
-    .category-card {
-      position: relative;
-      height: 400px;
-      overflow: hidden;
-      cursor: pointer;
-    }
-
-    .category-card img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      transition: transform 0.6s ease;
-    }
-
-    .category-card:hover img {
-      transform: scale(1.05);
-    }
-
-    .category-overlay {
-      position: absolute;
-      inset: 0;
-      background: rgba(0,0,0,0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.3s;
-    }
-
-    .category-card:hover .category-overlay {
-      background: rgba(0,0,0,0.5);
-    }
-
-    .category-overlay h3 {
-      color: #fff;
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 28px;
-      font-weight: 300;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-    }
-
-    .instagram-section {
-      padding: 80px 40px;
-      text-align: center;
-      background: #fafafa;
-    }
-
-    .instagram-section a {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      text-decoration: none;
-      color: #222;
-      font-size: 14px;
-      letter-spacing: 2px;
-      transition: color 0.3s;
-    }
-
-    .instagram-section a:hover {
-      color: #888;
-    }
-
-    .instagram-section svg {
-      width: 24px;
-      height: 24px;
-    }
-
-    .cta-section {
-      padding: 100px 40px;
-      text-align: center;
-      background: #222;
-      color: #fff;
-    }
-
-    .cta-section h2 {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 32px;
-      font-weight: 300;
-      letter-spacing: 3px;
-      margin-bottom: 20px;
-    }
-
-    .cta-section p {
-      font-size: 14px;
-      letter-spacing: 1px;
-      margin-bottom: 40px;
-      opacity: 0.8;
-    }
-
-    .cta-button {
-      display: inline-block;
-      padding: 15px 50px;
-      border: 1px solid #fff;
-      color: #fff;
-      text-decoration: none;
-      font-size: 12px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      transition: all 0.3s;
-    }
-
-    .cta-button:hover {
-      background: #fff;
-      color: #222;
-    }
-
-    footer {
-      padding: 60px 40px;
-      text-align: center;
-      border-top: 1px solid #eee;
-    }
-
-    .footer-logo {
-      height: auto;
-      margin-bottom: 30px;
-    }
-
-    .footer-logo img {
-      height: 70px;
-      width: auto;
-    }
-
-    .social-links {
-      display: flex;
-      justify-content: center;
-      gap: 30px;
-      margin-bottom: 30px;
-    }
-
-    .social-links a {
-      color: #222;
-      transition: color 0.3s;
-    }
-
-    .social-links a:hover {
-      color: #888;
-    }
-
-    .social-links svg {
-      width: 22px;
-      height: 22px;
-    }
-
-    .footer-info {
-      font-size: 12px;
-      color: #888;
-      letter-spacing: 1px;
-    }
-
-    .footer-info a {
-      color: #888;
-      text-decoration: none;
-    }
-
-    .whatsapp-float {
-      position: fixed;
-      bottom: 30px;
-      right: 30px;
-      width: 55px;
-      height: 55px;
-      background: #25D366;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-      transition: transform 0.3s;
-      z-index: 999;
-    }
-
-    .whatsapp-float:hover {
-      transform: scale(1.1);
-    }
-
-    .whatsapp-float svg {
-      width: 28px;
-      height: 28px;
-      fill: #fff;
-    }
-
-    @media (max-width: 768px) {
-      nav {
-        padding: 15px 20px;
-      }
-
-      .logo {
-        height: 40px;
-      }
-
-      .nav-links {
-        display: none;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: #fff;
-        flex-direction: column;
-        padding: 30px;
-        gap: 25px;
-        text-align: center;
-      }
-
-      .nav-links.active {
-        display: flex;
-      }
-
-      .menu-toggle {
-        display: flex;
-      }
-
-      .hero-content h1 {
-        font-size: 14px;
-        letter-spacing: 5px;
-      }
-
-      .categories {
-        padding: 60px 20px;
-      }
-
-      .categories-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .category-card {
-        height: 300px;
-      }
-
-      .section-title h2 {
-        font-size: 28px;
-      }
-
-      .cta-section {
-        padding: 60px 20px;
-      }
-
-      .cta-section h2 {
-        font-size: 24px;
-      }
-    }
-  </style>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #000;
+            --secondary: #fff;
+            --accent: #d4a574;
+            --accent-dark: #b08d5e;
+            --accent-light: #e8c9a0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: var(--primary);
+            overflow-x: hidden;
+            background: var(--secondary);
+        }
+
+        /* NUVENS NO FUNDO - NÃO INTERFERE NO CONTEÚDO */
+        .clouds-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .cloud-bg {
+            position: absolute;
+            background: radial-gradient(ellipse at center, rgba(212,165,116,0.08) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0;
+            animation: cloudFloat 20s ease-in-out infinite;
+        }
+
+        .cloud-bg:nth-child(1) {
+            width: 600px;
+            height: 600px;
+            top: -300px;
+            left: -200px;
+            animation-delay: 0s;
+        }
+
+        .cloud-bg:nth-child(2) {
+            width: 500px;
+            height: 500px;
+            top: 20%;
+            right: -150px;
+            animation-delay: 2s;
+        }
+
+        .cloud-bg:nth-child(3) {
+            width: 700px;
+            height: 700px;
+            bottom: -200px;
+            left: 10%;
+            animation-delay: 4s;
+        }
+
+        .cloud-bg:nth-child(4) {
+            width: 550px;
+            height: 550px;
+            top: 40%;
+            right: 10%;
+            animation-delay: 6s;
+        }
+
+        @keyframes cloudFloat {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            50% {
+                transform: translate(50px, 30px) scale(1.1);
+                opacity: 0.8;
+            }
+            90% {
+                opacity: 1;
+            }
+        }
+
+        /* Cursor Customizado */
+        body {
+            cursor: none;
+        }
+
+        #cursor {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            position: fixed;
+            pointer-events: none;
+            z-index: 10000;
+            transition: all 0.15s ease;
+            mix-blend-mode: difference;
+        }
+
+        #cursor.hover {
+            width: 60px;
+            height: 60px;
+            background: var(--accent);
+            opacity: 0.3;
+        }
+
+        /* Menu Fixo */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1000;
+            padding: 2rem 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: transparent;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        nav.scrolled {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(30px) saturate(180%);
+            padding: 1.2rem 5%;
+            box-shadow: 0 4px 40px rgba(0, 0, 0, 0.08);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            opacity: 0;
+            animation: fadeInDown 1s ease forwards;
+        }
+
+        .logo-img {
+            height: 60px;
+            width: auto;
+            object-fit: contain;
+            transition: transform 0.4s ease, filter 0.4s ease;
+            filter: brightness(0) invert(1);
+        }
+
+        nav.scrolled .logo-img {
+            filter: brightness(1) invert(0);
+        }
+
+        .logo-img:hover {
+            transform: scale(1.05);
+        }
+
+        .menu {
+            display: flex;
+            gap: 3rem;
+            list-style: none;
+        }
+
+        .menu a {
+            color: var(--secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            position: relative;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: fadeInDown 1s ease forwards;
+        }
+
+        nav.scrolled .menu a {
+            color: var(--primary);
+        }
+
+        .menu li:nth-child(1) a { animation-delay: 0.1s; }
+        .menu li:nth-child(2) a { animation-delay: 0.2s; }
+        .menu li:nth-child(3) a { animation-delay: 0.3s; }
+        .menu li:nth-child(4) a { animation-delay: 0.4s; }
+        .menu li:nth-child(5) a { animation-delay: 0.5s; }
+
+        .menu a::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 0;
+            width: 0;
+            height: 3px;
+            background: var(--accent);
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .menu a:hover {
+            color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        .menu a:hover::after {
+            width: 100%;
+        }
+
+        /* Hero Section */
+        .hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #000 100%);
+        }
+
+        .hero-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(2px 2px at 20% 30%, white, transparent),
+                radial-gradient(2px 2px at 60% 70%, white, transparent),
+                radial-gradient(1px 1px at 50% 50%, white, transparent),
+                radial-gradient(1px 1px at 80% 10%, white, transparent),
+                radial-gradient(2px 2px at 90% 60%, white, transparent),
+                radial-gradient(1px 1px at 33% 80%, white, transparent);
+            background-size: 200% 200%;
+            background-position: 50% 50%;
+            opacity: 0.3;
+            animation: particlesMove 40s linear infinite;
+        }
+
+        @keyframes particlesMove {
+            0%, 100% { background-position: 0% 0%; }
+            50% { background-position: 100% 100%; }
+        }
+
+        .hero-content {
+            text-align: center;
+            z-index: 2;
+            color: var(--secondary);
+            max-width: 1200px;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .hero h1 {
+            font-size: clamp(3.5rem, 10vw, 9rem);
+            font-weight: 900;
+            letter-spacing: -4px;
+            line-height: 0.9;
+            margin-bottom: 2rem;
+            opacity: 0;
+            transform: translateY(60px) scale(0.9);
+            animation: heroReveal 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards 0.5s;
+            text-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes heroReveal {
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.2rem, 2.5vw, 2rem);
+            font-weight: 300;
+            letter-spacing: 10px;
+            text-transform: uppercase;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeInUp 1s ease forwards 0.9s;
+            color: var(--accent-light);
+            text-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .hero-cta {
+            margin-top: 3rem;
+            opacity: 0;
+            animation: fadeInUp 1s ease forwards 1.2s;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            animation: fadeIn 1s ease forwards 1.8s, bounce 2s ease infinite 2.5s;
+        }
+
+        .scroll-indicator::before {
+            content: '';
+            width: 2px;
+            height: 70px;
+            background: linear-gradient(to bottom, transparent, var(--accent));
+            display: block;
+            margin: 0 auto 10px;
+        }
+
+        .scroll-indicator span {
+            color: var(--secondary);
+            font-size: 0.7rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            opacity: 0.7;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-15px); }
+        }
+
+        /* Seções */
+        .section {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 10rem 5%;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section-dark {
+            background: var(--primary);
+            color: var(--secondary);
+        }
+
+        .section-light {
+            background: var(--secondary);
+            color: var(--primary);
+        }
+
+        .section-accent {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+            color: var(--primary);
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .split-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6rem;
+            align-items: center;
+        }
+
+        .text-content h2 {
+            font-size: clamp(3rem, 6vw, 6rem);
+            font-weight: 900;
+            letter-spacing: -3px;
+            line-height: 0.95;
+            margin-bottom: 2.5rem;
+            opacity: 0;
+            transform: translateX(-100px);
+            transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .text-content h3 {
+            font-size: clamp(1.5rem, 3vw, 2.5rem);
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: var(--accent);
+        }
+
+        .text-content p {
+            font-size: 1.3rem;
+            line-height: 1.9;
+            opacity: 0;
+            transform: translateX(-100px);
+            transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
+            margin-bottom: 1.5rem;
+        }
+
+        .text-content.visible h2,
+        .text-content.visible p {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* Instagram Feed */
+        .instagram-feed {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 4rem;
+        }
+
+        .insta-post {
+            position: relative;
+            aspect-ratio: 1;
+            overflow: hidden;
+            border-radius: 8px;
+            cursor: pointer;
+            opacity: 0;
+            transform: scale(0.8) translateY(50px) rotateX(10deg);
+            transition: all 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+        }
+
+        .insta-post.visible {
+            opacity: 1;
+            transform: scale(1) translateY(0) rotateX(0);
+        }
+
+        .insta-post:nth-child(1) { transition-delay: 0s; }
+        .insta-post:nth-child(2) { transition-delay: 0.15s; }
+        .insta-post:nth-child(3) { transition-delay: 0.3s; }
+        .insta-post:nth-child(4) { transition-delay: 0.45s; }
+        .insta-post:nth-child(5) { transition-delay: 0.6s; }
+        .insta-post:nth-child(6) { transition-delay: 0.75s; }
+
+        .insta-post img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1), filter 0.5s ease;
+        }
+
+        .insta-post:hover img {
+            transform: scale(1.15) rotate(2deg);
+            filter: brightness(1.1);
+        }
+
+        .insta-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 2rem;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .insta-post:hover .insta-overlay {
+            opacity: 1;
+        }
+
+        .insta-overlay span {
+            color: var(--secondary);
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .insta-icon {
+            width: 30px;
+            height: 30px;
+            margin-top: 0.5rem;
+        }
+
+        /* Stats Section */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 5rem;
+            text-align: center;
+            margin-top: 4rem;
+        }
+
+        .stat-item {
+            opacity: 0;
+            transform: translateY(50px) scale(0.9);
+            transition: all 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .stat-item.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .stat-item:nth-child(1) { transition-delay: 0s; }
+        .stat-item:nth-child(2) { transition-delay: 0.2s; }
+        .stat-item:nth-child(3) { transition-delay: 0.4s; }
+        .stat-item:nth-child(4) { transition-delay: 0.6s; }
+
+        .stat-number {
+            font-size: 6rem;
+            font-weight: 900;
+            line-height: 1;
+            color: var(--accent);
+            margin-bottom: 1rem;
+            text-shadow: 0 10px 30px rgba(212, 165, 116, 0.3);
+        }
+
+        .stat-label {
+            font-size: 1.1rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            opacity: 0.8;
+            font-weight: 600;
+        }
+
+        /* CTA Button */
+        .cta-button {
+            display: inline-block;
+            padding: 1.8rem 5rem;
+            background: var(--accent);
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.5s ease;
+            border-radius: 4px;
+            box-shadow: 0 10px 40px rgba(212, 165, 116, 0.3);
+        }
+
+        .cta-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--accent-dark);
+            transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: -1;
+        }
+
+        .cta-button:hover::before {
+            left: 0;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 60px rgba(212, 165, 116, 0.5);
+            color: var(--secondary);
+        }
+
+        /* Serviços */
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 3rem;
+            margin-top: 4rem;
+        }
+
+        .service-card {
+            padding: 3rem;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(212, 165, 116, 0.2);
+            border-radius: 8px;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0;
+            transform: translateY(50px);
+        }
+
+        .service-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .service-card:hover {
+            transform: translateY(-10px);
+            background: rgba(212, 165, 116, 0.1);
+            border-color: var(--accent);
+            box-shadow: 0 20px 60px rgba(212, 165, 116, 0.2);
+        }
+
+        .service-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .service-card h3 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+
+        .service-card p {
+            line-height: 1.8;
+            opacity: 0.9;
+        }
+
+        /* Animações */
+        @keyframes fadeInDown {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        /* Responsivo */
+        @media (max-width: 1024px) {
+            .split-section {
+                grid-template-columns: 1fr;
+                gap: 4rem;
+            }
+
+            .menu {
+                gap: 2rem;
+            }
+
+            .stats-grid {
+                gap: 3rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            nav {
+                padding: 1.5rem 5%;
+            }
+
+            .menu {
+                gap: 1rem;
+            }
+
+            .menu a {
+                font-size: 0.75rem;
+            }
+
+            .logo-text {
+                font-size: 1.2rem;
+            }
+
+            .logo-img {
+                width: 40px;
+                height: 40px;
+            }
+
+            .hero h1 {
+                letter-spacing: -2px;
+            }
+
+            .hero-subtitle {
+                letter-spacing: 5px;
+            }
+
+            .section {
+                padding: 6rem 5%;
+            }
+
+            .instagram-feed {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+
+            #cursor {
+                display: none;
+            }
+
+            body {
+                cursor: auto;
+            }
+        }
+    </style>
 </head>
 <body>
+    <!-- Nuvens no Fundo -->
+    <div class="clouds-background">
+        <div class="cloud-bg"></div>
+        <div class="cloud-bg"></div>
+        <div class="cloud-bg"></div>
+        <div class="cloud-bg"></div>
+    </div>
 
-  <header>
-    <nav>
-      <div class="logo">
-        <img src="/images/logo.png" alt="Marcel Conde Photography">
-      </div>
-      <ul class="nav-links">
-        <li><a href="#" class="active">Início</a></li>
-        <li><a href="#">Sobre</a></li>
-        <li><a href="#">Portfólio</a></li>
-        <li><a href="#">Orçamento</a></li>
-      </ul>
-      <div class="menu-toggle" onclick="toggleMenu()">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
+    <!-- Cursor -->
+    <div id="cursor"></div>
+
+    <!-- Menu -->
+    <nav id="navbar">
+        <div class="logo-container">
+            <img src="images/logo.png" alt="Marcel Conde Photography" class="logo-img">
+        </div>
+        <ul class="menu">
+            <li><a href="#home">Home</a></li>
+            <li><a href="#sobre">Sobre</a></li>
+            <li><a href="#servicos">Serviços</a></li>
+            <li><a href="#portfolio">Portfólio</a></li>
+            <li><a href="#contato">Contato</a></li>
+        </ul>
     </nav>
-  </header>
 
-  <section class="hero">
-    <div class="slides" id="slider">
-      <div class="slide">
-        <img src="https://images.unsplash.com/photo-1519741497674-611481863552?w=1920" alt="Fotografia">
-        <div class="slide-overlay"></div>
-      </div>
-      <div class="slide">
-        <img src="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?w=1920" alt="Eventos">
-        <div class="slide-overlay"></div>
-      </div>
-      <div class="slide">
-        <img src="https://images.unsplash.com/photo-1473116763249-2faaef81ccda?w=1920" alt="Drone">
-        <div class="slide-overlay"></div>
-      </div>
-    </div>
-    <div class="hero-content">
-      <h1>Marcel Conde Photography</h1>
-      <p>Recife • Pernambuco</p>
-    </div>
-    <div class="slider-dots">
-      <div class="dot active" onclick="goToSlide(0)"></div>
-      <div class="dot" onclick="goToSlide(1)"></div>
-      <div class="dot" onclick="goToSlide(2)"></div>
-    </div>
-  </section>
-
-  <section class="categories">
-    <div class="section-title">
-      <h2>Portfólio</h2>
-      <p>CONHEÇA MEU TRABALHO</p>
-    </div>
-    <div class="categories-grid">
-      <div class="category-card">
-        <img src="https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800" alt="Eventos">
-        <div class="category-overlay">
-          <h3>Eventos</h3>
+    <!-- Hero -->
+    <section class="hero" id="home">
+        <div class="hero-particles"></div>
+        <div class="hero-content">
+            <h1>MARCEL<br>CONDE</h1>
+            <div class="hero-subtitle">Fotografia Premium</div>
+            <div class="hero-cta">
+                <a href="#contato" class="cta-button">Vamos Conversar</a>
+            </div>
         </div>
-      </div>
-      <div class="category-card">
-        <img src="https://images.unsplash.com/photo-1552664730-d307ca884978?w=800" alt="Corporativo">
-        <div class="category-overlay">
-          <h3>Corporativo</h3>
+        <div class="scroll-indicator">
+            <span>Scroll</span>
         </div>
-      </div>
-      <div class="category-card">
-        <img src="https://images.unsplash.com/photo-1506947411487-a56738267384?w=800" alt="Drone">
-        <div class="category-overlay">
-          <h3>Drone</h3>
+    </section>
+
+    <!-- Sobre -->
+    <section class="section section-light" id="sobre">
+        <div class="container">
+            <div class="split-section">
+                <div class="text-content">
+                    <h2>Eternizando<br>Momentos</h2>
+                    <p>Fotógrafo profissional especializado em eventos, com mais de 500 trabalhos realizados em Recife e região.</p>
+                    <p>Utilizando equipamento de ponta e técnicas avançadas, incluindo fotografia aérea com drone, capturo a essência de cada momento especial.</p>
+                    <a href="#portfolio" class="cta-button">Ver Portfólio</a>
+                </div>
+                <div class="image-content">
+                    <div style="width: 100%; height: 600px; background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%); border-radius: 8px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.2);"></div>
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="category-card">
-        <img src="https://images.unsplash.com/photo-1519741497674-611481863552?w=800" alt="Casamentos">
-        <div class="category-overlay">
-          <h3>Casamentos</h3>
+    </section>
+
+    <!-- Serviços -->
+    <section class="section section-dark" id="servicos">
+        <div class="container">
+            <div class="text-content" style="text-align: center; margin-bottom: 5rem;">
+                <h2>Serviços</h2>
+            </div>
+            <div class="services-grid">
+                <div class="service-card">
+                    <div class="service-icon">💍</div>
+                    <h3>Casamentos</h3>
+                    <p>Cobertura completa do seu grande dia, do making of à festa, com fotos e vídeos que contam sua história única.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">🎂</div>
+                    <h3>Aniversários</h3>
+                    <p>Registros especiais de festas infantis, debutantes e celebrações, capturando a alegria e emoção de cada momento.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">🏢</div>
+                    <h3>Corporativo</h3>
+                    <p>Eventos empresariais, confraternizações, palestras e convenções com profissionalismo e discrição.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">🎵</div>
+                    <h3>Shows</h3>
+                    <p>Fotografia de eventos musicais, teatro e apresentações, capturando a energia e emoção do palco.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">✈️</div>
+                    <h3>Drone</h3>
+                    <p>Imagens aéreas espetaculares que agregam uma perspectiva única e cinematográfica ao seu evento.</p>
+                </div>
+                <div class="service-card">
+                    <div class="service-icon">⛪</div>
+                    <h3>Batizados</h3>
+                    <p>Momentos religiosos eternizados com sensibilidade e respeito, preservando as emoções da família.</p>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="instagram-section">
-    <a href="https://instagram.com/mconde.foto" target="_blank">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <rect x="2" y="2" width="20" height="20" rx="5"/>
-        <circle cx="12" cy="12" r="4"/>
-        <circle cx="18" cy="6" r="1" fill="currentColor"/>
-      </svg>
-      @mconde.foto
-    </a>
-  </section>
+    <!-- Stats -->
+    <section class="section section-accent">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-number">500+</div>
+                    <div class="stat-label">Eventos</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">50k+</div>
+                    <div class="stat-label">Fotos</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">100%</div>
+                    <div class="stat-label">Satisfação</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-number">5★</div>
+                    <div class="stat-label">Avaliação</div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-  <section class="cta-section">
-    <h2>Vamos criar algo incrível juntos?</h2>
-    <p>Entre em contato e solicite um orçamento personalizado</p>
-    <a href="#" class="cta-button">Solicitar Orçamento</a>
-  </section>
+    <!-- Portfolio Instagram -->
+    <section class="section section-light" id="portfolio">
+        <div class="container">
+            <div class="text-content" style="text-align: center;">
+                <h2>Meu Trabalho</h2>
+                <p>Confira alguns dos trabalhos mais recentes no Instagram</p>
+            </div>
+            <div class="instagram-feed">
+                <a href="https://www.instagram.com/mconde.foto/" target="_blank" class="insta-post">
+                    <img src="data:image/svg+xml,%3Csvg width='600' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Crect fill='%23333' width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23d4a574' font-size='40' font-weight='bold'%3ECasamentos%3C/text%3E%3C/svg%3E" alt="Casamentos">
+                    <div class="insta-overlay">
+                        <span>Casamentos 💍</span>
+                        <svg class="insta-icon" fill="white" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </div>
+                </a>
+                <a href="https://www.instagram.com/mconde.foto/" target="_blank" class="insta-post">
+                    <img src="data:image/svg+xml,%3Csvg width='600' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Crect fill='%23444' width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23d4a574' font-size='40' font-weight='bold'%3EAniversários%3C/text%3E%3C/svg%3E" alt="Aniversários">
+                    <div class="insta-overlay">
+                        <span>Aniversários 🎂</span>
+                        <svg class="insta-icon" fill="white" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </div>
+                </a>
+                <a href="https://www.instagram.com/mconde.foto/" target="_blank" class="insta-post">
+                    <img src="data:image/svg+xml,%3Csvg width='600' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Crect fill='%23555' width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23d4a574' font-size='40' font-weight='bold'%3ECorporativo%3C/text%3E%3C/svg%3E" alt="Corporativo">
+                    <div class="insta-overlay">
+                        <span>Corporativo 🏢</span>
+                        <svg class="insta-icon" fill="white" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </div>
+                </a>
+                <a href="https://www.instagram.com/mconde.foto/" target="_blank" class="insta-post">
+                    <img src="data:image/svg+xml,%3Csvg width='600' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Crect fill='%23666' width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23d4a574' font-size='40' font-weight='bold'%3EShows%3C/text%3E%3C/svg%3E" alt="Shows">
+                    <div class="insta-overlay">
+                        <span>Shows 🎵</span>
+                        <svg class="insta-icon" fill="white" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </div>
+                </a>
+                <a href="https://www.instagram.com/mconde.foto/" target="_blank" class="insta-post">
+                    <img src="data:image/svg+xml,%3Csvg width='600' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Crect fill='%23777' width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23d4a574' font-size='40' font-weight='bold'%3EDrone%3C/text%3E%3C/svg%3E" alt="Drone">
+                    <div class="insta-overlay">
+                        <span>Drone ✈️</span>
+                        <svg class="insta-icon" fill="white" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </div>
+                </a>
+                <a href="https://www.instagram.com/mconde.foto/" target="_blank" class="insta-post">
+                    <img src="data:image/svg+xml,%3Csvg width='600' height='600' xmlns='http://www.w3.org/2000/svg'%3E%3Crect fill='%23888' width='600' height='600'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%23d4a574' font-size='40' font-weight='bold'%3EBatizados%3C/text%3E%3C/svg%3E" alt="Batizados">
+                    <div class="insta-overlay">
+                        <span>Batizados ⛪</span>
+                        <svg class="insta-icon" fill="white" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    </div>
+                </a>
+            </div>
+            <div style="text-align: center; margin-top: 4rem;">
+                <a href="https://www.instagram.com/mconde.foto/" target="_blank" class="cta-button">Ver Mais no Instagram</a>
+            </div>
+        </div>
+    </section>
 
-  <footer>
-    <div class="footer-logo">
-      <img src="/images/logo.png" alt="Marcel Conde Photography">
-    </div>
-    <div class="social-links">
-      <a href="https://instagram.com/mconde.foto" target="_blank">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="2" y="2" width="20" height="20" rx="5"/>
-          <circle cx="12" cy="12" r="4"/>
-          <circle cx="18" cy="6" r="1" fill="currentColor"/>
-        </svg>
-      </a>
-      <a href="https://wa.me/5581984094212" target="_blank">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-        </svg>
-      </a>
-    </div>
-    <div class="footer-info">
-      <p>contato@marcelconde.com.br</p>
-      <p style="margin-top: 10px;">© 2025 Marcel Conde Photography. Todos os direitos reservados.</p>
-    </div>
-  </footer>
+    <!-- Contato -->
+    <section class="section section-dark" id="contato">
+        <div class="container">
+            <div class="split-section">
+                <div class="text-content">
+                    <h2>Vamos Criar Algo Incrível</h2>
+                    <p>Entre em contato e vamos planejar juntos como eternizar os momentos mais especiais da sua vida ou do seu negócio.</p>
+                    <p>Atendimento personalizado e orçamento sem compromisso.</p>
+                    <a href="https://wa.me/5581984094212?text=Olá!%20Gostaria%20de%20saber%20mais%20sobre%20fotografia%20de%20eventos" class="cta-button" target="_blank">WhatsApp</a>
+                </div>
+                <div class="text-content" style="text-align: right;">
+                    <h3>Recife, PE</h3>
+                    <p style="font-size: 1.4rem; margin-bottom: 1.5rem;">Brasil</p>
+                    <p style="font-size: 1.3rem; margin-bottom: 1rem;">📷 @mconde.foto</p>
+                    <p style="font-size: 1.3rem; margin-bottom: 1rem;">📧 contato@marcelconde.com.br</p>
+                    <p style="font-size: 1.3rem;">📱 WhatsApp disponível</p>
+                </div>
+            </div>
+        </div>
+    </section>
 
-  <a href="https://wa.me/5581984094212" class="whatsapp-float" target="_blank">
-    <svg viewBox="0 0 24 24">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-    </svg>
-  </a>
+    <script>
+        // Cursor
+        const cursor = document.getElementById('cursor');
+        let mouseX = 0, mouseY = 0;
+        let cursorX = 0, cursorY = 0;
 
-  <script>
-    function toggleMenu() {
-      document.querySelector('.nav-links').classList.toggle('active');
-    }
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
 
-    let currentSlide = 0;
-    const slider = document.getElementById('slider');
-    const dots = document.querySelectorAll('.dot');
-    const totalSlides = 3;
+        function animateCursor() {
+            const speed = 0.15;
+            cursorX += (mouseX - cursorX) * speed;
+            cursorY += (mouseY - cursorY) * speed;
+            cursor.style.left = cursorX + 'px';
+            cursor.style.top = cursorY + 'px';
+            requestAnimationFrame(animateCursor);
+        }
+        animateCursor();
 
-    function goToSlide(n) {
-      currentSlide = n;
-      slider.style.transform = `translateX(-${n * 100}%)`;
-      dots.forEach((dot, i) => {
-        dot.classList.toggle('active', i === n);
-      });
-    }
+        const hovers = document.querySelectorAll('a, button, .insta-post, .service-card');
+        hovers.forEach(el => {
+            el.addEventListener('mouseenter', () => cursor.classList.add('hover'));
+            el.addEventListener('mouseleave', () => cursor.classList.remove('hover'));
+        });
 
-    function nextSlide() {
-      currentSlide = (currentSlide + 1) % totalSlides;
-      goToSlide(currentSlide);
-    }
+        // Navbar
+        const navbar = document.getElementById('navbar');
+        window.addEventListener('scroll', () => {
+            navbar.classList.toggle('scrolled', window.scrollY > 100);
+        });
 
-    setInterval(nextSlide, 5000);
-  </script>
+        // Scroll Animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, {
+            threshold: 0.15,
+            rootMargin: '0px 0px -100px 0px'
+        });
 
+        document.querySelectorAll('.text-content, .insta-post, .stat-item, .service-card').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Smooth Scroll
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // Nuvens com movimento baseado no scroll
+        const clouds = document.querySelectorAll('.cloud-bg');
+        let lastScroll = 0;
+
+        window.addEventListener('scroll', () => {
+            const scrollY = window.scrollY;
+            const scrollDelta = scrollY - lastScroll;
+            const progress = scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+
+            clouds.forEach((cloud, i) => {
+                const speed = 0.5 + (i * 0.2);
+                const direction = i % 2 === 0 ? 1 : -1;
+                const moveX = scrollDelta * speed * direction;
+                const moveY = Math.sin(progress * Math.PI * 2 + i) * 30;
+                const scale = 1 + Math.sin(progress * Math.PI * 4 + i) * 0.15;
+                const opacity = 0.5 + Math.sin(progress * Math.PI * 3 + i) * 0.3;
+
+                cloud.style.transform = `translate(${moveX}px, ${moveY}px) scale(${scale})`;
+                cloud.style.opacity = opacity;
+            });
+
+            lastScroll = scrollY;
+        });
+    </script>
 </body>
 </html>
