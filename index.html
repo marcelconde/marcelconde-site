@@ -1068,13 +1068,13 @@ async function loadPortfolio() {
         
         if (portfolioItems.length > 0) {
             portfolioContainer.innerHTML = portfolioItems.map(item => `
-                <div class="insta-post">
+            <a href="/categorias/${item.category.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ /g, '-')}.html" class="insta-post">
                     <img src="${item.thumbnail}" alt="${item.title}">
                     <div class="insta-overlay">
                         <span>${item.title}</span>
                         <span style="font-size: 0.9rem; opacity: 0.8;">${item.category}</span>
                     </div>
-                </div>
+                </a>
             `).join('');
             
             document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
