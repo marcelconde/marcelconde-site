@@ -40,7 +40,11 @@ var config_default = defineConfig({
               "Corporativo",
               "Shows",
               "Drone",
-              "Batizados"
+              "Batizados",
+              "Ch\xE1 Revela\xE7\xE3o",
+              "Ensaios",
+              "Eventos Esportivos",
+              "Outros"
             ]
           },
           {
