@@ -25,6 +25,49 @@
                 this.style.transform = 'translateX(0)';
             });
         });
+
+        // Carregar Portfólio do TinaCMS
+async function loadPortfolio() {
+    const portfolioContainer = document.querySelector('.instagram-feed');
+    
+    try {
+        // Busca lista de arquivos do portfólio
+        const indexRes = await fetch('/content/portfolio/index.json');
+        const files = await indexRes.json(); // Adicione novos arquivos aqui
+        const portfolioItems = [];
+        
+        for (const file of files) {
+            try {
+                const response = await fetch(`/content/portfolio/${file}.json`);
+                if (response.ok) {
+                    const data = await response.json();
+                    portfolioItems.push(data);
+                }
+            } catch (e) {
+                console.log(`Arquivo ${file}.json não encontrado`);
+            }
+        }
+        
+        if (portfolioItems.length > 0) {
+            portfolioContainer.innerHTML = portfolioItems.map(item => `
+                <div class="insta-post">
+                    <img src="${item.thumbnail}" alt="${item.title}">
+                    <div class="insta-overlay">
+                        <span>${item.title}</span>
+                        <span style="font-size: 0.9rem; opacity: 0.8;">${item.category}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Reaplica animações
+            document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
+        }
+    } catch (error) {
+        console.error('Erro ao carregar portfólio:', error);
+    }
+}
+
+loadPortfolio();
     </script>
     
     <style>
@@ -724,6 +767,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- Nuvens no Fundo -->
     <div class="clouds-background">
