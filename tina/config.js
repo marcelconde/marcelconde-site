@@ -47,7 +47,11 @@ export default defineConfig({
               "Corporativo",
               "Shows",
               "Drone",
-              "Batizados"
+              "Batizados",
+              "Chá Revelação",
+              "Ensaios",
+              "Eventos Esportivos",
+              "Outros",
             ],
           },
           {
