@@ -7,7 +7,7 @@ const branch = process.env.GITHUB_BRANCH ||
 
 export default defineConfig({
   branch,
-  clientId: process.env.TINA_CLIENT_ID || "7a1aca6c-11e2-41eb-8c59-de0b3e648ecb",
+  clientId: process.env.TINA_CLIENT_ID || "84e919a3-c640-4fab-b53e-aedc755e76bb",
   token: process.env.TINA_TOKEN || "094647ade8dec0d339c92b386583ac594fe21ab9",
 
   build: {
