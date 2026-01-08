@@ -36,6 +36,7 @@ var config_default = defineConfig({
             required: true,
             options: [
               "Casamentos",
+              "Pr\xE9-Wedding",
               "Anivers\xE1rios",
               "Corporativo",
               "Shows",
@@ -44,8 +45,7 @@ var config_default = defineConfig({
               "Ch\xE1 Revela\xE7\xE3o",
               "Ensaios",
               "Eventos Esportivos",
-              "Outros",
-              "Pr\xE9-Wedding"
+              "Outros"
             ]
           },
           {
