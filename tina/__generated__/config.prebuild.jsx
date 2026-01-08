@@ -44,7 +44,8 @@ var config_default = defineConfig({
               "Ch\xE1 Revela\xE7\xE3o",
               "Ensaios",
               "Eventos Esportivos",
-              "Outros"
+              "Outros",
+              "Pr\xE9-Wedding"
             ]
           },
           {

@@ -52,6 +52,7 @@ export default defineConfig({
               "Ensaios",
               "Eventos Esportivos",
               "Outros",
+              "Pré-Wedding",
             ],
           },
           {
