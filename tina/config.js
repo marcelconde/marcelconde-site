@@ -43,6 +43,7 @@ export default defineConfig({
             required: true,
             options: [
               "Casamentos",
+              "Pré-Wedding",
               "Aniversários",
               "Corporativo",
               "Shows",
@@ -52,7 +53,6 @@ export default defineConfig({
               "Ensaios",
               "Eventos Esportivos",
               "Outros",
-              "Pré-Wedding",
             ],
           },
           {
