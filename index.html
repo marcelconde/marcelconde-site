@@ -119,30 +119,6 @@
             }
         }
 
-        /* Cursor Customizado */
-        body {
-            cursor: none;
-        }
-
-        #cursor {
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--accent);
-            border-radius: 50%;
-            position: fixed;
-            pointer-events: none;
-            z-index: 10000;
-            transition: all 0.15s ease;
-            mix-blend-mode: difference;
-        }
-
-        #cursor.hover {
-            width: 60px;
-            height: 60px;
-            background: var(--accent);
-            opacity: 0.3;
-        }
-
         /* Menu Fixo */
         nav {
             position: fixed;
@@ -735,7 +711,6 @@
     </div>
 
     <!-- Cursor -->
-    <div id="cursor"></div>
 
     <!-- Menu -->
     <nav id="navbar">
@@ -961,31 +936,6 @@
     </section>
 
     <script>
-        // Cursor
-        const cursor = document.getElementById('cursor');
-        let mouseX = 0, mouseY = 0;
-        let cursorX = 0, cursorY = 0;
-
-        document.addEventListener('mousemove', (e) => {
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-        });
-
-        function animateCursor() {
-            const speed = 0.15;
-            cursorX += (mouseX - cursorX) * speed;
-            cursorY += (mouseY - cursorY) * speed;
-            cursor.style.left = cursorX + 'px';
-            cursor.style.top = cursorY + 'px';
-            requestAnimationFrame(animateCursor);
-        }
-        animateCursor();
-
-        const hovers = document.querySelectorAll('a, button, .insta-post, .service-card');
-        hovers.forEach(el => {
-            el.addEventListener('mouseenter', () => cursor.classList.add('hover'));
-            el.addEventListener('mouseleave', () => cursor.classList.remove('hover'));
-        });
 
         // Navbar
         const navbar = document.getElementById('navbar');
