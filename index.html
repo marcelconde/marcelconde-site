@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Marcel Conde - Fotógrafo Profissional | Recife-PE</title>
@@ -1053,5 +1054,16 @@ async function loadPortfolio() {
 
 loadPortfolio();
     </script>
+    <script>
+  if (window.netlifyIdentity) {
+    window.netlifyIdentity.on("init", user => {
+      if (!user) {
+        window.netlifyIdentity.on("login", () => {
+          document.location.href = "/admin-decap/";
+        });
+      }
+    });
+  }
+</script>
 </body>
 </html>
