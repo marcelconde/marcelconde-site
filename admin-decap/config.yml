@@ -1,5 +1,6 @@
 backend:
-  name: git-gateway
+  name: github
+  repo: marcelconde/marcelconde-site
   branch: main
 
 media_folder: "images/portfolio"
