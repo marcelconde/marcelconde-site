@@ -1036,11 +1036,10 @@ async function loadPortfolio() {
         
         if (portfolioItems.length > 0) {
             portfolioContainer.innerHTML = portfolioItems.map(item => `
-            <a href="/categorias/${item.category.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ /g, '-')}.html" class="insta-post">
-                    <img src="${item.thumbnail}" alt="${item.title}">
-                    <div class="insta-overlay">
-                        <span>${item.title}</span>
-                        <span style="font-size: 0.9rem; opacity: 0.8;">${item.category}</span>
+            <a href="/categorias/${item.category}.html" class="insta-post">
+                    <img src="${item.thumbnail}" alt="${item.category}">
+                    <div class="insta-overlay" style="opacity: 1; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);">
+                        <span>${item.category}</span>
                     </div>
                 </a>
             `).join('');
