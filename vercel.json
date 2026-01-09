@@ -1,0 +1,4 @@
+{
+  "buildCommand": "node generate-portfolio-index.js",
+  "outputDirectory": "."
+}
