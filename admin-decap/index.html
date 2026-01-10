@@ -1,21 +1,11 @@
-backend:
-  name: github
-  repo: marcelconde/marcelconde-site
-  branch: main
-  base_url: https://api.github.com
-
-media_folder: "images/portfolio"
-public_folder: "/images/portfolio"
-
-collections:
-  - name: "portfolio"
-    label: "Portfólio"
-    folder: "content/portfolio"
-    create: true
-    format: "json"
-    fields:
-      - {label: "Título", name: "title", widget: "string", required: true}
-      - {label: "Categoria", name: "category", widget: "select", options: ["Casamentos", "Pré-Wedding", "Aniversários", "Corporativo", "Shows", "Drone", "Batizados", "Chá Revelação", "Ensaios", "Eventos Esportivos", "Outros"]}
-      - {label: "Imagem de Capa", name: "thumbnail", widget: "image", required: true}
-      - {label: "Descrição", name: "description", widget: "text", required: false}
-      - {label: "Data", name: "date", widget: "datetime", required: false}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel Admin</title>
+</head>
+<body>
+  <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
+</body>
+</html>
