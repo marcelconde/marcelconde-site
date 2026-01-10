@@ -4,34 +4,37 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Painel Admin</title>
-  <script src="https://unpkg.com/netlify-cms-app@^2.0.0/dist/netlify-cms-app.js"></script>
 </head>
 <body>
+  <script src="https://unpkg.com/decap-cms@^3.0.0/dist/decap-cms.js"></script>
   <script>
-    CMS.init({
-      config: {
-        backend: {
-          name: 'github',
-          repo: 'marcelconde/marcelconde-site',
-          branch: 'main'
-        },
-        media_folder: 'images/portfolio',
-        public_folder: '/images/portfolio',
-        collections: [{
-          name: 'portfolio',
-          label: 'Portfólio',
-          folder: 'content/portfolio',
-          create: true,
-          format: 'json',
-          fields: [
-            {label: 'Título', name: 'title', widget: 'string', required: true},
-            {label: 'Categoria', name: 'category', widget: 'select', options: ['Casamentos', 'Pré-Wedding', 'Aniversários', 'Corporativo', 'Shows', 'Drone', 'Batizados', 'Chá Revelação', 'Ensaios', 'Eventos Esportivos', 'Animais', 'Outros']},
-            {label: 'Imagem de Capa', name: 'thumbnail', widget: 'image', required: true},
-            {label: 'Descrição', name: 'description', widget: 'text', required: false},
-            {label: 'Data', name: 'date', widget: 'datetime', required: false}
-          ]
-        }]
-      }
+    window.CMS_MANUAL_INIT = true;
+    window.addEventListener('load', function() {
+      window.CMS.init({
+        config: {
+          backend: {
+            name: 'github',
+            repo: 'marcelconde/marcelconde-site',
+            branch: 'main'
+          },
+          media_folder: 'images/portfolio',
+          public_folder: '/images/portfolio',
+          collections: [{
+            name: 'portfolio',
+            label: 'Portfólio',
+            folder: 'content/portfolio',
+            create: true,
+            format: 'json',
+            fields: [
+              {label: 'Título', name: 'title', widget: 'string', required: true},
+              {label: 'Categoria', name: 'category', widget: 'select', options: ['Casamentos', 'Pré-Wedding', 'Aniversários', 'Corporativo', 'Shows', 'Drone', 'Batizados', 'Chá Revelação', 'Ensaios', 'Eventos Esportivos', 'Animais', 'Outros']},
+              {label: 'Imagem de Capa', name: 'thumbnail', widget: 'image', required: true},
+              {label: 'Descrição', name: 'description', widget: 'text', required: false},
+              {label: 'Data', name: 'date', widget: 'datetime', required: false}
+            ]
+          }]
+        }
+      });
     });
   </script>
 </body>
