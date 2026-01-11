@@ -19,7 +19,7 @@
     const titleEl = document.getElementById('title');
     const gridEl = document.getElementById('grid');
 
-    // Agora vem da URL: /categoria.html?slug=eventos-esportivos
+    // URL: /categoria.html?slug=eventos-esportivos
     const params = new URLSearchParams(location.search);
     const slug = params.get("slug");
 
@@ -28,8 +28,17 @@
       throw new Error("missing slug param");
     }
 
+    async function exists(url) {
+      try {
+        const r = await fetch(url, { method: "HEAD", cache: "no-store" });
+        return r.ok;
+      } catch {
+        return false;
+      }
+    }
+
     async function load() {
-      // carrega direto o álbum pelo slug (não precisa varrer tudo)
+      // carrega direto o álbum pelo slug
       const res = await fetch(`/content/portfolio/${slug}.json`, { cache: "no-store" });
       if (!res.ok) throw new Error(`Não achei /content/portfolio/${slug}.json`);
 
@@ -46,7 +55,18 @@
       // fallback: se não tiver images, mostra só a capa
       const list = images.length ? images : [album.thumbnail].filter(Boolean);
 
-      gridEl.innerHTML = list.map(src => `<img src="${src}" alt="">`).join("");
+      // fallback automático: se apontar pra /images/portfolio/<slug>/ mas não existir, tenta /images/portfolio/
+      const fixed = [];
+      for (const src of list) {
+        if (typeof src === "string" && src.includes(`/images/portfolio/${slug}/`)) {
+          const alt = src.replace(`/images/portfolio/${slug}/`, `/images/portfolio/`);
+          fixed.push((await exists(src)) ? src : alt);
+        } else {
+          fixed.push(src);
+        }
+      }
+
+      gridEl.innerHTML = fixed.map(src => `<img src="${src}" alt="">`).join("");
     }
 
     load().catch(err => {
