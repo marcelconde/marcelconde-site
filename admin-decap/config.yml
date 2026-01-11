@@ -16,33 +16,42 @@ collections:
     format: "json"
     slug: "{{slug}}"
 
-    # ✅ cada item (álbum) faz upload pra própria pasta
-    # ✅ cada item (álbum) faz upload pra própria pasta (NO ROOT DO REPO)
-    media_folder: "/images/portfolio/{{slug}}"
-    public_folder: "/images/portfolio/{{slug}}"
+    # uploads do álbum por slug
+    media_folder: "images/portfolio/{{fields.slug}}"
+    public_folder: "/images/portfolio/{{fields.slug}}"
 
     fields:
       - { label: "Título", name: "title", widget: "string", required: true }
       - { label: "Slug", name: "slug", widget: "string", required: true, hint: "ex: pre-wedding (sem acento, sem espaço)" }
-      - { label: "Categoria", name: "category", widget: "select", required: true, options: [
-        "Casamentos",
-        "Pré-Wedding", 
-        "Aniversários", 
-        "Corporativo", 
-        "Shows", 
-        "Drone", 
-        "Batizados", 
-        "Chá Revelação", 
-        "Ensaios", 
-        "Eventos Esportivos", 
-        "Festas Infantis",
-        "Formaturas",
-        "Animais",
-        "Natureza",
-        "Outros"] }
+      - label: "Categoria"
+        name: "category"
+        widget: "select"
+        required: true
+        options:
+          - "Casamentos"
+          - "Pré-Wedding"
+          - "Aniversários"
+          - "Corporativo"
+          - "Shows"
+          - "Drone"
+          - "Batizados"
+          - "Chá Revelação"
+          - "Ensaios"
+          - "Eventos Esportivos"
+          - "Festas Infantis"
+          - "Formaturas"
+          - "Animais"
+          - "Natureza"
+          - "Outros"
       - { label: "Imagem de Capa", name: "thumbnail", widget: "image", required: true }
+
       - label: "Fotos do Álbum"
         name: "images"
         widget: "list"
         fields:
-          - { label: "Foto", name: "image", widget: "image" }
+          - label: "Foto"
+            name: "image"
+            widget: "image"
+            media_folder: "images/portfolio/{{fields.slug}}"
+            public_folder: "/images/portfolio/{{fields.slug}}"
+            path: "{{fields.slug}}/{{filename}}"
