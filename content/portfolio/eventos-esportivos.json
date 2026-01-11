@@ -1,5 +1,11 @@
 {
   "title": "Eventos Esportivos",
   "category": "Eventos Esportivos",
-  "thumbnail": "/images/portfolio/img_0179.jpg"
+  "thumbnail": "/images/portfolio/img_0179.jpg",
+  "images": [
+    {
+      "image": "/images/portfolio/eventos-esportivos/img_9093.jpg"
+    }
+  ],
+  "slug": "eventos-esportivos"
 }
