@@ -971,42 +971,65 @@
         });
 
         // Carregar Portfólio do TinaCMS
+// Carregar Portfólio (Decap)
 async function loadPortfolio() {
-    const portfolioContainer = document.querySelector('.instagram-feed');
-    if (!portfolioContainer) return;
-    
-    try {
-        const indexRes = await fetch('/content/portfolio/index.json');
-        const files = await indexRes.json();
-        const portfolioItems = [];
-        
-        for (const file of files) {
-            try {
-                const response = await fetch(`/content/portfolio/${file}.json`);
-                if (response.ok) {
-                    const data = await response.json();
-                    portfolioItems.push(data);
-                }
-            } catch (e) {
-                console.log(`Arquivo ${file}.json não encontrado`);
-            }
-        }
-        
-        if (portfolioItems.length > 0) {
-            portfolioContainer.innerHTML = portfolioItems.map(item => `
-            <a href="/categorias/${item.category.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ /g, '-')}.html" class="insta-post">
-                    <img src="${item.thumbnail}" alt="${item.category}">
-                    <div class="insta-overlay" style="opacity: 1; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);">
-                        <span>${item.category}</span>
-                    </div>
-                </a>
-            `).join('');
-            
-            document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
-        }
-    } catch (error) {
-        console.error('Erro ao carregar portfólio:', error);
+  const portfolioContainer = document.querySelector('.instagram-feed');
+  if (!portfolioContainer) return;
+
+  try {
+    // 1) lê o índice
+    const indexRes = await fetch('/content/portfolio/index.json', { cache: 'no-store' });
+    if (!indexRes.ok) throw new Error(`index.json ${indexRes.status}`);
+
+    const slugs = await indexRes.json();
+
+    // 2) renderiza os "álbuns" pelo slug (arquivo)
+    const cards = [];
+
+    for (const slug of slugs) {
+      const res = await fetch(`/content/portfolio/${slug}.json`, { cache: 'no-store' });
+      if (!res.ok) continue;
+
+      const data = await res.json();
+
+      // aceita 2 formatos:
+      // A) arquivo é um OBJ com campos (thumbnail/category/etc)
+      // B) arquivo é um ARRAY de itens (pegamos o primeiro como capa)
+      const item = Array.isArray(data) ? data[0] : data;
+      if (!item) continue;
+
+      const category =
+        item.category || item.categoria || slug;
+
+      const thumbnail =
+        item.thumbnail || item.thumb || item.cover || item.imagem || item.image || null;
+
+      // se não tiver thumbnail, pula (pra não quebrar layout)
+      if (!thumbnail) continue;
+
+      const categorySlug = String(category)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '-');
+
+      cards.push(`
+        <a href="/categorias/${categorySlug}.html" class="insta-post">
+          <img src="${thumbnail}" alt="${category}">
+          <div class="insta-overlay" style="opacity: 1; background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);">
+            <span>${category}</span>
+          </div>
+        </a>
+      `);
     }
+
+    portfolioContainer.innerHTML = cards.join('');
+
+    // animações
+    document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
+  } catch (error) {
+    console.error('Erro ao carregar portfólio:', error);
+  }
 }
 
 loadPortfolio();
