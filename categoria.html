@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Categoria</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; padding: 24px; }
+    h1 { margin: 0 0 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .grid img { width: 100%; height: 260px; object-fit: cover; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <h1 id="title">Carregando...</h1>
+  <div class="grid" id="grid"></div>
+
+  <script>
+    const titleEl = document.getElementById('title');
+    const gridEl = document.getElementById('grid');
+
+    const normalize = (s) =>
+      (s || "")
+        .toString()
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, "-");
+
+    // categoria vem da URL: /categoria.html?c=pre-wedding
+    const params = new URLSearchParams(location.search);
+    const c = params.get("c");
+
+    if (!c) {
+      titleEl.textContent = "Categoria não informada. Use ?c=nome-da-categoria";
+      throw new Error("missing category param");
+    }
+
+    async function load() {
+      const indexRes = await fetch("/content/portfolio/index.json", { cache: "no-store" });
+      if (!indexRes.ok) throw new Error("index.json não encontrado");
+
+      const slugs = await indexRes.json();
+
+      const allAlbums = [];
+      for (const slug of slugs) {
+        const res = await fetch(`/content/portfolio/${slug}.json`, { cache: "no-store" });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const album = Array.isArray(data) ? data[0] : data;
+        if (!album) continue;
+        allAlbums.push({ slug, ...album });
+      }
+
+      const target = normalize(c);
+
+      // acha o primeiro álbum cuja category normalize bate com c
+      const album = allAlbums.find(a => normalize(a.category) === target);
+
+      if (!album) {
+        titleEl.textContent = "Categoria não encontrada";
+        return;
+      }
+
+      titleEl.textContent = album.category || c;
+
+      const images = (album.images || []).map(x => x.image).filter(Boolean);
+
+      // fallback: se não tiver images, mostra só a capa
+      const list = images.length ? images : [album.thumbnail].filter(Boolean);
+
+      gridEl.innerHTML = list.map(src => `<img src="${src}" alt="">`).join("");
+    }
+
+    load().catch(err => {
+      console.error(err);
+      titleEl.textContent = "Erro ao carregar a categoria";
+    });
+  </script>
+</body>
+</html>
