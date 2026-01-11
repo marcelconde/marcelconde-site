@@ -23,7 +23,22 @@ collections:
     fields:
       - { label: "Título", name: "title", widget: "string", required: true }
       - { label: "Slug", name: "slug", widget: "string", required: true, hint: "ex: pre-wedding (sem acento, sem espaço)" }
-      - { label: "Categoria", name: "category", widget: "string", required: true }
+      - { label: "Categoria", name: "category", widget: "select", required: true, options: [
+        "Casamentos",
+        "Pré-Wedding", 
+        "Aniversários", 
+        "Corporativo", 
+        "Shows", 
+        "Drone", 
+        "Batizados", 
+        "Chá Revelação", 
+        "Ensaios", 
+        "Eventos Esportivos", 
+        "Festas Infantis",
+        "Formaturas",
+        "Animais",
+        "Natureza",
+        "Outros"] }
       - { label: "Imagem de Capa", name: "thumbnail", widget: "image", required: true }
       - label: "Fotos do Álbum"
         name: "images"
