@@ -19,53 +19,29 @@
     const titleEl = document.getElementById('title');
     const gridEl = document.getElementById('grid');
 
-    const normalize = (s) =>
-      (s || "")
-        .toString()
-        .trim()
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/\s+/g, "-");
-
-    // categoria vem da URL: /categoria.html?c=pre-wedding
+    // Agora vem da URL: /categoria.html?slug=eventos-esportivos
     const params = new URLSearchParams(location.search);
-    const c = params.get("c");
+    const slug = params.get("slug");
 
-    if (!c) {
-      titleEl.textContent = "Categoria não informada. Use ?c=nome-da-categoria";
-      throw new Error("missing category param");
+    if (!slug) {
+      titleEl.textContent = "Álbum não informado. Use ?slug=nome-do-album";
+      throw new Error("missing slug param");
     }
 
     async function load() {
-      const indexRes = await fetch("/content/portfolio/index.json", { cache: "no-store" });
-      if (!indexRes.ok) throw new Error("index.json não encontrado");
+      // carrega direto o álbum pelo slug (não precisa varrer tudo)
+      const res = await fetch(`/content/portfolio/${slug}.json`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Não achei /content/portfolio/${slug}.json`);
 
-      const slugs = await indexRes.json();
+      const data = await res.json();
+      const album = Array.isArray(data) ? data[0] : data;
 
-      const allAlbums = [];
-      for (const slug of slugs) {
-        const res = await fetch(`/content/portfolio/${slug}.json`, { cache: "no-store" });
-        if (!res.ok) continue;
-        const data = await res.json();
-        const album = Array.isArray(data) ? data[0] : data;
-        if (!album) continue;
-        allAlbums.push({ slug, ...album });
-      }
+      titleEl.textContent = album.title || album.category || slug;
 
-      const target = normalize(c);
-
-      // acha o primeiro álbum cuja category normalize bate com c
-      const album = allAlbums.find(a => normalize(a.category) === target);
-
-      if (!album) {
-        titleEl.textContent = "Categoria não encontrada";
-        return;
-      }
-
-      titleEl.textContent = album.category || c;
-
-      const images = (album.images || []).map(x => x.image).filter(Boolean);
+      // images: [{ image: "/images/..." }, ...]
+      const images = (album.images || [])
+        .map(x => (x && typeof x === "object") ? x.image : x)
+        .filter(Boolean);
 
       // fallback: se não tiver images, mostra só a capa
       const list = images.length ? images : [album.thumbnail].filter(Boolean);
@@ -75,7 +51,7 @@
 
     load().catch(err => {
       console.error(err);
-      titleEl.textContent = "Erro ao carregar a categoria";
+      titleEl.textContent = "Erro ao carregar o álbum";
     });
   </script>
 </body>
