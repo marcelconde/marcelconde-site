@@ -4,7 +4,6 @@ backend:
   branch: main
   base_url: https://auth.marcelconde.com.br
   auth_endpoint: auth
-  api_root: https://auth.marcelconde.com.br/api
 
 media_folder: "images/portfolio"
 public_folder: "/images/portfolio"
@@ -15,9 +14,18 @@ collections:
     folder: "content/portfolio"
     create: true
     format: "json"
+    slug: "{{slug}}"
+
+    # ✅ cada item (álbum) faz upload pra própria pasta
+    media_folder: "images/portfolio/{{slug}}"
+    public_folder: "/images/portfolio/{{slug}}"
+
     fields:
-      - {label: "Título", name: "title", widget: "string", required: true}
-      - {label: "Categoria", name: "category", widget: "select", options: ["Casamentos", "Pré-Wedding", "Aniversários", "Corporativo", "Shows", "Drone", "Batizados", "Chá Revelação", "Ensaios", "Eventos Esportivos", "Outros"]}
-      - {label: "Imagem de Capa", name: "thumbnail", widget: "image", required: true}
-      - {label: "Descrição", name: "description", widget: "text", required: false}
-      - {label: "Data", name: "date", widget: "datetime", required: false}
+      - { label: "Título", name: "title", widget: "string", required: true }
+      - { label: "Slug", name: "slug", widget: "string", required: true, hint: "ex: pre-wedding (sem acento, sem espaço)" }
+      - { label: "Categoria", name: "category", widget: "string", required: true }
+      - { label: "Imagem de Capa", name: "thumbnail", widget: "image", required: true }
+      - label: "Fotos do Álbum"
+        name: "images"
+        widget: "list"
+        field: { label: "Foto", name: "image", widget: "image" }
