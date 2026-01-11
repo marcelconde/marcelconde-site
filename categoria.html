@@ -5,10 +5,50 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Categoria</title>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; padding: 24px; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      margin: 0;
+      padding: 24px;
+    }
+
     h1 { margin: 0 0 16px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-    .grid img { width: 100%; height: auto; object-fit: contain; border-radius: 10px; }
+
+    /* Grid OK para várias fotos */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+
+    /* Cada foto vira um "card" com área útil */
+    .img-wrap {
+      border-radius: 10px;
+      overflow: hidden;
+      background: #f2f2f2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* IMPORTANTÍSSIMO:
+       - contain = não corta
+       - max-height = evita “faixa” panorâmica parecer bug
+    */
+    .img-wrap img {
+      width: 100%;
+      height: auto;
+      max-height: 70vh;         /* ✅ evita parecer “cortado” */
+      object-fit: contain;      /* ✅ não corta */
+      display: block;
+    }
+
+    /* Quando a imagem é muito “horizontal”, faz ela ficar mais apresentável */
+    .img-wrap img.is-wide {
+      width: 100%;
+      height: auto;
+      max-height: 55vh;         /* ✅ reduz aquela faixa gigante */
+    }
   </style>
 </head>
 <body>
@@ -19,7 +59,7 @@
     const titleEl = document.getElementById('title');
     const gridEl = document.getElementById('grid');
 
-    // URL: /categoria.html?slug=eventos-esportivos
+    // URL: /categoria.html?slug=drone
     const params = new URLSearchParams(location.search);
     const slug = params.get("slug");
 
@@ -28,17 +68,25 @@
       throw new Error("missing slug param");
     }
 
-    async function exists(url) {
-      try {
-        const r = await fetch(url, { method: "HEAD", cache: "no-store" });
-        return r.ok;
-      } catch {
-        return false;
+    // Fallback: se imagem não existir na subpasta, tenta no root /images/portfolio/
+    function fallbackSrc(src) {
+      if (typeof src !== "string") return src;
+      const needle = `/images/portfolio/${slug}/`;
+      if (src.includes(needle)) {
+        return src.replace(needle, `/images/portfolio/`);
       }
+      return src;
+    }
+
+    function isWideImage(img) {
+      // Se o ratio for bem panorâmico, aplica classe pra ficar mais apresentável
+      try {
+        const ratio = img.naturalWidth / img.naturalHeight;
+        if (ratio >= 2.2) img.classList.add("is-wide");
+      } catch {}
     }
 
     async function load() {
-      // carrega direto o álbum pelo slug
       const res = await fetch(`/content/portfolio/${slug}.json`, { cache: "no-store" });
       if (!res.ok) throw new Error(`Não achei /content/portfolio/${slug}.json`);
 
@@ -47,26 +95,32 @@
 
       titleEl.textContent = album.title || album.category || slug;
 
-      // images: [{ image: "/images/..." }, ...]
       const images = (album.images || [])
         .map(x => (x && typeof x === "object") ? x.image : x)
         .filter(Boolean);
 
-      // fallback: se não tiver images, mostra só a capa
       const list = images.length ? images : [album.thumbnail].filter(Boolean);
 
-      // fallback automático: se apontar pra /images/portfolio/<slug>/ mas não existir, tenta /images/portfolio/
-      const fixed = [];
-      for (const src of list) {
-        if (typeof src === "string" && src.includes(`/images/portfolio/${slug}/`)) {
-          const alt = src.replace(`/images/portfolio/${slug}/`, `/images/portfolio/`);
-          fixed.push((await exists(src)) ? src : alt);
-        } else {
-          fixed.push(src);
-        }
-      }
+      gridEl.innerHTML = "";
 
-      gridEl.innerHTML = fixed.map(src => `<img src="${src}" alt="">`).join("");
+      for (const src of list) {
+        const wrap = document.createElement("div");
+        wrap.className = "img-wrap";
+
+        const img = document.createElement("img");
+        img.src = src;
+
+        // Se falhar, tenta automaticamente o fallback no root
+        img.onerror = () => {
+          const alt = fallbackSrc(src);
+          if (alt !== img.src) img.src = alt;
+        };
+
+        img.onload = () => isWideImage(img);
+
+        wrap.appendChild(img);
+        gridEl.appendChild(wrap);
+      }
     }
 
     load().catch(err => {
