@@ -28,4 +28,5 @@ collections:
       - label: "Fotos do Álbum"
         name: "images"
         widget: "list"
-        field: { label: "Foto", name: "image", widget: "image" }
+        fields:
+          - { label: "Foto", name: "image", widget: "image" }
