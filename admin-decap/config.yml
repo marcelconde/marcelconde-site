@@ -17,7 +17,8 @@ collections:
     slug: "{{slug}}"
 
     # ✅ cada item (álbum) faz upload pra própria pasta
-    media_folder: "images/portfolio/{{slug}}"
+    # ✅ cada item (álbum) faz upload pra própria pasta (NO ROOT DO REPO)
+    media_folder: "/images/portfolio/{{slug}}"
     public_folder: "/images/portfolio/{{slug}}"
 
     fields:
