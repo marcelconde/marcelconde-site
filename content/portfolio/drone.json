@@ -1,7 +1,19 @@
 {
   "title": "Drone",
   "category": "Drone",
-  "thumbnail": "https://res.cloudinary.com/djv98mqfz/image/upload/v1768173655/dji_fly_20240609_115014_42_1717944637380_photo_optimized_conjyq.jpg",
-  "images": [],
-  "slug": "drone"
+  "thumbnail": "https://res.cloudinary.com/djv98mqfz/image/upload/v1768173659/dji_fly_20240511_085442_133_1715430969957_photo_optimized_aefmeu.jpg",
+  "images": [
+    {
+      "image": "https://res.cloudinary.com/djv98mqfz/image/upload/v1768173659/dji_fly_20240511_085442_133_1715430969957_photo_optimized_aefmeu.jpg"
+    },
+    {
+      "image": "https://res.cloudinary.com/djv98mqfz/image/upload/v1768173656/dji_fly_20240505_100912_104_1714914562418_photo_optimized_b0ukh2.jpg"
+    },
+    {
+      "image": "https://res.cloudinary.com/djv98mqfz/image/upload/v1768173659/dji_fly_20240810_113930_140_1723300945018_photo_optimized_b97fd7.jpg"
+    },
+    {
+      "image": "https://res.cloudinary.com/djv98mqfz/image/upload/v1768173650/dji_fly_20240520_133220_300_1716222748097_photo_optimized_etruny.jpg"
+    }
+  ]
 }
