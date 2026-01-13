@@ -62,6 +62,9 @@
     const titleEl = document.getElementById("title");
     const gridEl = document.getElementById("grid");
 
+    // ✅ SUA BASE DO WORKER (ajustado)
+    const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
+
     // URL: /categoria.html?slug=drone
     const params = new URLSearchParams(location.search);
     const slug = params.get("slug");
@@ -69,14 +72,6 @@
     if (!slug) {
       titleEl.textContent = "Álbum não informado (?slug=nome-do-album)";
       throw new Error("missing slug");
-    }
-
-    function fallbackSrc(src) {
-      const needle = `/images/portfolio/${slug}/`;
-      if (src.includes(needle)) {
-        return src.replace(needle, "/images/portfolio/");
-      }
-      return src;
     }
 
     function markWide(img) {
@@ -87,21 +82,31 @@
     }
 
     async function load() {
-      const res = await fetch(`/content/portfolio/${slug}.json`, { cache: "no-store" });
-      if (!res.ok) throw new Error("JSON não encontrado");
+      // ✅ Agora vem do Worker, não do JSON local
+      const albumPath = `portfolio/${slug}`;
+      const url = `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}`;
+
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Worker /album ${res.status}`);
 
       const data = await res.json();
-      const album = Array.isArray(data) ? data[0] : data;
+      // data esperado:
+      // { title, path, thumbnail, images:[{url,...}] }
 
-      titleEl.textContent = album.title || album.category || slug;
+      titleEl.textContent = data.title || slug;
 
-      const images = (album.images || [])
-        .map(i => typeof i === "object" ? i.image : i)
+      const images = (data.images || [])
+        .map(i => (typeof i === "object" ? i.url : i))
         .filter(Boolean);
 
-      const list = images.length ? images : [album.thumbnail].filter(Boolean);
+      const list = images.length ? images : [data.thumbnail].filter(Boolean);
 
       gridEl.innerHTML = "";
+
+      if (!list.length) {
+        titleEl.textContent = "Álbum vazio";
+        return;
+      }
 
       for (const src of list) {
         const wrap = document.createElement("div");
@@ -109,15 +114,7 @@
 
         const img = document.createElement("img");
         img.src = src;
-
-        img.onerror = () => {
-          const alt = fallbackSrc(img.src);
-          if (alt !== img.src) {
-            img.src = alt;
-          } else {
-            img.onerror = null;
-          }
-        };
+        img.loading = "lazy";
 
         img.onload = () => markWide(img);
 
