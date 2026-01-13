@@ -1083,7 +1083,7 @@
 
             try {
                 // ✅ PUXA OS ÁLBUNS DO WORKER (troque pela SUA URL do worker)
-                const WORKER_BASE = "https://SEU-WORKER.workers.dev";
+                const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
                 const albumsRes = await fetch(`${WORKER_BASE}/albums`, { cache: "no-store" });
                 if (!albumsRes.ok) throw new Error(`/albums ${albumsRes.status}`);
 
