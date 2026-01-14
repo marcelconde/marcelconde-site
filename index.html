@@ -788,7 +788,19 @@
             }
         }
 
-        
+        /* === FOTO SOBRE (BORDA ARREDONDADA) === */
+        .about-image {
+            max-width: 450px;
+            border-radius: 16px;
+            overflow: hidden; /* ESSENCIAL para cortar a imagem */
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.25);
+        }
+
+        .about-image img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
     </style>
 </head>
 
