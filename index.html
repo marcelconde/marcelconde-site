@@ -453,6 +453,25 @@
             transform: translateX(0);
         }
 
+        /* === ANIMAÇÃO NO CONTATO (coluna direita também) === */
+        #contato .text-content h3,
+        #contato .text-content a {
+            opacity: 0;
+            transform: translateX(-100px);
+            transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
+        }
+
+        /* links precisam aceitar transform */
+        #contato .text-content a {
+            display: inline-block;
+        }
+
+        #contato .text-content.visible h3,
+        #contato .text-content.visible a {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
         /* Instagram Feed */
         .instagram-feed {
             display: grid;
