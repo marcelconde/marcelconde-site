@@ -163,6 +163,45 @@
       list-style: none;
     }
 
+    /* === HAMBURGER (mobile) === */
+    .nav-toggle {
+      display: none;
+      border: 0;
+      background: transparent;
+      color: var(--secondary);
+      font-size: 1.7rem;
+      line-height: 1;
+      padding: 0.4rem 0.6rem;
+      cursor: pointer;
+    }
+
+    nav.scrolled .nav-toggle {
+      color: var(--primary);
+    }
+
+    /* Estado aberto */
+    nav.menu-open {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+      visibility: visible !important;
+    }
+
+    /* Overlay do menu no mobile */
+    .menu-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 1500;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+
+    .menu-overlay.show {
+      display: block;
+      opacity: 1;
+    }
+
     .menu a {
       color: var(--secondary);
       text-decoration: none;
@@ -605,24 +644,40 @@
 
       .menu {
         width: 100%;
+        display: none; /* escondido por padrao */
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.25rem;
+        overflow: visible;
+        padding: 0.75rem 0;
+      }
+
+      nav.menu-open .menu {
         display: flex;
-        flex-wrap: nowrap;
-        justify-content: center;
+      }
+
+      .menu li {
+        width: 100%;
+      }
+
+      .menu a {
+        font-size: 0.85rem;
+        padding: 0.9rem 0.6rem;
+        letter-spacing: 1px;
+        white-space: nowrap;
+        text-align: center;
+      }
+
+      /* Botao hamburguer aparece no mobile */
+      .nav-toggle {
+        display: inline-flex;
         align-items: center;
-        gap: 0.8rem;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        justify-content: center;
+        margin-left: auto;
       }
 
       .menu::-webkit-scrollbar {
         display: none;
-      }
-
-      .menu a {
-        font-size: 0.65rem;
-        padding: 0.4rem 0.2rem;
-        letter-spacing: 0.7px;
-        white-space: nowrap;
       }
 
       .hero h1 { letter-spacing: -2px; }
@@ -726,9 +781,9 @@
     <div class="logo-container">
       <img src="images/logo.png" alt="Marcel Conde Photography" class="logo-img">
     </div>
-
+    <button class="nav-toggle" id="navToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="siteMenu">≡</button>
     <!-- ✅ MENU CORRIGIDO (IDs certos + nova página) -->
-    <ul class="menu">
+    <ul class="menu" id="siteMenu">
       <li><a href="/encontre.html">Encontre suas fotos</a></li>
       <li><a href="#sobre">Sobre</a></li>
       <li><a href="#servicos">Serviços</a></li>
@@ -736,6 +791,7 @@
       <li><a href="#contato">Contato</a></li>
     </ul>
   </nav>
+  <div class="menu-overlay" id="menuOverlay" aria-hidden="true"></div>
 
   <!-- Hero -->
   <section class="hero" id="home">
@@ -911,9 +967,45 @@
   <script>
     // Navbar (scrolled + fade out conforme rola)
     const navbar = document.getElementById('navbar');
+    const navToggle = document.getElementById('navToggle');
+    const siteMenu = document.getElementById('siteMenu');
+    const menuOverlay = document.getElementById('menuOverlay');
+
+    function closeMenu() {
+      navbar.classList.remove('menu-open');
+      menuOverlay?.classList.remove('show');
+      if (navToggle) {
+        navToggle.setAttribute('aria-expanded', 'false');
+        navToggle.setAttribute('aria-label', 'Abrir menu');
+        navToggle.textContent = '≡';
+      }
+      document.body.style.overflow = '';
+    }
+
+    function openMenu() {
+      navbar.classList.add('menu-open');
+      menuOverlay?.classList.add('show');
+      if (navToggle) {
+        navToggle.setAttribute('aria-expanded', 'true');
+        navToggle.setAttribute('aria-label', 'Fechar menu');
+        navToggle.textContent = '×';
+      }
+      document.body.style.overflow = 'hidden';
+    }
+
+    function toggleMenu() {
+      if (navbar.classList.contains('menu-open')) closeMenu();
+      else openMenu();
+    }
 
     function updateNavbar() {
       const y = window.scrollY || 0;
+      if (navbar.classList.contains('menu-open')) {
+        navbar.style.opacity = '1';
+        navbar.style.pointerEvents = 'auto';
+        navbar.style.visibility = 'visible';
+        return;
+      }
 
       // mantém o efeito "scrolled" atual
       navbar.classList.toggle('scrolled', y > 100);
@@ -943,6 +1035,21 @@
     window.addEventListener('scroll', updateNavbar, { passive: true });
     updateNavbar();
 
+    // Menu mobile (hamburguer)
+    navToggle?.addEventListener('click', toggleMenu);
+    menuOverlay?.addEventListener('click', closeMenu);
+
+    // Fecha o menu ao clicar em um item
+    siteMenu?.addEventListener('click', (e) => {
+      const a = e.target?.closest?.('a');
+      if (a) closeMenu();
+    });
+
+    // Fecha com ESC
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeMenu();
+    });
+
     // Scroll Animations
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
@@ -956,6 +1063,7 @@
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function (e) {
         e.preventDefault();
+        closeMenu();
         const target = document.querySelector(this.getAttribute('href'));
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
