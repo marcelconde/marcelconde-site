@@ -35,6 +35,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      cursor: pointer;
     }
 
     .img-wrap img {
@@ -77,6 +78,87 @@
       transform: translateY(-1px);
       box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
     }
+
+    /* ===============================
+   LIGHTBOX (imagem expandida)
+================================ */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.lightbox[aria-hidden="false"] {
+  display: flex;
+}
+
+.lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  border-radius: 12px;
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
+  transition: transform 0.25s ease;
+}
+
+/* Botão fechar */
+.lightbox-close {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  font-size: 42px;
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.lightbox-close:hover {
+  opacity: 1;
+}
+
+/* Navegação */
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 64px;
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 0 16px;
+  opacity: 0.8;
+  user-select: none;
+}
+
+.lightbox-nav:hover {
+  opacity: 1;
+}
+
+.lightbox-prev {
+  left: 20px;
+}
+
+.lightbox-next {
+  right: 20px;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .lightbox-nav {
+    font-size: 48px;
+  }
+
+  .lightbox-close {
+    font-size: 36px;
+  }
+}
   </style>
 </head>
 
@@ -87,6 +169,17 @@
     <h1 id="title">Carregando...</h1>
   </div>
   <div class="grid" id="grid"></div>
+
+  <!-- Lightbox (modal) -->
+<div id="lightbox" class="lightbox" aria-hidden="true">
+  <button class="lightbox-close" aria-label="Fechar" type="button">×</button>
+
+  <button class="lightbox-nav lightbox-prev" aria-label="Foto anterior" type="button">‹</button>
+
+  <img id="lightbox-img" class="lightbox-img" alt="" />
+
+  <button class="lightbox-nav lightbox-next" aria-label="Próxima foto" type="button">›</button>
+</div>
 
   <script>
     const titleEl = document.getElementById("title");
@@ -104,12 +197,69 @@
       throw new Error("missing slug");
     }
 
+    // ===== Lightbox refs =====
+    const lightboxEl = document.getElementById("lightbox");
+    const lightboxImg = document.getElementById("lightbox-img");
+    const btnClose = lightboxEl.querySelector(".lightbox-close");
+    const btnPrev = lightboxEl.querySelector(".lightbox-prev");
+    const btnNext = lightboxEl.querySelector(".lightbox-next");
+
+    let currentIndex = 0;
+    let currentList = [];
+
     function markWide(img) {
       try {
         const ratio = img.naturalWidth / img.naturalHeight;
         if (ratio > 2.2) img.classList.add("is-wide");
       } catch { }
     }
+
+    function openLightboxAt(index) {
+      if (!currentList.length) return;
+
+      currentIndex = (index + currentList.length) % currentList.length;
+      const src = currentList[currentIndex];
+
+      lightboxImg.src = src;
+      lightboxImg.alt = `${slug} ${currentIndex + 1}`;
+      lightboxEl.setAttribute("aria-hidden", "false");
+
+      // evita scroll do fundo
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeLightbox() {
+      lightboxEl.setAttribute("aria-hidden", "true");
+      lightboxImg.src = "";
+      document.body.style.overflow = "";
+    }
+
+    function prev() {
+      openLightboxAt(currentIndex - 1);
+    }
+
+    function next() {
+      openLightboxAt(currentIndex + 1);
+    }
+
+    // eventos do lightbox
+    btnClose.addEventListener("click", closeLightbox);
+    btnPrev.addEventListener("click", prev);
+    btnNext.addEventListener("click", next);
+
+    // clicar no fundo fecha (mas clicar na imagem não)
+    lightboxEl.addEventListener("click", (e) => {
+      if (e.target === lightboxEl) closeLightbox();
+    });
+
+    // teclado: ESC / setas
+    window.addEventListener("keydown", (e) => {
+      if (lightboxEl.getAttribute("aria-hidden") !== "false") return;
+
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowLeft") prev();
+      if (e.key === "ArrowRight") next();
+    });
 
     async function load() {
       // ✅ Agora vem do Worker, não do JSON local
@@ -130,6 +280,7 @@
         .filter(Boolean);
 
       const list = images.length ? images : [data.thumbnail].filter(Boolean);
+      currentList = list;
 
       gridEl.innerHTML = "";
 
@@ -138,7 +289,7 @@
         return;
       }
 
-      for (const src of list) {
+      list.forEach((src, index) => {
         const wrap = document.createElement("div");
         wrap.className = "img-wrap";
 
@@ -148,9 +299,12 @@
 
         img.onload = () => markWide(img);
 
+        // ✅ abre a foto em tela cheia
+        wrap.addEventListener("click", () => openLightboxAt(index));
+
         wrap.appendChild(img);
         gridEl.appendChild(wrap);
-      }
+      });
     }
 
     load().catch(err => {
