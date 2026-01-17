@@ -110,7 +110,7 @@
       position: fixed;
       top: 0;
       width: 100%;
-      z-index: 1000;
+      z-index: 1600;
       padding: 2rem 5%;
       display: flex;
       justify-content: space-between;
@@ -184,6 +184,7 @@
       opacity: 1 !important;
       pointer-events: auto !important;
       visibility: visible !important;
+      z-index: 1600;
     }
 
     /* Overlay do menu no mobile */
@@ -192,7 +193,7 @@
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.55);
-      z-index: 1500;
+      z-index: 1500; /* stays below nav (nav is 1600) */
       opacity: 0;
       transition: opacity 0.25s ease;
     }
