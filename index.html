@@ -596,6 +596,57 @@
       height: auto;
       display: block;
     }
+
+    /* === BOTAO VOLTAR AO TOPO === */
+    #backToTop {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      width: 48px;
+      height: 48px;
+      border: none;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--primary);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 2000;
+    }
+
+    #backToTop.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    #backToTop:hover {
+      transform: translateY(-2px);
+    }
+
+    #backToTop:focus-visible {
+      outline: 3px solid var(--accent-light);
+      outline-offset: 3px;
+    }
+
+    #backToTop svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    @media (max-width: 768px) {
+      #backToTop {
+        right: 14px;
+        bottom: 14px;
+        width: 44px;
+        height: 44px;
+      }
+    }
   </style>
 </head>
 
@@ -638,6 +689,13 @@
       <span>Scroll</span>
     </div>
   </section>
+
+  <!-- Botao voltar ao topo -->
+  <button id="backToTop" aria-label="Voltar ao topo" title="Voltar ao topo">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M12 5l7 7-1.4 1.4L13 8.8V19h-2V8.8L6.4 13.4 5 12l7-7z" fill="currentColor"/>
+    </svg>
+  </button>
 
   <!-- Sobre -->
   <section class="section section-light" id="sobre">
@@ -897,6 +955,21 @@
     }
 
     loadPortfolio();
+
+    // Botao voltar ao topo
+    const backToTopBtn = document.getElementById('backToTop');
+
+    function toggleBackToTop() {
+      if (!backToTopBtn) return;
+      backToTopBtn.classList.toggle('show', window.scrollY > 500);
+    }
+
+    window.addEventListener('scroll', toggleBackToTop, { passive: true });
+    toggleBackToTop();
+
+    backToTopBtn?.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
   </script>
 
   <script>
