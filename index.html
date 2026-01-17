@@ -210,29 +210,37 @@
       background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #000 100%);
     }
 
-    /* === FUNDO HERO: CINEMATOGRAFICO PROFISSIONAL (LUZ + GRAIN) === */
+    /* === FUNDO HERO: CINEMATOGRAFICO PROFISSIONAL (movimento constante) === */
     .hero::before {
       content: "";
       position: absolute;
-      inset: 0;
+      inset: -20%;
       z-index: 1;
-      /* camadas: vinheta + luz suave + feixe diagonal */
+      pointer-events: none;
+
+      /* Camadas: glow quente + halos frios + feixe + vinheta */
       background:
-        radial-gradient(1200px 800px at 50% 45%, rgba(212,165,116,0.16), transparent 60%),
-        radial-gradient(900px 600px at 15% 25%, rgba(255,255,255,0.06), transparent 55%),
-        radial-gradient(900px 600px at 85% 30%, rgba(255,255,255,0.05), transparent 60%),
-        linear-gradient(115deg,
-          rgba(212,165,116,0) 0%,
-          rgba(212,165,116,0.10) 18%,
-          rgba(212,165,116,0.03) 35%,
-          rgba(212,165,116,0) 55%
+        radial-gradient(900px 700px at 30% 35%, rgba(212,165,116,0.22), transparent 62%),
+        radial-gradient(800px 650px at 75% 30%, rgba(255,255,255,0.10), transparent 60%),
+        radial-gradient(700px 600px at 65% 75%, rgba(255,255,255,0.06), transparent 62%),
+        conic-gradient(from 220deg at 50% 50%,
+          rgba(212,165,116,0.00) 0deg,
+          rgba(212,165,116,0.08) 50deg,
+          rgba(212,165,116,0.00) 110deg,
+          rgba(255,255,255,0.05) 170deg,
+          rgba(255,255,255,0.00) 230deg,
+          rgba(212,165,116,0.06) 290deg,
+          rgba(212,165,116,0.00) 360deg
         ),
-        radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%);
-      background-size: 100% 100%, 100% 100%, 100% 100%, 180% 180%, 100% 100%;
-      background-position: 50% 50%, 15% 25%, 85% 30%, 0% 0%, 50% 50%;
-      filter: blur(0px);
+        radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 38%, rgba(0,0,0,0.62) 100%);
+
+      background-blend-mode: screen, screen, screen, overlay, normal;
       opacity: 1;
-      animation: heroSweep 16s ease-in-out infinite;
+      filter: saturate(110%) contrast(105%);
+
+      /* Movimento constante e visível, mas ainda premium */
+      animation: heroSweep 10s linear infinite;
+      transform-origin: 50% 50%;
     }
 
     .hero::after {
@@ -241,41 +249,55 @@
       inset: 0;
       z-index: 1;
       pointer-events: none;
-      /* grain/poeira bem sutil (profissional) */
+
+      /* Poeira/grain + pequenas partículas super sutis */
       background-image:
-        radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08) 0 1px, transparent 2px),
-        radial-gradient(circle at 70% 40%, rgba(255,255,255,0.06) 0 1px, transparent 2px),
-        radial-gradient(circle at 45% 70%, rgba(255,255,255,0.05) 0 1px, transparent 2px),
-        radial-gradient(circle at 85% 75%, rgba(255,255,255,0.04) 0 1px, transparent 2px);
-      background-size: 260px 260px, 320px 320px, 380px 380px, 420px 420px;
-      background-position: 0 0, 40px 80px, 120px 40px, 200px 160px;
-      opacity: 0.18;
+        radial-gradient(circle at 20% 30%, rgba(255,255,255,0.10) 0 1px, transparent 2px),
+        radial-gradient(circle at 70% 40%, rgba(255,255,255,0.08) 0 1px, transparent 2px),
+        radial-gradient(circle at 45% 70%, rgba(255,255,255,0.07) 0 1px, transparent 2px),
+        radial-gradient(circle at 85% 75%, rgba(255,255,255,0.06) 0 1px, transparent 2px),
+        radial-gradient(circle at 10% 80%, rgba(212,165,116,0.08) 0 1px, transparent 2px),
+        radial-gradient(circle at 90% 15%, rgba(212,165,116,0.06) 0 1px, transparent 2px);
+
+      background-size:
+        220px 220px,
+        280px 280px,
+        340px 340px,
+        420px 420px,
+        300px 300px,
+        380px 380px;
+
+      background-position:
+        0 0,
+        60px 90px,
+        140px 60px,
+        220px 180px,
+        30px 200px,
+        260px 40px;
+
+      opacity: 0.26;
       mix-blend-mode: overlay;
-      animation: heroGrain 9s steps(6) infinite;
+
+      /* drift constante (o olho percebe) */
+      animation: heroGrain 6s linear infinite;
     }
 
     @keyframes heroSweep {
       0% {
-        background-position: 50% 50%, 15% 25%, 85% 30%, 0% 0%, 50% 50%;
-        filter: brightness(1) contrast(1);
+        transform: translate3d(-2%, -1%, 0) rotate(0deg) scale(1.05);
       }
       50% {
-        background-position: 50% 50%, 18% 28%, 82% 26%, 100% 100%, 50% 50%;
-        filter: brightness(1.06) contrast(1.02);
+        transform: translate3d(2%, 1%, 0) rotate(180deg) scale(1.08);
       }
       100% {
-        background-position: 50% 50%, 15% 25%, 85% 30%, 0% 0%, 50% 50%;
-        filter: brightness(1) contrast(1);
+        transform: translate3d(-2%, -1%, 0) rotate(360deg) scale(1.05);
       }
     }
 
     @keyframes heroGrain {
-      0%   { transform: translate3d(0,0,0); }
-      20%  { transform: translate3d(-1.5%, 1%, 0); }
-      40%  { transform: translate3d(1%, -1.5%, 0); }
-      60%  { transform: translate3d(-1%, -1%, 0); }
-      80%  { transform: translate3d(1.5%, 0.5%, 0); }
-      100% { transform: translate3d(0,0,0); }
+      0%   { background-position: 0 0, 60px 90px, 140px 60px, 220px 180px, 30px 200px, 260px 40px; }
+      50%  { background-position: 18px -12px, 44px 110px, 120px 78px, 240px 160px, 12px 218px, 282px 22px; }
+      100% { background-position: 0 0, 60px 90px, 140px 60px, 220px 180px, 30px 200px, 260px 40px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
