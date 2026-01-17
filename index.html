@@ -210,31 +210,80 @@
       background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #000 100%);
     }
 
-    /* === FUNDO HERO: GRADIENTE VIVO CINEMATOGRÁFICO === */
+    /* === FUNDO HERO: AURORA + SPARKLES (novo efeito chamativo) === */
     .hero::before {
       content: "";
       position: absolute;
-      inset: 0;
+      inset: -20%;
       background:
-        radial-gradient(circle at 20% 20%, rgba(212,165,116,0.25), transparent 40%),
-        radial-gradient(circle at 80% 30%, rgba(232,201,160,0.25), transparent 45%),
-        radial-gradient(circle at 50% 80%, rgba(176,141,94,0.25), transparent 50%);
-      animation: heroGlow 18s ease-in-out infinite alternate;
+        radial-gradient(60% 60% at 15% 20%, rgba(212,165,116,0.45), transparent 55%),
+        radial-gradient(55% 55% at 85% 30%, rgba(140,200,255,0.35), transparent 55%),
+        radial-gradient(65% 65% at 55% 85%, rgba(190,120,255,0.30), transparent 60%),
+        radial-gradient(50% 50% at 45% 55%, rgba(232,201,160,0.28), transparent 60%),
+        conic-gradient(from 180deg at 50% 50%, rgba(255,255,255,0.00), rgba(212,165,116,0.20), rgba(140,200,255,0.18), rgba(190,120,255,0.16), rgba(255,255,255,0.00));
+      filter: blur(70px) saturate(140%);
+      opacity: 0.95;
+      transform: translate3d(0,0,0) scale(1.05);
+      animation: auroraDrift 14s ease-in-out infinite alternate;
       z-index: 1;
     }
 
-    @keyframes heroGlow {
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      /* “sparkles” diferentes das partículas antigas: pontinhos + brilho sutil */
+      background-image:
+        radial-gradient(2px 2px at 8% 18%, rgba(255,255,255,0.85), transparent 60%),
+        radial-gradient(1px 1px at 14% 64%, rgba(255,255,255,0.65), transparent 60%),
+        radial-gradient(2px 2px at 22% 36%, rgba(255,255,255,0.75), transparent 60%),
+        radial-gradient(1px 1px at 28% 82%, rgba(255,255,255,0.55), transparent 60%),
+        radial-gradient(2px 2px at 36% 12%, rgba(255,255,255,0.70), transparent 60%),
+        radial-gradient(1px 1px at 44% 56%, rgba(255,255,255,0.60), transparent 60%),
+        radial-gradient(2px 2px at 52% 22%, rgba(255,255,255,0.80), transparent 60%),
+        radial-gradient(1px 1px at 61% 74%, rgba(255,255,255,0.55), transparent 60%),
+        radial-gradient(2px 2px at 70% 40%, rgba(255,255,255,0.70), transparent 60%),
+        radial-gradient(1px 1px at 78% 88%, rgba(255,255,255,0.50), transparent 60%),
+        radial-gradient(2px 2px at 86% 16%, rgba(255,255,255,0.75), transparent 60%),
+        radial-gradient(1px 1px at 92% 58%, rgba(255,255,255,0.60), transparent 60%);
+      background-size: 200% 200%;
+      background-position: 50% 50%;
+      mix-blend-mode: screen;
+      opacity: 0.55;
+      filter: blur(0.2px);
+      animation: sparkleFloat 18s linear infinite;
+      z-index: 1;
+    }
+
+    @keyframes auroraDrift {
       0% {
-        filter: blur(60px);
-        transform: scale(1);
+        transform: translate3d(-2%, -1%, 0) scale(1.05) rotate(-1deg);
+        filter: blur(75px) saturate(145%);
       }
       50% {
-        filter: blur(90px);
-        transform: scale(1.05);
+        transform: translate3d(2%, 1.5%, 0) scale(1.10) rotate(1deg);
+        filter: blur(90px) saturate(165%);
       }
       100% {
-        filter: blur(70px);
-        transform: scale(1.1);
+        transform: translate3d(-1%, 2%, 0) scale(1.07) rotate(-0.5deg);
+        filter: blur(80px) saturate(155%);
+      }
+    }
+
+    @keyframes sparkleFloat {
+      0% {
+        background-position: 0% 0%;
+        opacity: 0.40;
+      }
+      40% {
+        opacity: 0.65;
+      }
+      60% {
+        opacity: 0.52;
+      }
+      100% {
+        background-position: 100% 100%;
+        opacity: 0.42;
       }
     }
 
