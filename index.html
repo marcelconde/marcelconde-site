@@ -210,99 +210,44 @@
       background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #000 100%);
     }
 
-    /* === HERO FLARE (efeito de lente) === */
-    .hero-flare {
-      position: absolute;
-      inset: -25%;
-      z-index: 1;
-      pointer-events: none;
-      opacity: var(--flare-opacity, 1);
-      transform: translate3d(var(--flare-x, -18%), var(--flare-y, -18%), 0) rotate(var(--flare-rot, -10deg)) scale(var(--flare-scale, 1));
-      transition: opacity 0.25s ease;
-      mix-blend-mode: screen;
-      filter: blur(0.2px);
-    }
-
-    /* Núcleo do flare (sol) */
-    .hero-flare::before {
-      content: "";
-      position: absolute;
-      left: 12%;
-      top: 12%;
-      width: 380px;
-      height: 380px;
-      border-radius: 999px;
-      background:
-        radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95) 0 12%, rgba(255,220,160,0.85) 13% 25%, rgba(212,165,116,0.35) 26% 45%, transparent 60%),
-        radial-gradient(circle at 50% 50%, rgba(255,160,90,0.20) 0 55%, transparent 70%);
-      filter: blur(0.5px);
-      transform: translate3d(var(--flare-core-x, 0px), var(--flare-core-y, 0px), 0);
-    }
-
-    /* Raios + bokeh */
-    .hero-flare::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background:
-        /* halo grande */
-        radial-gradient(closest-side at 22% 22%, rgba(255,200,140,0.22), transparent 60%),
-        /* streak horizontal */
-        linear-gradient(90deg, transparent 0%, rgba(255,210,160,0.18) 38%, rgba(255,255,255,0.22) 50%, rgba(255,210,160,0.18) 62%, transparent 100%),
-        /* bokeh "bolinhas" */
-        radial-gradient(circle at 42% 44%, rgba(255,180,120,0.22) 0 18px, transparent 22px),
-        radial-gradient(circle at 50% 52%, rgba(255,160,100,0.20) 0 14px, transparent 18px),
-        radial-gradient(circle at 58% 60%, rgba(255,140,90,0.18) 0 10px, transparent 14px),
-        radial-gradient(circle at 66% 68%, rgba(255,200,140,0.16) 0 9px, transparent 13px),
-        radial-gradient(circle at 74% 76%, rgba(255,160,110,0.14) 0 7px, transparent 11px);
-      opacity: 0.95;
-      transform: translate3d(var(--flare-bokeh-x, 0px), var(--flare-bokeh-y, 0px), 0) rotate(var(--flare-bokeh-rot, 0deg));
-      filter: blur(0.6px);
-    }
-
-    /* Desliga efeitos para quem prefere menos movimento */
-    @media (prefers-reduced-motion: reduce) {
-      .hero-flare {
-        transform: none !important;
-        transition: none !important;
-      }
-      .hero-flare::before,
-      .hero-flare::after {
-        transform: none !important;
-      }
-    }
-
+    /* === Partículas reais (movimento aleatório por partícula) === */
     .hero-particles {
       position: absolute;
       inset: 0;
-      pointer-events: none;
       z-index: 1;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0.55;
     }
 
     .hero-particles span {
       position: absolute;
-      width: 2px;
-      height: 2px;
-      background: rgba(255,255,255,0.8);
-      border-radius: 50%;
-      opacity: 0.8;
-      animation: floatRandom linear infinite;
+      left: var(--x);
+      top: var(--y);
+      width: var(--size);
+      height: var(--size);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.95);
+      opacity: var(--alpha);
+      transform: translate3d(0, 0, 0);
+      filter: blur(0.2px);
+      animation: floatParticle var(--dur) linear infinite;
+      animation-delay: var(--delay);
+      will-change: transform;
     }
 
-    @keyframes floatRandom {
+    @keyframes floatParticle {
       0% {
-        transform: translate(0, 0);
-        opacity: 0;
-      }
-      10% {
-        opacity: 1;
-      }
-      90% {
-        opacity: 1;
+        transform: translate3d(0, 0, 0);
       }
       100% {
-        transform: translate(var(--dx), var(--dy));
-        opacity: 0;
+        transform: translate3d(var(--dx), var(--dy), 0);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .hero-particles {
+        opacity: 0.45;
       }
     }
 
@@ -734,10 +679,7 @@
 
   <!-- Hero -->
   <section class="hero" id="home">
-    <div class="hero-particles" aria-hidden="true">
-      <!-- particles injected by JS -->
-    </div>
-    <div class="hero-flare" aria-hidden="true"></div>
+    <div class="hero-particles" aria-hidden="true"></div>
     <div class="hero-content">
       <h1>MARCEL<br>CONDE</h1>
       <div class="hero-subtitle">Fotografia Premium</div>
@@ -931,6 +873,62 @@
       });
     });
 
+    // Partículas do Hero (movimento aleatório)
+    const particlesLayer = document.querySelector('.hero-particles');
+
+    function rand(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    function buildHeroParticles() {
+      if (!particlesLayer) return;
+
+      // limpa caso já exista
+      particlesLayer.innerHTML = '';
+
+      const isMobile = window.matchMedia('(max-width: 768px)').matches;
+      const count = isMobile ? 26 : 48;
+
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('span');
+
+        // posição inicial
+        const x = rand(0, 100);
+        const y = rand(0, 100);
+
+        // tamanho e opacidade
+        const size = rand(1.2, 2.6);
+        const alpha = rand(0.25, 0.95);
+
+        // deslocamento aleatório (direção e intensidade)
+        const dx = rand(-220, 220);
+        const dy = rand(-160, 160);
+
+        // duração e delay (delay negativo = já nasce em movimento)
+        const dur = rand(10, 22);
+        const delay = rand(-22, 0);
+
+        p.style.setProperty('--x', `${x}%`);
+        p.style.setProperty('--y', `${y}%`);
+        p.style.setProperty('--size', `${size}px`);
+        p.style.setProperty('--alpha', `${alpha}`);
+        p.style.setProperty('--dx', `${dx}px`);
+        p.style.setProperty('--dy', `${dy}px`);
+        p.style.setProperty('--dur', `${dur}s`);
+        p.style.setProperty('--delay', `${delay}s`);
+
+        particlesLayer.appendChild(p);
+      }
+    }
+
+    // monta ao carregar e remonta ao redimensionar
+    buildHeroParticles();
+    window.addEventListener('resize', () => {
+      // simples debounce
+      clearTimeout(window.__pResize);
+      window.__pResize = setTimeout(buildHeroParticles, 200);
+    });
+
     // Hover effect nos links de contato (após DOM pronto)
     window.addEventListener('DOMContentLoaded', () => {
       document
@@ -971,82 +969,6 @@
       lastScroll = scrollY;
     });
 
-    // === Flare no Hero (mexe com o scroll e some depois do topo) ===
-    const heroEl = document.querySelector('.hero');
-    const flareEl = document.querySelector('.hero-flare');
-
-    function clamp(n, min, max) {
-      return Math.max(min, Math.min(max, n));
-    }
-
-    function updateHeroFlare() {
-      if (!heroEl || !flareEl) return;
-
-      const heroH = heroEl.offsetHeight || window.innerHeight;
-      const y = window.scrollY;
-      const t = clamp(y / heroH, 0, 1); // 0 no topo, 1 no fim do hero
-
-      // Movimento suave: desloca e gira como "mudança de ângulo" da lente
-      const xPct = -18 + (t * 26);          // -18% -> +8%
-      const yPct = -18 + (t * 20);          // -18% -> +2%
-      const rot = -12 + (t * 28);           // -12deg -> +16deg
-      const scale = 1 + (t * 0.08);
-
-      // Bokeh "anda" na direção contrária pra dar sensação de lente
-      const bx = (t * -60);
-      const by = (t * 40);
-      const brot = (t * -18);
-
-      // Opacidade: some depois do hero
-      const opacity = t < 0.92 ? (1 - (t * 0.9)) : (1 - (t * 1.6));
-
-      flareEl.style.setProperty('--flare-x', `${xPct}%`);
-      flareEl.style.setProperty('--flare-y', `${yPct}%`);
-      flareEl.style.setProperty('--flare-rot', `${rot}deg`);
-      flareEl.style.setProperty('--flare-scale', `${scale}`);
-      flareEl.style.setProperty('--flare-bokeh-x', `${bx}px`);
-      flareEl.style.setProperty('--flare-bokeh-y', `${by}px`);
-      flareEl.style.setProperty('--flare-bokeh-rot', `${brot}deg`);
-      flareEl.style.setProperty('--flare-opacity', `${clamp(opacity, 0, 1)}`);
-
-      // Depois que sair do hero, garante invisível e sem custo
-      if (t >= 1) {
-        flareEl.style.setProperty('--flare-opacity', '0');
-      }
-    }
-
-    window.addEventListener('scroll', updateHeroFlare, { passive: true });
-    window.addEventListener('resize', updateHeroFlare);
-    updateHeroFlare();
-
-    // === Partículas com movimento aleatório ===
-    const particlesContainer = document.querySelector('.hero-particles');
-
-    if (particlesContainer) {
-      const PARTICLE_COUNT = 60;
-
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        const p = document.createElement('span');
-
-        const startX = Math.random() * 100;
-        const startY = Math.random() * 100;
-
-        const dx = (Math.random() * 2 - 1) * 300; // movimento aleatório X
-        const dy = (Math.random() * 2 - 1) * 300; // movimento aleatório Y
-
-        const duration = 18 + Math.random() * 20;
-        const delay = Math.random() * -duration;
-
-        p.style.left = `${startX}%`;
-        p.style.top = `${startY}%`;
-        p.style.setProperty('--dx', `${dx}px`);
-        p.style.setProperty('--dy', `${dy}px`);
-        p.style.animationDuration = `${duration}s`;
-        p.style.animationDelay = `${delay}s`;
-
-        particlesContainer.appendChild(p);
-      }
-    }
 
     // Carregar Portfólio (Worker)
     async function loadPortfolio() {
