@@ -210,80 +210,78 @@
       background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #000 100%);
     }
 
-    /* === FUNDO HERO: AURORA + SPARKLES (novo efeito chamativo) === */
+    /* === FUNDO HERO: CINEMATOGRAFICO PROFISSIONAL (LUZ + GRAIN) === */
     .hero::before {
       content: "";
       position: absolute;
-      inset: -20%;
-      background:
-        radial-gradient(60% 60% at 15% 20%, rgba(212,165,116,0.45), transparent 55%),
-        radial-gradient(55% 55% at 85% 30%, rgba(140,200,255,0.35), transparent 55%),
-        radial-gradient(65% 65% at 55% 85%, rgba(190,120,255,0.30), transparent 60%),
-        radial-gradient(50% 50% at 45% 55%, rgba(232,201,160,0.28), transparent 60%),
-        conic-gradient(from 180deg at 50% 50%, rgba(255,255,255,0.00), rgba(212,165,116,0.20), rgba(140,200,255,0.18), rgba(190,120,255,0.16), rgba(255,255,255,0.00));
-      filter: blur(70px) saturate(140%);
-      opacity: 0.95;
-      transform: translate3d(0,0,0) scale(1.05);
-      animation: auroraDrift 14s ease-in-out infinite alternate;
+      inset: 0;
       z-index: 1;
+      /* camadas: vinheta + luz suave + feixe diagonal */
+      background:
+        radial-gradient(1200px 800px at 50% 45%, rgba(212,165,116,0.16), transparent 60%),
+        radial-gradient(900px 600px at 15% 25%, rgba(255,255,255,0.06), transparent 55%),
+        radial-gradient(900px 600px at 85% 30%, rgba(255,255,255,0.05), transparent 60%),
+        linear-gradient(115deg,
+          rgba(212,165,116,0) 0%,
+          rgba(212,165,116,0.10) 18%,
+          rgba(212,165,116,0.03) 35%,
+          rgba(212,165,116,0) 55%
+        ),
+        radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%);
+      background-size: 100% 100%, 100% 100%, 100% 100%, 180% 180%, 100% 100%;
+      background-position: 50% 50%, 15% 25%, 85% 30%, 0% 0%, 50% 50%;
+      filter: blur(0px);
+      opacity: 1;
+      animation: heroSweep 16s ease-in-out infinite;
     }
 
     .hero::after {
       content: "";
       position: absolute;
       inset: 0;
-      /* “sparkles” diferentes das partículas antigas: pontinhos + brilho sutil */
-      background-image:
-        radial-gradient(2px 2px at 8% 18%, rgba(255,255,255,0.85), transparent 60%),
-        radial-gradient(1px 1px at 14% 64%, rgba(255,255,255,0.65), transparent 60%),
-        radial-gradient(2px 2px at 22% 36%, rgba(255,255,255,0.75), transparent 60%),
-        radial-gradient(1px 1px at 28% 82%, rgba(255,255,255,0.55), transparent 60%),
-        radial-gradient(2px 2px at 36% 12%, rgba(255,255,255,0.70), transparent 60%),
-        radial-gradient(1px 1px at 44% 56%, rgba(255,255,255,0.60), transparent 60%),
-        radial-gradient(2px 2px at 52% 22%, rgba(255,255,255,0.80), transparent 60%),
-        radial-gradient(1px 1px at 61% 74%, rgba(255,255,255,0.55), transparent 60%),
-        radial-gradient(2px 2px at 70% 40%, rgba(255,255,255,0.70), transparent 60%),
-        radial-gradient(1px 1px at 78% 88%, rgba(255,255,255,0.50), transparent 60%),
-        radial-gradient(2px 2px at 86% 16%, rgba(255,255,255,0.75), transparent 60%),
-        radial-gradient(1px 1px at 92% 58%, rgba(255,255,255,0.60), transparent 60%);
-      background-size: 200% 200%;
-      background-position: 50% 50%;
-      mix-blend-mode: screen;
-      opacity: 0.55;
-      filter: blur(0.2px);
-      animation: sparkleFloat 18s linear infinite;
       z-index: 1;
+      pointer-events: none;
+      /* grain/poeira bem sutil (profissional) */
+      background-image:
+        radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08) 0 1px, transparent 2px),
+        radial-gradient(circle at 70% 40%, rgba(255,255,255,0.06) 0 1px, transparent 2px),
+        radial-gradient(circle at 45% 70%, rgba(255,255,255,0.05) 0 1px, transparent 2px),
+        radial-gradient(circle at 85% 75%, rgba(255,255,255,0.04) 0 1px, transparent 2px);
+      background-size: 260px 260px, 320px 320px, 380px 380px, 420px 420px;
+      background-position: 0 0, 40px 80px, 120px 40px, 200px 160px;
+      opacity: 0.18;
+      mix-blend-mode: overlay;
+      animation: heroGrain 9s steps(6) infinite;
     }
 
-    @keyframes auroraDrift {
+    @keyframes heroSweep {
       0% {
-        transform: translate3d(-2%, -1%, 0) scale(1.05) rotate(-1deg);
-        filter: blur(75px) saturate(145%);
+        background-position: 50% 50%, 15% 25%, 85% 30%, 0% 0%, 50% 50%;
+        filter: brightness(1) contrast(1);
       }
       50% {
-        transform: translate3d(2%, 1.5%, 0) scale(1.10) rotate(1deg);
-        filter: blur(90px) saturate(165%);
+        background-position: 50% 50%, 18% 28%, 82% 26%, 100% 100%, 50% 50%;
+        filter: brightness(1.06) contrast(1.02);
       }
       100% {
-        transform: translate3d(-1%, 2%, 0) scale(1.07) rotate(-0.5deg);
-        filter: blur(80px) saturate(155%);
+        background-position: 50% 50%, 15% 25%, 85% 30%, 0% 0%, 50% 50%;
+        filter: brightness(1) contrast(1);
       }
     }
 
-    @keyframes sparkleFloat {
-      0% {
-        background-position: 0% 0%;
-        opacity: 0.40;
-      }
-      40% {
-        opacity: 0.65;
-      }
-      60% {
-        opacity: 0.52;
-      }
-      100% {
-        background-position: 100% 100%;
-        opacity: 0.42;
+    @keyframes heroGrain {
+      0%   { transform: translate3d(0,0,0); }
+      20%  { transform: translate3d(-1.5%, 1%, 0); }
+      40%  { transform: translate3d(1%, -1.5%, 0); }
+      60%  { transform: translate3d(-1%, -1%, 0); }
+      80%  { transform: translate3d(1.5%, 0.5%, 0); }
+      100% { transform: translate3d(0,0,0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero::before,
+      .hero::after {
+        animation: none !important;
       }
     }
 
