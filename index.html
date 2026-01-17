@@ -605,15 +605,23 @@
 
       .menu {
         width: 100%;
+        display: flex;
+        flex-wrap: nowrap;
         justify-content: center;
-        flex-wrap: wrap;
-        gap: 0.5rem 1rem;
+        align-items: center;
+        gap: 0.8rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .menu::-webkit-scrollbar {
+        display: none;
       }
 
       .menu a {
-        font-size: 0.7rem;
-        padding: 0.4rem 0;
-        letter-spacing: 0.8px;
+        font-size: 0.65rem;
+        padding: 0.4rem 0.2rem;
+        letter-spacing: 0.7px;
         white-space: nowrap;
       }
 
