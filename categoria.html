@@ -102,9 +102,11 @@
   border-radius: 12px;
   box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
 
-  /* ✅ animação suave ao trocar de foto */
+  /* ✅ transição suave ao trocar de foto */
+  --enter-x: 18px;
+  --exit-x: -18px;
   opacity: 0;
-  transform: translateX(18px) scale(0.99);
+  transform: translateX(var(--enter-x)) scale(0.99);
   transition: opacity 220ms ease, transform 220ms ease;
   will-change: opacity, transform;
 }
@@ -114,8 +116,9 @@
   transform: translateX(0) scale(1);
 }
 
-.lightbox-img.is-prev {
-  transform: translateX(-18px) scale(0.99);
+.lightbox-img.is-leaving {
+  opacity: 0;
+  transform: translateX(var(--exit-x)) scale(0.99);
 }
 
 /* Botão fechar */
@@ -216,10 +219,8 @@
     const lightboxImg = document.getElementById("lightbox-img");
     // quando a imagem do lightbox carregar, faz aparecer com transição
     lightboxImg.addEventListener("load", () => {
-      // força o browser a reconhecer o estado inicial antes de mostrar
       requestAnimationFrame(() => {
         lightboxImg.classList.add("is-visible");
-        lightboxImg.classList.remove("is-prev");
       });
     });
     const btnClose = lightboxEl.querySelector(".lightbox-close");
@@ -236,34 +237,67 @@
       } catch { }
     }
 
+    let isTransitioning = false;
+
     function openLightboxAt(index) {
       if (!currentList.length) return;
 
+      const total = currentList.length;
+      const nextIndex = (index + total) % total;
+
+      // define direção (considerando wrap)
       const prevIndex = currentIndex;
-      currentIndex = (index + currentList.length) % currentList.length;
-      const src = currentList[currentIndex];
+      const direction = (nextIndex === (prevIndex + 1) % total) ? "next" :
+                        (nextIndex === (prevIndex - 1 + total) % total) ? "prev" :
+                        (nextIndex > prevIndex ? "next" : "prev");
 
-      // direção da animação
-      const goingNext = currentIndex >= prevIndex;
+      // garante modal aberto
+      lightboxEl.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
 
-      // prepara transição: some antes de trocar
-      lightboxImg.classList.remove("is-visible", "is-prev");
-      if (!goingNext) lightboxImg.classList.add("is-prev");
+      // aplica variáveis de direção
+      const enterX = direction === "next" ? 18 : -18;
+      const exitX = direction === "next" ? -18 : 18;
+      lightboxImg.style.setProperty("--enter-x", `${enterX}px`);
+      lightboxImg.style.setProperty("--exit-x", `${exitX}px`);
 
-      // garante fade-out antes de trocar o src
-      requestAnimationFrame(() => {
-        // troca src depois de 1 frame
+      // se já tem imagem aberta, faz sair antes
+      const hasCurrent = !!lightboxImg.getAttribute("src");
+
+      const swapToNext = () => {
+        currentIndex = nextIndex;
+        const src = currentList[currentIndex];
+
+        // prepara estado inicial de entrada
+        lightboxImg.classList.remove("is-visible", "is-leaving");
+
+        // troca a imagem (o evento 'load' vai colocar is-visible)
         lightboxImg.src = src;
         lightboxImg.alt = `${slug} ${currentIndex + 1}`;
+      };
 
-        lightboxEl.setAttribute("aria-hidden", "false");
-        document.body.style.overflow = "hidden";
-      });
+      if (!hasCurrent) {
+        swapToNext();
+        return;
+      }
+
+      if (isTransitioning) return;
+      isTransitioning = true;
+
+      // anima saída
+      lightboxImg.classList.remove("is-visible");
+      lightboxImg.classList.add("is-leaving");
+
+      // após a duração da transição, troca e libera
+      window.setTimeout(() => {
+        swapToNext();
+        isTransitioning = false;
+      }, 220);
     }
 
     function closeLightbox() {
       lightboxEl.setAttribute("aria-hidden", "true");
-      lightboxImg.classList.remove("is-visible", "is-prev");
+      lightboxImg.classList.remove("is-visible", "is-leaving");
       lightboxImg.src = "";
       document.body.style.overflow = "";
     }
