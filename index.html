@@ -210,101 +210,46 @@
       background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #000 100%);
     }
 
-    /* === FUNDO HERO: CINEMATOGRAFICO PROFISSIONAL (movimento constante) === */
-    .hero::before {
-      content: "";
+    .hero-particles {
       position: absolute;
-      inset: -20%;
-      z-index: 1;
-      pointer-events: none;
-
-      /* Camadas: glow quente + halos frios + feixe + vinheta */
-      background:
-        radial-gradient(900px 700px at 30% 35%, rgba(212,165,116,0.22), transparent 62%),
-        radial-gradient(800px 650px at 75% 30%, rgba(255,255,255,0.10), transparent 60%),
-        radial-gradient(700px 600px at 65% 75%, rgba(255,255,255,0.06), transparent 62%),
-        conic-gradient(from 220deg at 50% 50%,
-          rgba(212,165,116,0.00) 0deg,
-          rgba(212,165,116,0.08) 50deg,
-          rgba(212,165,116,0.00) 110deg,
-          rgba(255,255,255,0.05) 170deg,
-          rgba(255,255,255,0.00) 230deg,
-          rgba(212,165,116,0.06) 290deg,
-          rgba(212,165,116,0.00) 360deg
-        ),
-        radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 38%, rgba(0,0,0,0.62) 100%);
-
-      background-blend-mode: screen, screen, screen, overlay, normal;
-      opacity: 1;
-      filter: saturate(110%) contrast(105%);
-
-      /* Movimento constante e visível, mas ainda premium */
-      animation: heroSweep 10s linear infinite;
-      transform-origin: 50% 50%;
-    }
-
-    .hero::after {
-      content: "";
-      position: absolute;
+      width: 100%;
+      height: 100%;
       inset: 0;
+      background-image:
+        radial-gradient(2px 2px at 5% 15%, white, transparent),
+        radial-gradient(2px 2px at 10% 60%, white, transparent),
+        radial-gradient(1px 1px at 15% 35%, white, transparent),
+        radial-gradient(2px 2px at 20% 80%, white, transparent),
+        radial-gradient(1px 1px at 25% 10%, white, transparent),
+        radial-gradient(2px 2px at 30% 55%, white, transparent),
+        radial-gradient(1px 1px at 35% 90%, white, transparent),
+        radial-gradient(2px 2px at 40% 25%, white, transparent),
+        radial-gradient(1px 1px at 45% 70%, white, transparent),
+        radial-gradient(2px 2px at 50% 5%, white, transparent),
+        radial-gradient(1px 1px at 55% 45%, white, transparent),
+        radial-gradient(2px 2px at 60% 85%, white, transparent),
+        radial-gradient(1px 1px at 65% 20%, white, transparent),
+        radial-gradient(2px 2px at 70% 65%, white, transparent),
+        radial-gradient(1px 1px at 75% 40%, white, transparent),
+        radial-gradient(2px 2px at 80% 95%, white, transparent),
+        radial-gradient(1px 1px at 85% 30%, white, transparent),
+        radial-gradient(2px 2px at 90% 75%, white, transparent),
+        radial-gradient(1px 1px at 95% 50%, white, transparent),
+        radial-gradient(2px 2px at 12% 42%, white, transparent);
+      background-size: 200% 200%;
+      background-position: 50% 50%;
+      opacity: 0.7;
+      animation: particlesMove 32s linear infinite;
       z-index: 1;
       pointer-events: none;
-
-      /* Poeira/grain + pequenas partículas super sutis */
-      background-image:
-        radial-gradient(circle at 20% 30%, rgba(255,255,255,0.10) 0 1px, transparent 2px),
-        radial-gradient(circle at 70% 40%, rgba(255,255,255,0.08) 0 1px, transparent 2px),
-        radial-gradient(circle at 45% 70%, rgba(255,255,255,0.07) 0 1px, transparent 2px),
-        radial-gradient(circle at 85% 75%, rgba(255,255,255,0.06) 0 1px, transparent 2px),
-        radial-gradient(circle at 10% 80%, rgba(212,165,116,0.08) 0 1px, transparent 2px),
-        radial-gradient(circle at 90% 15%, rgba(212,165,116,0.06) 0 1px, transparent 2px);
-
-      background-size:
-        220px 220px,
-        280px 280px,
-        340px 340px,
-        420px 420px,
-        300px 300px,
-        380px 380px;
-
-      background-position:
-        0 0,
-        60px 90px,
-        140px 60px,
-        220px 180px,
-        30px 200px,
-        260px 40px;
-
-      opacity: 0.26;
-      mix-blend-mode: overlay;
-
-      /* drift constante (o olho percebe) */
-      animation: heroGrain 6s linear infinite;
     }
 
-    @keyframes heroSweep {
-      0% {
-        transform: translate3d(-2%, -1%, 0) rotate(0deg) scale(1.05);
-      }
-      50% {
-        transform: translate3d(2%, 1%, 0) rotate(180deg) scale(1.08);
-      }
-      100% {
-        transform: translate3d(-2%, -1%, 0) rotate(360deg) scale(1.05);
-      }
-    }
-
-    @keyframes heroGrain {
-      0%   { background-position: 0 0, 60px 90px, 140px 60px, 220px 180px, 30px 200px, 260px 40px; }
-      50%  { background-position: 18px -12px, 44px 110px, 120px 78px, 240px 160px, 12px 218px, 282px 22px; }
-      100% { background-position: 0 0, 60px 90px, 140px 60px, 220px 180px, 30px 200px, 260px 40px; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .hero::before,
-      .hero::after {
-        animation: none !important;
-      }
+    @keyframes particlesMove {
+      0% { background-position: 0% 0%; }
+      25% { background-position: 50% 25%; }
+      50% { background-position: 100% 50%; }
+      75% { background-position: 50% 75%; }
+      100% { background-position: 0% 0%; }
     }
 
     .hero-content {
@@ -735,6 +680,7 @@
 
   <!-- Hero -->
   <section class="hero" id="home">
+    <div class="hero-particles"></div>
     <div class="hero-content">
       <h1>MARCEL<br>CONDE</h1>
       <div class="hero-subtitle">Fotografia Premium</div>
