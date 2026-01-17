@@ -574,15 +574,54 @@
     }
 
     @media (max-width: 768px) {
-      nav { padding: 1.5rem 5%; }
-      .menu { gap: 1rem; }
-      .menu a { font-size: 0.75rem; }
-      .logo-img { width: 40px; height: 40px; }
+      /* Tipografia geral menor no celular */
+      html { font-size: 15px; }
+      body { font-size: 1rem; }
+
+      /* Navbar: evita logo espremida e menu cortado */
+      nav {
+        padding: 1rem 4%;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.75rem;
+      }
+
+      .logo-container {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .logo-img {
+        height: 44px;
+        width: auto;
+      }
+
+      .menu {
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+      }
+
+      .menu a {
+        font-size: 0.7rem;
+        padding: 0.4rem 0;
+        letter-spacing: 0.8px;
+        white-space: nowrap;
+      }
+
       .hero h1 { letter-spacing: -2px; }
       .hero-subtitle { letter-spacing: 5px; }
       .section { padding: 6rem 5%; }
       .instagram-feed { grid-template-columns: 1fr; gap: 1.5rem; }
       .services-grid { grid-template-columns: 1fr; }
+
+      #backToTop {
+        right: 14px;
+        bottom: 14px;
+        width: 44px;
+        height: 44px;
+      }
     }
 
     /* === FOTO SOBRE (BORDA ARREDONDADA) === */
@@ -647,6 +686,12 @@
         bottom: 14px;
         width: 44px;
         height: 44px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      nav.scrolled {
+        padding: 0.85rem 4%;
       }
     }
   </style>
