@@ -101,7 +101,21 @@
   max-height: 90vh;
   border-radius: 12px;
   box-shadow: 0 40px 120px rgba(0, 0, 0, 0.6);
-  transition: transform 0.25s ease;
+
+  /* ✅ animação suave ao trocar de foto */
+  opacity: 0;
+  transform: translateX(18px) scale(0.99);
+  transition: opacity 220ms ease, transform 220ms ease;
+  will-change: opacity, transform;
+}
+
+.lightbox-img.is-visible {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+.lightbox-img.is-prev {
+  transform: translateX(-18px) scale(0.99);
 }
 
 /* Botão fechar */
@@ -200,6 +214,14 @@
     // ===== Lightbox refs =====
     const lightboxEl = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightbox-img");
+    // quando a imagem do lightbox carregar, faz aparecer com transição
+    lightboxImg.addEventListener("load", () => {
+      // força o browser a reconhecer o estado inicial antes de mostrar
+      requestAnimationFrame(() => {
+        lightboxImg.classList.add("is-visible");
+        lightboxImg.classList.remove("is-prev");
+      });
+    });
     const btnClose = lightboxEl.querySelector(".lightbox-close");
     const btnPrev = lightboxEl.querySelector(".lightbox-prev");
     const btnNext = lightboxEl.querySelector(".lightbox-next");
@@ -217,19 +239,31 @@
     function openLightboxAt(index) {
       if (!currentList.length) return;
 
+      const prevIndex = currentIndex;
       currentIndex = (index + currentList.length) % currentList.length;
       const src = currentList[currentIndex];
 
-      lightboxImg.src = src;
-      lightboxImg.alt = `${slug} ${currentIndex + 1}`;
-      lightboxEl.setAttribute("aria-hidden", "false");
+      // direção da animação
+      const goingNext = currentIndex >= prevIndex;
 
-      // evita scroll do fundo
-      document.body.style.overflow = "hidden";
+      // prepara transição: some antes de trocar
+      lightboxImg.classList.remove("is-visible", "is-prev");
+      if (!goingNext) lightboxImg.classList.add("is-prev");
+
+      // garante fade-out antes de trocar o src
+      requestAnimationFrame(() => {
+        // troca src depois de 1 frame
+        lightboxImg.src = src;
+        lightboxImg.alt = `${slug} ${currentIndex + 1}`;
+
+        lightboxEl.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      });
     }
 
     function closeLightbox() {
       lightboxEl.setAttribute("aria-hidden", "true");
+      lightboxImg.classList.remove("is-visible", "is-prev");
       lightboxImg.src = "";
       document.body.style.overflow = "";
     }
