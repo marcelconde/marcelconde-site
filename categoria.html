@@ -418,23 +418,18 @@
                 }
               } catch {}
 
+              // ✅ Se não existe thumbnail, consideramos a subpasta vazia e não exibimos
+              if (!thumb) continue;
+
               const a = document.createElement("a");
               a.className = "folder-card";
               a.href = `/categoria.html?slug=${encodeURIComponent(childSlug)}`;
 
-              if (thumb) {
-                const img = document.createElement("img");
-                img.src = thumb;
-                img.alt = folderSlug;
-                img.loading = "lazy";
-                a.appendChild(img);
-              } else {
-                const placeholder = document.createElement("div");
-                placeholder.style.width = "100%";
-                placeholder.style.height = "100%";
-                placeholder.style.background = "#e9e9e9";
-                a.appendChild(placeholder);
-              }
+              const img = document.createElement("img");
+              img.src = thumb;
+              img.alt = folderSlug;
+              img.loading = "lazy";
+              a.appendChild(img);
 
               const label = document.createElement("div");
               label.className = "folder-label";
