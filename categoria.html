@@ -217,18 +217,31 @@
     // ===== Lightbox refs =====
     const lightboxEl = document.getElementById("lightbox");
     const lightboxImg = document.getElementById("lightbox-img");
-    // quando a imagem do lightbox carregar, faz aparecer com transição
-    lightboxImg.addEventListener("load", () => {
-      requestAnimationFrame(() => {
-        lightboxImg.classList.add("is-visible");
-      });
-    });
     const btnClose = lightboxEl.querySelector(".lightbox-close");
     const btnPrev = lightboxEl.querySelector(".lightbox-prev");
     const btnNext = lightboxEl.querySelector(".lightbox-next");
 
     let currentIndex = 0;
     let currentList = [];
+    let isTransitioning = false;
+
+    async function setLightboxSrc(src, altText) {
+      // prepara estado inicial de entrada
+      lightboxImg.classList.remove("is-visible", "is-leaving");
+      lightboxImg.src = src;
+      lightboxImg.alt = altText;
+
+      // garante animação mesmo quando a imagem já está em cache
+      try {
+        if (lightboxImg.decode) {
+          await lightboxImg.decode();
+        }
+      } catch {}
+
+      requestAnimationFrame(() => {
+        lightboxImg.classList.add("is-visible");
+      });
+    }
 
     function markWide(img) {
       try {
@@ -236,8 +249,6 @@
         if (ratio > 2.2) img.classList.add("is-wide");
       } catch { }
     }
-
-    let isTransitioning = false;
 
     function openLightboxAt(index) {
       if (!currentList.length) return;
@@ -264,17 +275,12 @@
       // se já tem imagem aberta, faz sair antes
       const hasCurrent = !!lightboxImg.getAttribute("src");
 
-      const swapToNext = () => {
+      const swapToNext = async () => {
         currentIndex = nextIndex;
         const src = currentList[currentIndex];
 
-        // prepara estado inicial de entrada
-        lightboxImg.classList.remove("is-visible", "is-leaving");
-
-        // troca a imagem (o evento 'load' vai colocar is-visible)
-        lightboxImg.src = src;
         const slugAlt = decodeURIComponent(String(slug)).replace(/\+/g, " ");
-        lightboxImg.alt = `${slugAlt} ${currentIndex + 1}`;
+        await setLightboxSrc(src, `${slugAlt} ${currentIndex + 1}`);
       };
 
       if (!hasCurrent) {
@@ -290,8 +296,8 @@
       lightboxImg.classList.add("is-leaving");
 
       // após a duração da transição, troca e libera
-      window.setTimeout(() => {
-        swapToNext();
+      window.setTimeout(async () => {
+        await swapToNext();
         isTransitioning = false;
       }, 220);
     }
