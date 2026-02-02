@@ -273,7 +273,8 @@
 
         // troca a imagem (o evento 'load' vai colocar is-visible)
         lightboxImg.src = src;
-        lightboxImg.alt = `${slug} ${currentIndex + 1}`;
+        const slugAlt = decodeURIComponent(String(slug)).replace(/\+/g, " ");
+        lightboxImg.alt = `${slugAlt} ${currentIndex + 1}`;
       };
 
       if (!hasCurrent) {
@@ -341,7 +342,8 @@
       // data esperado:
       // { title, path, thumbnail, images:[{url,...}] }
 
-      titleEl.textContent = data.title || slug;
+      const slugTitle = decodeURIComponent(String(slug)).split("/").filter(Boolean).pop() || slug;
+      titleEl.textContent = data.title || slugTitle;
 
       const images = (data.images || [])
         .map(i => (typeof i === "object" ? i.url : i))
