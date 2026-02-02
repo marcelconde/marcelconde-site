@@ -1174,20 +1174,59 @@
           const slug = album.slug;
           const path = album.path;
 
-          const res = await fetch(`${WORKER_BASE}/album?path=${encodeURIComponent(path)}`, { cache: "no-store" });
-          if (!res.ok) continue;
+          let categoryTitle = slug;
+          let thumbnail = null;
 
-          const data = await res.json();
+          // === CASO ESPECIAL: Eventos Esportivos (tem subpastas) ===
+          if (slug === "Eventos Esportivos") {
+            try {
+              const subRes = await fetch(
+                `${WORKER_BASE}/albums?path=${encodeURIComponent(path)}`,
+                { cache: "no-store" }
+              );
+              if (!subRes.ok) continue;
 
-          const category = data.title || slug;
-          const thumbnail = data.thumbnail || (data.images?.[0]?.url) || null;
-          if (!thumbnail) continue;
+              const subFolders = await subRes.json();
+
+              for (const sub of subFolders) {
+                const subAlbumRes = await fetch(
+                  `${WORKER_BASE}/album?path=${encodeURIComponent(sub.path)}`,
+                  { cache: "no-store" }
+                );
+                if (!subAlbumRes.ok) continue;
+
+                const subData = await subAlbumRes.json();
+                const subThumb = subData.thumbnail || (subData.images?.[0]?.url) || null;
+
+                if (subThumb) {
+                  thumbnail = subThumb;
+                  break; // usa a primeira subpasta com fotos
+                }
+              }
+            } catch (e) {
+              console.warn("Erro ao carregar subpastas de Eventos Esportivos", e);
+            }
+
+            if (!thumbnail) continue; // não mostra se nenhuma subpasta tiver fotos
+          } 
+          // === ÁLBUNS NORMAIS ===
+          else {
+            const res = await fetch(
+              `${WORKER_BASE}/album?path=${encodeURIComponent(path)}`,
+              { cache: "no-store" }
+            );
+            if (!res.ok) continue;
+
+            const data = await res.json();
+            thumbnail = data.thumbnail || (data.images?.[0]?.url) || null;
+            if (!thumbnail) continue;
+          }
 
           cards.push(`
             <a href="/categoria.html?slug=${encodeURIComponent(slug)}" class="insta-post">
-              <img src="${thumbnail}" alt="${category}">
+              <img src="${thumbnail}" alt="${categoryTitle}">
               <div class="insta-overlay" style="opacity:1;background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);">
-                <span>${category}</span>
+                <span>${categoryTitle}</span>
               </div>
             </a>
           `);
