@@ -56,6 +56,45 @@
       object-fit: contain;
     }
 
+    /* Card de subpastas (ex: Eventos Esportivos -> Corrida, Vôlei, etc.) */
+    .folder-card {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #f2f2f2;
+      aspect-ratio: 4 / 3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    .folder-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scale(1);
+      transition: transform .35s ease;
+    }
+
+    .folder-card:hover img {
+      transform: scale(1.03);
+    }
+
+    .folder-card .folder-label {
+      position: absolute;
+      inset: auto 0 0 0;
+      padding: 16px;
+      font-weight: 800;
+      letter-spacing: .2px;
+      color: #fff;
+      background: linear-gradient(to top, rgba(0,0,0,.75) 0%, rgba(0,0,0,0) 70%);
+      text-transform: none;
+    }
+
     .topbar {
       display: flex;
       align-items: center;
@@ -337,18 +376,98 @@
     });
 
     async function load() {
-      // ✅ Agora vem do Worker, não do JSON local
-      const albumPath = `portfolio/${slug}`;
+      // slug pode ser:
+      // - "drone" (pasta com fotos)
+      // - "Eventos Esportivos" (pasta que contém subpastas)
+      // - "Eventos Esportivos/Corrida" (subpasta com fotos)
+
+      const slugDecoded = decodeURIComponent(String(slug)).replace(/\+/g, " ");
+      const albumPath = `portfolio/${slugDecoded}`;
+
+      // 1) Primeiro tenta ver se essa pasta tem subpastas
+      //    (depende do Worker suportar /albums?path=...)
+      try {
+        const foldersRes = await fetch(
+          `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}`,
+          { cache: "no-store" }
+        );
+
+        // Se o worker não suportar, vai cair no catch e seguimos pro modo álbum
+        if (foldersRes.ok) {
+          const folders = await foldersRes.json();
+
+          if (Array.isArray(folders) && folders.length > 0) {
+            // ✅ Renderiza subpastas como “capas”, igual a home
+            titleEl.textContent = slugDecoded;
+            gridEl.innerHTML = "";
+
+            // Em modo “pastas”, lightbox não faz sentido
+            closeLightbox();
+
+            for (const folder of folders) {
+              const folderSlug = folder.slug; // nome da subpasta (ex: "Corrida")
+              const folderPath = folder.path; // ex: "portfolio/Eventos Esportivos/Corrida"
+
+              // slug relativo que vamos passar na URL da categoria
+              const childSlug = `${slugDecoded}/${folderSlug}`;
+
+              // tenta pegar thumbnail da subpasta (primeira imagem)
+              let thumb = null;
+              try {
+                const albumRes = await fetch(
+                  `${WORKER_BASE}/album?path=${encodeURIComponent(folderPath)}`,
+                  { cache: "no-store" }
+                );
+                if (albumRes.ok) {
+                  const albumData = await albumRes.json();
+                  thumb = albumData.thumbnail || (albumData.images?.[0]?.url) || null;
+                }
+              } catch {}
+
+              // fallback visual caso esteja vazio
+              const a = document.createElement("a");
+              a.className = "folder-card";
+              a.href = `/categoria.html?slug=${encodeURIComponent(childSlug)}`;
+
+              if (thumb) {
+                const img = document.createElement("img");
+                img.src = thumb;
+                img.alt = folderSlug;
+                img.loading = "lazy";
+                a.appendChild(img);
+              } else {
+                // sem thumb: coloca um bloco neutro
+                const placeholder = document.createElement("div");
+                placeholder.style.width = "100%";
+                placeholder.style.height = "100%";
+                placeholder.style.background = "#e9e9e9";
+                a.appendChild(placeholder);
+              }
+
+              const label = document.createElement("div");
+              label.className = "folder-label";
+              label.textContent = folderSlug;
+              a.appendChild(label);
+
+              gridEl.appendChild(a);
+            }
+
+            return; // terminou modo subpastas
+          }
+        }
+      } catch {
+        // ignora e tenta modo álbum
+      }
+
+      // 2) Se não tem subpastas, trata como álbum de fotos
       const url = `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}`;
 
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`Worker /album ${res.status}`);
 
       const data = await res.json();
-      // data esperado:
-      // { title, path, thumbnail, images:[{url,...}] }
 
-      const slugTitle = decodeURIComponent(String(slug)).split("/").filter(Boolean).pop() || slug;
+      const slugTitle = slugDecoded.split("/").filter(Boolean).pop() || slugDecoded;
       titleEl.textContent = data.title || slugTitle;
 
       const images = (data.images || [])
