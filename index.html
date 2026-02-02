@@ -2,11 +2,17 @@
 <html lang="pt-BR">
 
 <head>
-  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Marcel Conde - Fotógrafo Profissional | Recife-PE</title>
   <meta name="description" content="Fotografia profissional de eventos, casamentos, corporativo e drone em Recife-PE">
+  <!-- Performance hints -->
+  <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
+  <link rel="dns-prefetch" href="//res.cloudinary.com">
+  <link rel="preconnect" href="https://cloudinary.marcel-conde.workers.dev" crossorigin>
+  <link rel="dns-prefetch" href="//cloudinary.marcel-conde.workers.dev">
+  <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
+  <link rel="dns-prefetch" href="//www.googletagmanager.com">
   <link rel="icon" href="/images/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/images/favicon.png">
   <!-- Google Analytics -->
@@ -776,7 +782,7 @@
   <!-- Menu -->
   <nav id="navbar">
     <div class="logo-container">
-      <img src="images/logo.png" alt="Marcel Conde Photography" class="logo-img">
+      <img src="images/logo.png" alt="Marcel Conde Photography" class="logo-img" width="240" height="60" decoding="async" fetchpriority="high">
     </div>
     <button class="nav-toggle" id="navToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="siteMenu">≡</button>
     <!-- ✅ MENU CORRIGIDO (IDs certos + nova página) -->
@@ -1157,89 +1163,136 @@
     });
 
 
-    // Carregar Portfólio (Worker)
+    // Carregar Portfólio (Worker) — otimizado (menos bloqueio e mais paralelo)
     async function loadPortfolio() {
       const portfolioContainer = document.querySelector('.instagram-feed');
       if (!portfolioContainer) return;
 
+      const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
+
+      // cache simples por sessão pra evitar refetch em reload
+      const cacheKey = 'mc_portfolio_cards_v1';
       try {
-        const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
-        const albumsRes = await fetch(`${WORKER_BASE}/albums`, { cache: "no-store" });
-        if (!albumsRes.ok) throw new Error(`/albums ${albumsRes.status}`);
+        const cached = sessionStorage.getItem(cacheKey);
+        if (cached) {
+          portfolioContainer.innerHTML = cached;
+          document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
+          return;
+        }
+      } catch {}
 
-        const albums = await albumsRes.json();
-        const cards = [];
+      // helpers
+      const withTimeout = (p, ms = 12000) =>
+        Promise.race([
+          p,
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+        ]);
 
-        for (const album of albums) {
+      async function fetchJson(url) {
+        const res = await withTimeout(fetch(url, { cache: 'no-store' }));
+        if (!res.ok) throw new Error(`${url} -> ${res.status}`);
+        return res.json();
+      }
+
+      // limita concorrência pra não explodir requests
+      async function mapLimit(items, limit, mapper) {
+        const out = new Array(items.length);
+        let i = 0;
+        const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+          while (i < items.length) {
+            const idx = i++;
+            try {
+              out[idx] = await mapper(items[idx], idx);
+            } catch (e) {
+              out[idx] = null;
+            }
+          }
+        });
+        await Promise.all(workers);
+        return out;
+      }
+
+      try {
+        const albums = await fetchJson(`${WORKER_BASE}/albums`);
+
+        const results = await mapLimit(albums, 6, async (album) => {
           const slug = album.slug;
           const path = album.path;
 
-          let categoryTitle = slug;
-          let thumbnail = null;
-
-          // === CASO ESPECIAL: Eventos Esportivos (tem subpastas) ===
+          // === CASO ESPECIAL: Eventos Esportivos (pega thumb da primeira subpasta com fotos) ===
           if (slug === "Eventos Esportivos") {
+            let subFolders;
             try {
-              const subRes = await fetch(
-                `${WORKER_BASE}/albums?path=${encodeURIComponent(path)}`,
-                { cache: "no-store" }
-              );
-              if (!subRes.ok) continue;
-
-              const subFolders = await subRes.json();
-
-              for (const sub of subFolders) {
-                const subAlbumRes = await fetch(
-                  `${WORKER_BASE}/album?path=${encodeURIComponent(sub.path)}`,
-                  { cache: "no-store" }
-                );
-                if (!subAlbumRes.ok) continue;
-
-                const subData = await subAlbumRes.json();
-                const subThumb = subData.thumbnail || (subData.images?.[0]?.url) || null;
-
-                if (subThumb) {
-                  thumbnail = subThumb;
-                  break; // usa a primeira subpasta com fotos
-                }
-              }
-            } catch (e) {
-              console.warn("Erro ao carregar subpastas de Eventos Esportivos", e);
+              subFolders = await fetchJson(`${WORKER_BASE}/albums?path=${encodeURIComponent(path)}`);
+            } catch {
+              return null;
             }
 
-            if (!thumbnail) continue; // não mostra se nenhuma subpasta tiver fotos
-          } 
-          // === ÁLBUNS NORMAIS ===
-          else {
-            const res = await fetch(
-              `${WORKER_BASE}/album?path=${encodeURIComponent(path)}`,
-              { cache: "no-store" }
-            );
-            if (!res.ok) continue;
+            // tenta achar a primeira subpasta com thumbnail
+            for (const sub of (subFolders || [])) {
+              try {
+                const subData = await fetchJson(`${WORKER_BASE}/album?path=${encodeURIComponent(sub.path)}`);
+                const subThumb = subData.thumbnail || (subData.images?.[0]?.url) || null;
+                if (subThumb) {
+                  return {
+                    slug,
+                    title: slug,
+                    thumbnail: subThumb,
+                  };
+                }
+              } catch {
+                // segue para a próxima subpasta
+              }
+            }
 
-            const data = await res.json();
-            thumbnail = data.thumbnail || (data.images?.[0]?.url) || null;
-            if (!thumbnail) continue;
+            // se nenhuma subpasta tiver fotos, não mostra
+            return null;
           }
 
-          cards.push(`
+          // === ÁLBUNS NORMAIS ===
+          try {
+            const data = await fetchJson(`${WORKER_BASE}/album?path=${encodeURIComponent(path)}`);
+            const thumbnail = data.thumbnail || (data.images?.[0]?.url) || null;
+            if (!thumbnail) return null;
+            return {
+              slug,
+              title: slug,
+              thumbnail,
+            };
+          } catch {
+            return null;
+          }
+        });
+
+        const cardsHtml = (results || [])
+          .filter(Boolean)
+          .map(({ slug, title, thumbnail }) => {
+            return `
             <a href="/categoria.html?slug=${encodeURIComponent(slug)}" class="insta-post">
-              <img src="${thumbnail}" alt="${categoryTitle}">
+              <img src="${thumbnail}" alt="${title}" loading="lazy" decoding="async">
               <div class="insta-overlay" style="opacity:1;background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);">
-                <span>${categoryTitle}</span>
+                <span>${title}</span>
               </div>
             </a>
-          `);
-        }
+          `;
+          })
+          .join('');
 
-        portfolioContainer.innerHTML = cards.join('');
+        portfolioContainer.innerHTML = cardsHtml;
         document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
+
+        try { sessionStorage.setItem(cacheKey, cardsHtml); } catch {}
       } catch (error) {
         console.error("Erro ao carregar portfólio:", error);
       }
     }
 
-    loadPortfolio();
+    // carrega o portfólio quando o browser estiver mais livre
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => loadPortfolio(), { timeout: 2000 });
+    } else {
+      setTimeout(() => loadPortfolio(), 0);
+    }
 
     // Botao voltar ao topo
     const backToTopBtn = document.getElementById('backToTop');
@@ -1257,17 +1310,6 @@
     });
   </script>
 
-  <script>
-    if (window.netlifyIdentity) {
-      window.netlifyIdentity.on("init", user => {
-        if (!user) {
-          window.netlifyIdentity.on("login", () => {
-            document.location.href = "/admin-decap/";
-          });
-        }
-      });
-    }
-  </script>
 </body>
 
 </html>
