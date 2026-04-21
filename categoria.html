@@ -37,15 +37,21 @@
       background: #eaeaea;
       cursor: pointer;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-      transition: transform .32s cubic-bezier(.2,.8,.2,1), box-shadow .32s cubic-bezier(.2,.8,.2,1), z-index .01s linear;
+      transition:
+        transform .46s cubic-bezier(.22,1,.36,1),
+        box-shadow .46s cubic-bezier(.22,1,.36,1),
+        filter .46s ease,
+        z-index .01s linear;
       break-inside: avoid;
       will-change: transform;
+      transform-origin: center center;
     }
 
     .img-wrap:hover {
       z-index: 8;
-      transform: translateY(-6px) scale(1.03);
-      box-shadow: 0 22px 48px rgba(0, 0, 0, 0.18);
+      transform: translateY(-8px) scale(1.035);
+      box-shadow: 0 26px 56px rgba(0, 0, 0, 0.2);
+      filter: saturate(1.02);
     }
 
     .img-wrap img {
@@ -53,13 +59,15 @@
       height: 100%;
       display: block;
       object-fit: cover;
-      transition: transform .45s ease, filter .35s ease;
+      transition: transform .55s cubic-bezier(.22,1,.36,1), filter .45s ease, opacity .35s ease;
       background: #efefef;
+      transform-origin: center center;
+      backface-visibility: hidden;
     }
 
     .img-wrap:hover img {
-      transform: scale(1.04);
-      filter: saturate(1.04);
+      transform: scale(1.055);
+      filter: saturate(1.06) contrast(1.01);
     }
 
     .img-wrap img.is-wide {
@@ -102,11 +110,12 @@
     .lightbox {
       position: fixed;
       inset: 0;
-      background: rgba(10, 10, 10, 0.92);
+      background: rgba(10, 10, 10, 0.7);
       display: none;
       z-index: 9999;
       opacity: 0;
-      transition: opacity .32s ease;
+      transition: opacity .32s ease, background-color .32s ease;
+      backdrop-filter: blur(8px);
     }
 
     .lightbox[aria-hidden="false"] {
@@ -155,27 +164,26 @@
       overflow-y: auto;
       scroll-behavior: smooth;
       scroll-snap-type: y mandatory;
-      padding: 9vh 4vw 8vh;
+      padding: 7vh 4vw;
     }
 
     .lightbox-track {
       display: grid;
-      gap: 10vh;
+      gap: 14vh;
       justify-items: center;
-      padding: 12vh 0;
-      transition: transform .45s ease;
+      padding: 10vh 0 16vh;
       will-change: transform;
     }
 
     .lightbox-item {
       width: min(1200px, 92vw);
-      min-height: 82vh;
+      min-height: 86vh;
       display: grid;
       place-items: center;
       scroll-snap-align: center;
-      opacity: 0.32;
-      transform: translateY(42px) scale(0.975);
-      transition: opacity .5s ease, transform .5s cubic-bezier(.2,.8,.2,1);
+      opacity: 0.22;
+      transform: translateY(70px) scale(0.955);
+      transition: opacity .58s ease, transform .58s cubic-bezier(.22,1,.36,1);
     }
 
     .lightbox-item.is-visible {
@@ -192,7 +200,7 @@
       border-radius: 16px;
       box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
       background: rgba(255,255,255,0.04);
-      transition: transform .5s ease, box-shadow .5s ease, opacity .45s ease;
+      transition: transform .58s cubic-bezier(.22,1,.36,1), box-shadow .58s ease, opacity .45s ease;
     }
 
     @media (max-width: 1200px) {
@@ -222,18 +230,20 @@
       }
 
       .lightbox-scroll {
-        padding: 8vh 3vw 8vh;
+        padding: 0 3vw;
       }
 
       .lightbox-item {
         width: 94vw;
         min-height: 100vh;
         padding: 0;
+        align-content: center;
       }
 
       .lightbox-item img {
         max-width: 94vw;
-        max-height: 78vh;
+        max-height: 72vh;
+        margin: 0 auto;
       }
 
       .lightbox-close {
@@ -334,6 +344,8 @@
             entry.target.classList.remove("is-visible");
           }
         });
+
+        requestAnimationFrame(syncViewerParallax);
       }, {
         root: lightboxScroll,
         threshold: 0.62,
@@ -346,8 +358,21 @@
 
     function syncViewerParallax() {
       if (!lightboxScroll) return;
-      const offset = Math.min(28, lightboxScroll.scrollTop * 0.06);
-      lightboxTrack.style.transform = `translateY(${-offset}px)`;
+      const viewport = lightboxScroll.clientHeight || window.innerHeight;
+      const centerY = lightboxScroll.scrollTop + viewport / 2;
+
+      lightboxTrack.querySelectorAll('.lightbox-item').forEach((item) => {
+        const itemCenter = item.offsetTop + item.offsetHeight / 2;
+        const distance = (itemCenter - centerY) / viewport;
+        const shift = Math.max(-18, Math.min(18, distance * 26));
+        const scale = 1 - Math.min(0.035, Math.abs(distance) * 0.04);
+        const opacity = 1 - Math.min(0.4, Math.abs(distance) * 0.55);
+
+        item.style.transform = item.classList.contains('is-visible')
+          ? `translateY(${shift}px) scale(${scale})`
+          : `translateY(${42 + shift}px) scale(${Math.max(0.94, scale - 0.03)})`;
+        item.style.opacity = String(Math.max(0.18, opacity));
+      });
     }
 
     function openLightboxAt(index) {
@@ -358,12 +383,12 @@
       lightboxEl.setAttribute("aria-hidden", "false");
       document.body.style.overflow = "hidden";
       lightboxScroll.scrollTop = 0;
-      syncViewerParallax();
 
       requestAnimationFrame(() => {
         const target = lightboxTrack.querySelector(`[data-index="${index}"]`);
         if (target) {
           target.scrollIntoView({ behavior: "smooth", block: "center" });
+          requestAnimationFrame(syncViewerParallax);
         }
       });
     }
@@ -387,7 +412,7 @@
 
     lightboxScroll.addEventListener("scroll", () => {
       if (lightboxEl.getAttribute("aria-hidden") !== "false") return;
-      syncViewerParallax();
+      requestAnimationFrame(syncViewerParallax);
     }, { passive: true });
 
     window.addEventListener("keydown", (e) => {
