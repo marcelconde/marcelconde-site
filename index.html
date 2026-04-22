@@ -1179,14 +1179,18 @@
 
       const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
 
-      // cache simples por sessão pra evitar refetch em reload
-      const cacheKey = 'mc_portfolio_cards_v2';
+      // cache com expiração de 1h — atualiza automaticamente sem precisar limpar cache manualmente
+      const cacheKey = 'mc_portfolio_cards_v3';
+      const CACHE_TTL = 60 * 60 * 1000; // 1 hora em ms
       try {
-        const cached = sessionStorage.getItem(cacheKey);
-        if (cached) {
-          portfolioContainer.innerHTML = cached;
-          document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
-          return;
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const { html, ts } = JSON.parse(raw);
+          if (html && Date.now() - ts < CACHE_TTL) {
+            portfolioContainer.innerHTML = html;
+            document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
+            return;
+          }
         }
       } catch {}
 
@@ -1295,7 +1299,7 @@
         portfolioContainer.innerHTML = cardsHtml;
         document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
 
-        try { sessionStorage.setItem(cacheKey, cardsHtml); } catch {}
+        try { localStorage.setItem(cacheKey, JSON.stringify({ html: cardsHtml, ts: Date.now() })); } catch {}
       } catch (error) {
         console.error("Erro ao carregar portfólio:", error);
       }
