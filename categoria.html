@@ -156,7 +156,7 @@
       content: '';
       position: absolute;
       inset: 0;
-      background: rgba(6,6,6,0.78);
+      background: rgba(6,6,6,0.87);
     }
 
     .lightbox-bg-inner {
@@ -277,22 +277,17 @@
     /* ─── SCROLL HINT ─── */
     .scroll-hint {
       position: fixed;
-      bottom: 28px;
+      bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 10001;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
+      gap: 0px;
       pointer-events: none;
       opacity: 0;
       transition: opacity .5s ease;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.18);
-      backdrop-filter: blur(10px);
-      border-radius: 999px;
-      padding: 10px 20px 12px;
     }
 
     .scroll-hint.visible {
@@ -300,33 +295,33 @@
     }
 
     .scroll-hint-label {
-      color: rgba(255,255,255,0.6);
-      font-size: .7rem;
+      color: rgba(255,255,255,0.38);
+      font-size: .65rem;
       font-weight: 600;
       letter-spacing: 1.2px;
       text-transform: uppercase;
-      margin-bottom: 2px;
+      margin-bottom: 4px;
     }
 
     .sh-arrow {
       display: block;
-      width: 30px;
-      height: 30px;
-      stroke: #fff;
+      width: 22px;
+      height: 22px;
+      stroke: rgba(255,255,255,0.55);
       fill: none;
-      stroke-width: 2.2;
+      stroke-width: 2;
       stroke-linecap: round;
       stroke-linejoin: round;
-      animation: shCascade 1.2s ease-in-out infinite;
+      animation: shCascade 1.3s ease-in-out infinite;
     }
 
     .sh-a1 { animation-delay: 0s; }
-    .sh-a2 { animation-delay: 0.18s; }
-    .sh-a3 { animation-delay: 0.36s; }
+    .sh-a2 { animation-delay: 0.2s; }
+    .sh-a3 { animation-delay: 0.4s; }
 
     @keyframes shCascade {
-      0%, 100% { opacity: 0.1; transform: translateY(-4px); }
-      50%       { opacity: 1;   transform: translateY(5px);  }
+      0%, 100% { opacity: 0.08; transform: translateY(-3px); }
+      50%       { opacity: 0.9;  transform: translateY(4px);  }
     }
 
     /* ─── RESPONSIVE ─── */
@@ -347,6 +342,12 @@
 
     @media (max-width: 480px) {
       .grid { columns: 1; }
+    }
+
+    @media (orientation: landscape) and (max-height: 500px) {
+      .lightbox-item { padding: 50px 60px; height: 100vh; }
+      .lightbox-item img { max-height: 82vh; max-width: 70vw; }
+      .lightbox-bg-inner { grid-template-columns: repeat(8, 1fr); }
     }
   </style>
 </head>
