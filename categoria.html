@@ -277,42 +277,56 @@
     /* ─── SCROLL HINT ─── */
     .scroll-hint {
       position: fixed;
-      bottom: 32px;
+      bottom: 28px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 10001;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1px;
+      gap: 2px;
       pointer-events: none;
       opacity: 0;
       transition: opacity .5s ease;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      backdrop-filter: blur(10px);
+      border-radius: 999px;
+      padding: 10px 20px 12px;
     }
 
     .scroll-hint.visible {
       opacity: 1;
     }
 
+    .scroll-hint-label {
+      color: rgba(255,255,255,0.6);
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
     .sh-arrow {
       display: block;
-      width: 24px;
-      height: 24px;
-      stroke: rgba(255,255,255,0.7);
+      width: 30px;
+      height: 30px;
+      stroke: #fff;
       fill: none;
-      stroke-width: 2;
+      stroke-width: 2.2;
       stroke-linecap: round;
       stroke-linejoin: round;
-      animation: shCascade 1.5s ease-in-out infinite;
+      animation: shCascade 1.2s ease-in-out infinite;
     }
 
     .sh-a1 { animation-delay: 0s; }
-    .sh-a2 { animation-delay: 0.2s; }
-    .sh-a3 { animation-delay: 0.4s; }
+    .sh-a2 { animation-delay: 0.18s; }
+    .sh-a3 { animation-delay: 0.36s; }
 
     @keyframes shCascade {
-      0%, 100% { opacity: 0.15; transform: translateY(-3px); }
-      50%       { opacity: 1;    transform: translateY(3px);  }
+      0%, 100% { opacity: 0.1; transform: translateY(-4px); }
+      50%       { opacity: 1;   transform: translateY(5px);  }
     }
 
     /* ─── RESPONSIVE ─── */
@@ -324,8 +338,9 @@
       body { padding: 16px; }
       .grid { columns: 2; column-gap: 10px; }
       .img-wrap, .folder-card { margin-bottom: 10px; }
-      .lightbox-item { padding: 56px 16px 50px; }
-      .lightbox-item img { max-width: 96vw; max-height: 78vh; }
+      .lightbox-bg-inner { grid-template-columns: repeat(4, 1fr); }
+      .lightbox-item { padding: 64px 12px; }
+      .lightbox-item img { max-width: 96vw; max-height: 74vh; }
       .lightbox-close { top: 14px; right: 14px; width: 42px; height: 42px; font-size: 22px; }
       .lightbox-counter { top: 16px; left: 14px; font-size: .78rem; padding: 7px 12px; }
     }
@@ -356,6 +371,7 @@
       <div class="lightbox-track" id="lightbox-track"></div>
     </div>
     <div class="scroll-hint" id="scroll-hint">
+      <span class="scroll-hint-label">role para ver mais</span>
       <svg class="sh-arrow sh-a1" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
       <svg class="sh-arrow sh-a2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
       <svg class="sh-arrow sh-a3" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
@@ -392,7 +408,7 @@
       if (!lightboxBgInner || !currentList.length) return;
       lightboxBgInner.innerHTML = "";
       lightboxBgInner.style.transform = "";
-      const needed = 54; // 6 cols × 9 rows — cobre viewport + margem para parallax
+      const needed = 96; // 6 cols × 16 rows — cobre viewport + margem para parallax em álbuns longos
       for (let i = 0; i < needed; i++) {
         const img = document.createElement("img");
         img.src = currentList[i % currentList.length];
@@ -405,7 +421,7 @@
 
     function syncBgParallax() {
       if (!lightboxBgInner) return;
-      const shift = lightboxScroll.scrollTop * 0.15;
+      const shift = lightboxScroll.scrollTop * 0.08;
       lightboxBgInner.style.transform = `translateY(-${shift}px)`;
     }
 
