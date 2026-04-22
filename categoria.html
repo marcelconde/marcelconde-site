@@ -31,26 +31,21 @@
 
     .img-wrap {
       position: relative;
-      z-index: 1;
       border-radius: 14px;
       overflow: hidden;
       background: #eaeaea;
       cursor: pointer;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
       transition:
-        transform .6s cubic-bezier(.22,1,.36,1),
-        box-shadow .6s cubic-bezier(.22,1,.36,1),
-        filter .45s ease;
+        transform 0.45s cubic-bezier(.22,1,.36,1),
+        box-shadow 0.45s ease;
       will-change: transform;
-      transform-origin: center center;
-      isolation: isolate;
+      transform: translateZ(0);
     }
 
     .img-wrap:hover {
-      z-index: 10;
-      transform: translateY(-10px) scale(1.045);
+      transform: scale(1.05);
       box-shadow: 0 30px 70px rgba(0, 0, 0, 0.22);
-      filter: saturate(1.04);
     }
 
     .img-wrap img {
@@ -58,14 +53,14 @@
       height: 100%;
       display: block;
       object-fit: cover;
-      transition: transform .7s cubic-bezier(.22,1,.36,1), filter .5s ease, opacity .35s ease;
+      transition: transform .55s cubic-bezier(.22,1,.36,1), filter .45s ease, opacity .35s ease;
       background: #efefef;
       transform-origin: center center;
       backface-visibility: hidden;
     }
 
     .img-wrap:hover img {
-      transform: scale(1.08);
+      transform: scale(1.06);
       filter: saturate(1.08) contrast(1.02);
     }
 
@@ -376,8 +371,9 @@
       if (!lightboxScroll) return;
       const viewport = lightboxScroll.clientHeight || window.innerHeight;
       const centerY = lightboxScroll.scrollTop + viewport / 2;
-      const bgShift = Math.max(-40, Math.min(40, -(lightboxScroll.scrollTop * 0.12)));
+      const bgShift = -(lightboxScroll.scrollTop * 0.25);
       lightboxEl.style.setProperty('--bg-shift', `${bgShift}px`);
+      lightboxEl.style.transform = 'translateZ(0)';
 
       lightboxTrack.querySelectorAll('.lightbox-item').forEach((item) => {
         const itemCenter = item.offsetTop + item.offsetHeight / 2;
@@ -433,10 +429,13 @@
       if (e.target === lightboxEl) closeLightbox();
     });
 
-    lightboxScroll.addEventListener("scroll", () => {
+    function handleViewerScroll() {
       if (lightboxEl.getAttribute("aria-hidden") !== "false") return;
       requestAnimationFrame(syncViewerParallax);
-    }, { passive: true });
+    }
+
+    lightboxScroll.addEventListener("scroll", handleViewerScroll, { passive: true });
+    lightboxScroll.addEventListener("touchmove", handleViewerScroll, { passive: true });
 
     window.addEventListener("keydown", (e) => {
       if (lightboxEl.getAttribute("aria-hidden") !== "false") return;
