@@ -136,11 +136,42 @@
     .lightbox {
       position: fixed;
       inset: 0;
-      background: #0c0c0c;
+      background: #060606;
       z-index: 9999;
       display: none;
       opacity: 0;
       transition: opacity .35s ease;
+    }
+
+    /* Background mosaic of all album photos */
+    .lightbox-bg {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .lightbox-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(6,6,6,0.78);
+    }
+
+    .lightbox-bg-inner {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 3px;
+      will-change: transform;
+    }
+
+    .lightbox-bg-inner img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      display: block;
+      filter: blur(1px);
     }
 
     .lightbox.is-open {
@@ -194,6 +225,8 @@
     }
 
     .lightbox-scroll {
+      position: relative;
+      z-index: 1;
       height: 100vh;
       overflow-y: scroll;
       scroll-snap-type: y mandatory;
@@ -314,6 +347,9 @@
 
   <!-- Fullscreen scroll viewer -->
   <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Visualizador de fotos">
+    <div class="lightbox-bg" aria-hidden="true">
+      <div id="lightbox-bg-inner" class="lightbox-bg-inner"></div>
+    </div>
     <button class="lightbox-close" id="btn-close" aria-label="Fechar" type="button">×</button>
     <div class="lightbox-counter" id="lightbox-counter">1 / 1</div>
     <div class="lightbox-scroll" id="lightbox-scroll">
@@ -340,17 +376,38 @@
     }
 
     // ─── Viewer refs ───
-    const lightboxEl     = document.getElementById("lightbox");
-    const btnClose       = document.getElementById("btn-close");
-    const lightboxScroll = document.getElementById("lightbox-scroll");
-    const lightboxTrack  = document.getElementById("lightbox-track");
+    const lightboxEl      = document.getElementById("lightbox");
+    const btnClose        = document.getElementById("btn-close");
+    const lightboxScroll  = document.getElementById("lightbox-scroll");
+    const lightboxTrack   = document.getElementById("lightbox-track");
     const lightboxCounter = document.getElementById("lightbox-counter");
-    const scrollHintEl   = document.getElementById("scroll-hint");
+    const scrollHintEl    = document.getElementById("scroll-hint");
+    const lightboxBgInner = document.getElementById("lightbox-bg-inner");
 
     let currentIndex = 0;
     let currentList  = [];
     let viewerObserver = null;
-    let scrollHintTimer = null;
+
+    function buildBg() {
+      if (!lightboxBgInner || !currentList.length) return;
+      lightboxBgInner.innerHTML = "";
+      lightboxBgInner.style.transform = "";
+      const needed = 54; // 6 cols × 9 rows — cobre viewport + margem para parallax
+      for (let i = 0; i < needed; i++) {
+        const img = document.createElement("img");
+        img.src = currentList[i % currentList.length];
+        img.loading = i < 18 ? "eager" : "lazy";
+        img.decoding = "async";
+        img.alt = "";
+        lightboxBgInner.appendChild(img);
+      }
+    }
+
+    function syncBgParallax() {
+      if (!lightboxBgInner) return;
+      const shift = lightboxScroll.scrollTop * 0.15;
+      lightboxBgInner.style.transform = `translateY(-${shift}px)`;
+    }
 
     // ─── Build viewer items ───
     function buildViewerItems() {
@@ -380,11 +437,6 @@
             const idx = Number(entry.target.dataset.index || 0);
             currentIndex = idx;
             lightboxCounter.textContent = `${idx + 1} / ${currentList.length}`;
-            // Hide scroll hint once user scrolls past the first photo
-            if (idx > 0) {
-              clearTimeout(scrollHintTimer);
-              scrollHintEl.classList.remove("visible");
-            }
           } else {
             entry.target.classList.remove("is-visible");
           }
@@ -421,17 +473,13 @@
       currentIndex = index;
 
       buildViewerItems();
+      buildBg();
 
       lightboxEl.classList.add("is-open");
       document.body.style.overflow = "hidden";
       lightboxScroll.scrollTop = 0;
 
-      // Show scroll hint only when there are multiple photos
-      if (currentList.length > 1) {
-        clearTimeout(scrollHintTimer);
-        scrollHintEl.classList.add("visible");
-        scrollHintTimer = setTimeout(() => scrollHintEl.classList.remove("visible"), 3500);
-      }
+      if (currentList.length > 1) scrollHintEl.classList.add("visible");
 
       requestAnimationFrame(() => {
         lightboxEl.classList.add("is-visible");
@@ -451,7 +499,6 @@
     function closeLightbox() {
       lightboxEl.classList.remove("is-visible");
       document.body.style.overflow = "";
-      clearTimeout(scrollHintTimer);
       scrollHintEl.classList.remove("visible");
 
       setTimeout(() => {
@@ -461,6 +508,7 @@
           viewerObserver = null;
         }
         lightboxTrack.innerHTML = "";
+        lightboxBgInner.innerHTML = "";
       }, 360);
     }
 
@@ -473,6 +521,7 @@
     lightboxScroll.addEventListener("scroll", () => {
       if (!lightboxEl.classList.contains("is-open")) return;
       requestAnimationFrame(syncParallax);
+      requestAnimationFrame(syncBgParallax);
     }, { passive: true });
 
     window.addEventListener("keydown", (e) => {
