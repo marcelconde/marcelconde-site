@@ -7,77 +7,34 @@
   <title>Categoria</title>
 
   <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
     body {
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
       margin: 0;
       padding: 24px;
-      background: #f5f5f5;
+      background: #f4f4f4;
       color: #111;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(1.6rem, 2.4vw, 2.4rem);
+      font-size: clamp(1.5rem, 2.2vw, 2.2rem);
+      font-weight: 700;
       line-height: 1.1;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 16px;
-      align-items: start;
-      grid-auto-rows: 220px;
-    }
-
-    .img-wrap {
-      position: relative;
-      border-radius: 14px;
-      overflow: hidden;
-      background: #eaeaea;
-      cursor: pointer;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-      transition:
-        transform 0.45s cubic-bezier(.22,1,.36,1),
-        box-shadow 0.45s ease;
-      will-change: transform;
-      transform: translateZ(0);
-    }
-
-    .img-wrap:hover {
-      transform: scale(1.05);
-      box-shadow: 0 30px 70px rgba(0, 0, 0, 0.22);
-    }
-
-    .img-wrap img {
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: cover;
-      transition: transform .55s cubic-bezier(.22,1,.36,1), filter .45s ease, opacity .35s ease;
-      background: #efefef;
-      transform-origin: center center;
-      backface-visibility: hidden;
-    }
-
-    .img-wrap:hover img {
-      transform: scale(1.06);
-      filter: saturate(1.08) contrast(1.02);
-    }
-
-    .img-wrap img.is-wide {
-      object-fit: cover;
-    }
-
+    /* ─── TOP BAR ─── */
     .topbar {
       display: flex;
       align-items: center;
-      gap: 12px;
-      margin: 0 0 24px;
+      gap: 14px;
+      margin: 0 0 28px;
       position: sticky;
       top: 0;
       z-index: 20;
-      padding: 8px 0 18px;
-      background: linear-gradient(to bottom, rgba(245,245,245,0.98) 65%, rgba(245,245,245,0));
+      padding: 10px 0 20px;
+      background: linear-gradient(to bottom, rgba(244,244,244,0.97) 60%, rgba(244,244,244,0));
       backdrop-filter: blur(8px);
     }
 
@@ -85,190 +42,256 @@
       appearance: none;
       border: 1px solid #ddd;
       background: #fff;
-      padding: 10px 14px;
+      padding: 10px 16px;
       border-radius: 999px;
+      font-size: .9rem;
       font-weight: 600;
       cursor: pointer;
-      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+      white-space: nowrap;
+      transition: transform .15s ease, box-shadow .15s ease;
     }
 
     .back-btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(0, 0, 0, .08);
-      border-color: #ccc;
+      box-shadow: 0 6px 18px rgba(0,0,0,.09);
     }
 
-    /* ===============================
-       FULLSCREEN SCROLL VIEWER
-    ================================ */
+    /* ─── MASONRY GRID (CSS columns) ─── */
+    .grid {
+      columns: 4;
+      column-gap: 14px;
+    }
+
+    .img-wrap {
+      break-inside: avoid;
+      display: block;
+      margin-bottom: 14px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #e4e4e4;
+      cursor: pointer;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      transition: transform .4s cubic-bezier(.22,1,.36,1), box-shadow .4s ease;
+    }
+
+    .img-wrap:hover {
+      transform: translateY(-5px) scale(1.012);
+      box-shadow: 0 18px 52px rgba(0,0,0,0.15);
+    }
+
+    .img-wrap img {
+      width: 100%;
+      height: auto;
+      display: block;
+      transition: transform .55s cubic-bezier(.22,1,.36,1), filter .4s ease;
+    }
+
+    .img-wrap:hover img {
+      transform: scale(1.04);
+      filter: saturate(1.08) brightness(1.02);
+    }
+
+    /* ─── FOLDER CARDS ─── */
+    .folder-card {
+      break-inside: avoid;
+      display: block;
+      margin-bottom: 14px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #e4e4e4;
+      cursor: pointer;
+      text-decoration: none;
+      color: #111;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      transition: transform .4s cubic-bezier(.22,1,.36,1), box-shadow .4s ease;
+    }
+
+    .folder-card:hover {
+      transform: translateY(-5px) scale(1.012);
+      box-shadow: 0 18px 52px rgba(0,0,0,0.15);
+    }
+
+    .folder-card img {
+      width: 100%;
+      aspect-ratio: 4/3;
+      object-fit: cover;
+      display: block;
+      transition: transform .55s cubic-bezier(.22,1,.36,1), filter .4s ease;
+    }
+
+    .folder-card:hover img {
+      transform: scale(1.04);
+      filter: saturate(1.08) brightness(1.02);
+    }
+
+    .folder-label {
+      padding: 11px 14px;
+      font-weight: 600;
+      font-size: .88rem;
+      background: #fff;
+      border-top: 1px solid rgba(0,0,0,0.06);
+    }
+
+    /* ─── FULLSCREEN SCROLL VIEWER ─── */
     .lightbox {
       position: fixed;
       inset: 0;
-      background: rgba(6, 6, 6, 0.82);
-      display: none;
+      background: #0c0c0c;
       z-index: 9999;
+      display: none;
       opacity: 0;
-      transition: opacity .32s ease, background-color .32s ease;
-      backdrop-filter: blur(12px);
+      transition: opacity .35s ease;
     }
 
-    .lightbox[aria-hidden="false"] {
+    .lightbox.is-open {
       display: block;
-      opacity: 1;
     }
 
-    .lightbox::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(circle at center, rgba(255,255,255,0.05), transparent 55%),
-        linear-gradient(to bottom, rgba(255,255,255,0.04), rgba(255,255,255,0));
-      transform: translateY(var(--bg-shift, 0px));
-      transition: transform .18s linear;
-      pointer-events: none;
+    .lightbox.is-visible {
+      opacity: 1;
     }
 
     .lightbox-close {
       position: fixed;
-      top: 18px;
-      right: 22px;
-      width: 48px;
-      height: 48px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.16);
-      background: rgba(255,255,255,0.08);
+      top: 20px;
+      right: 24px;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.07);
       color: #fff;
-      font-size: 30px;
-      cursor: pointer;
+      font-size: 26px;
       line-height: 1;
+      cursor: pointer;
       z-index: 10001;
       backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .2s ease, transform .2s ease;
     }
 
     .lightbox-close:hover {
       background: rgba(255,255,255,0.14);
+      transform: scale(1.06);
     }
 
     .lightbox-counter {
       position: fixed;
-      top: 22px;
-      left: 22px;
-      color: rgba(255,255,255,0.86);
+      top: 24px;
+      left: 24px;
+      color: rgba(255,255,255,0.72);
+      font-size: .82rem;
       font-weight: 600;
-      letter-spacing: .3px;
+      letter-spacing: .5px;
       z-index: 10001;
-      padding: 10px 14px;
+      padding: 9px 16px;
       border-radius: 999px;
-      background: rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.07);
       border: 1px solid rgba(255,255,255,0.12);
       backdrop-filter: blur(8px);
     }
 
     .lightbox-scroll {
       height: 100vh;
-      overflow-y: auto;
-      scroll-behavior: smooth;
+      overflow-y: scroll;
       scroll-snap-type: y mandatory;
-      padding: 4vh 4vw;
+      -webkit-overflow-scrolling: touch;
     }
 
     .lightbox-track {
-      display: grid;
-      gap: 6vh;
-      justify-items: center;
-      padding: 8vh 0 12vh;
-      will-change: transform;
+      display: block;
     }
 
+    /* Each photo occupies the full viewport and snaps into place */
     .lightbox-item {
-      width: min(1200px, 92vw);
-      min-height: 92vh;
+      height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      scroll-snap-align: center;
-      opacity: 0.18;
-      transform: translateY(90px) scale(0.94);
-      transition: opacity .7s ease, transform .7s cubic-bezier(.22,1,.36,1);
+      scroll-snap-align: start;
+      padding: 72px 32px 60px;
+      will-change: transform;
     }
 
-    .lightbox-item.is-visible {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-
+    /* The image itself animates in when its parent becomes visible */
     .lightbox-item img {
-      max-width: 100%;
+      max-width: min(92vw, 1500px);
       max-height: 84vh;
       width: auto;
       height: auto;
       display: block;
-      border-radius: 16px;
-      box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
-      background: rgba(255,255,255,0.04);
-      transition: transform .7s cubic-bezier(.22,1,.36,1), box-shadow .6s ease, opacity .45s ease;
+      border-radius: 8px;
+      box-shadow: 0 32px 90px rgba(0,0,0,0.55);
+      /* Initial (hidden) state */
+      opacity: 0;
+      transform: translateY(55px) scale(0.96);
+      transition:
+        opacity .75s cubic-bezier(.22,1,.36,1),
+        transform .75s cubic-bezier(.22,1,.36,1),
+        box-shadow .55s ease;
+      will-change: transform, opacity;
     }
 
+    /* Visible state — triggered by IntersectionObserver */
+    .lightbox-item.is-visible img {
+      opacity: 1;
+      transform: none;
+      box-shadow: 0 50px 140px rgba(0,0,0,0.65);
+    }
+
+    /* ─── SCROLL HINT ─── */
+    .scroll-hint {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.45);
+      font-size: .72rem;
+      letter-spacing: .9px;
+      text-transform: uppercase;
+      z-index: 10001;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+      animation: hintBounce 1.8s ease-in-out infinite;
+      transition: opacity .4s ease;
+    }
+
+    .scroll-hint.hidden {
+      opacity: 0;
+    }
+
+    .scroll-hint svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    @keyframes hintBounce {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      55% { transform: translateX(-50%) translateY(7px); }
+    }
+
+    /* ─── RESPONSIVE ─── */
     @media (max-width: 1200px) {
-      .grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
+      .grid { columns: 3; }
     }
 
-    @media (max-width: 900px) {
-      .grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+    @media (max-width: 800px) {
+      body { padding: 16px; }
+      .grid { columns: 2; column-gap: 10px; }
+      .img-wrap, .folder-card { margin-bottom: 10px; }
+      .lightbox-item { padding: 56px 16px 50px; }
+      .lightbox-item img { max-width: 96vw; max-height: 78vh; }
+      .lightbox-close { top: 14px; right: 14px; width: 42px; height: 42px; font-size: 22px; }
+      .lightbox-counter { top: 16px; left: 14px; font-size: .78rem; padding: 7px 12px; }
     }
 
-    @media (max-width: 768px) {
-      body {
-        padding: 16px;
-      }
-
-      .grid {
-        grid-template-columns: 1fr;
-        gap: 14px;
-      }
-
-      .topbar {
-        margin-bottom: 18px;
-      }
-
-      .lightbox-scroll {
-        padding: 0 3vw;
-      }
-
-      .lightbox-item {
-        width: 94vw;
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0;
-      }
-
-      .lightbox-item img {
-        max-width: 94vw;
-        max-height: 68vh;
-        width: auto;
-        height: auto;
-        margin: 0 auto;
-      }
-
-      .lightbox-close {
-        top: 12px;
-        right: 12px;
-        width: 44px;
-        height: 44px;
-      }
-
-      .lightbox-counter {
-        top: 12px;
-        left: 12px;
-        font-size: .9rem;
-      }
+    @media (max-width: 480px) {
+      .grid { columns: 1; }
     }
   </style>
 </head>
@@ -279,51 +302,50 @@
     <button class="back-btn" type="button" onclick="history.back()">← Voltar</button>
     <h1 id="title">Carregando...</h1>
   </div>
+
   <div class="grid" id="grid"></div>
 
-  <!-- Viewer fullscreen com rolagem -->
-  <div id="lightbox" class="lightbox" aria-hidden="true">
-    <button class="lightbox-close" aria-label="Fechar" type="button">×</button>
+  <!-- Fullscreen scroll viewer -->
+  <div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="Visualizador de fotos">
+    <button class="lightbox-close" id="btn-close" aria-label="Fechar" type="button">×</button>
     <div class="lightbox-counter" id="lightbox-counter">1 / 1</div>
     <div class="lightbox-scroll" id="lightbox-scroll">
       <div class="lightbox-track" id="lightbox-track"></div>
     </div>
+    <div class="scroll-hint hidden" id="scroll-hint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+      <span>rolar</span>
+    </div>
   </div>
 
   <script>
-    const titleEl = document.getElementById("title");
-    const gridEl = document.getElementById("grid");
-
-    // ✅ SUA BASE DO WORKER (ajustado)
+    const titleEl  = document.getElementById("title");
+    const gridEl   = document.getElementById("grid");
     const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
 
-    // URL: /categoria.html?slug=drone
     const params = new URLSearchParams(location.search);
-    const slug = params.get("slug");
+    const slug   = params.get("slug");
 
     if (!slug) {
       titleEl.textContent = "Álbum não informado (?slug=nome-do-album)";
       throw new Error("missing slug");
     }
 
-    // ===== Viewer fullscreen refs =====
-    const lightboxEl = document.getElementById("lightbox");
-    const btnClose = lightboxEl.querySelector(".lightbox-close");
+    // ─── Viewer refs ───
+    const lightboxEl     = document.getElementById("lightbox");
+    const btnClose       = document.getElementById("btn-close");
     const lightboxScroll = document.getElementById("lightbox-scroll");
-    const lightboxTrack = document.getElementById("lightbox-track");
+    const lightboxTrack  = document.getElementById("lightbox-track");
     const lightboxCounter = document.getElementById("lightbox-counter");
+    const scrollHintEl   = document.getElementById("scroll-hint");
 
     let currentIndex = 0;
-    let currentList = [];
+    let currentList  = [];
     let viewerObserver = null;
 
-    function markWide(img) {
-      try {
-        const ratio = img.naturalWidth / img.naturalHeight;
-        if (ratio > 2.2) img.classList.add("is-wide");
-      } catch {}
-    }
-
+    // ─── Build viewer items ───
     function buildViewerItems() {
       lightboxTrack.innerHTML = "";
 
@@ -351,15 +373,16 @@
             const idx = Number(entry.target.dataset.index || 0);
             currentIndex = idx;
             lightboxCounter.textContent = `${idx + 1} / ${currentList.length}`;
+            // Hide scroll hint once user scrolls past the first photo
+            if (idx > 0) scrollHintEl.classList.add("hidden");
           } else {
             entry.target.classList.remove("is-visible");
           }
         });
-
-        requestAnimationFrame(syncViewerParallax);
+        requestAnimationFrame(syncParallax);
       }, {
         root: lightboxScroll,
-        threshold: 0.62,
+        threshold: 0.5,
       });
 
       lightboxTrack.querySelectorAll(".lightbox-item").forEach((item) => {
@@ -367,60 +390,64 @@
       });
     }
 
-    function syncViewerParallax() {
+    // Subtle parallax on item containers — keeps images feeling "alive" while scrolling
+    function syncParallax() {
       if (!lightboxScroll) return;
-      const viewport = lightboxScroll.clientHeight || window.innerHeight;
-      const centerY = lightboxScroll.scrollTop + viewport / 2;
-      const bgShift = -(lightboxScroll.scrollTop * 0.25);
-      lightboxEl.style.setProperty('--bg-shift', `${bgShift}px`);
-      lightboxEl.style.transform = 'translateZ(0)';
+      const vh = lightboxScroll.clientHeight || window.innerHeight;
+      const centerY = lightboxScroll.scrollTop + vh / 2;
 
-      lightboxTrack.querySelectorAll('.lightbox-item').forEach((item) => {
+      lightboxTrack.querySelectorAll(".lightbox-item").forEach((item) => {
         const itemCenter = item.offsetTop + item.offsetHeight / 2;
-        const distance = (itemCenter - centerY) / viewport;
-        const shift = Math.max(-28, Math.min(28, distance * 38));
-        const scale = 1 - Math.min(0.06, Math.abs(distance) * 0.08);
-        const opacity = 1 - Math.min(0.55, Math.abs(distance) * 0.75);
-
-        if (item.classList.contains('is-visible')) {
-          item.style.transform = `translateY(${shift}px) scale(${scale})`;
-          item.style.opacity = String(Math.max(0.55, opacity));
-        } else {
-          item.style.transform = `translateY(${70 + shift}px) scale(${Math.max(0.9, scale - 0.04)})`;
-          item.style.opacity = String(Math.max(0.12, opacity - 0.2));
-        }
+        const distance = (itemCenter - centerY) / vh;
+        const shift = Math.max(-18, Math.min(18, distance * 26));
+        const scale = 1 - Math.min(0.035, Math.abs(distance) * 0.045);
+        item.style.transform = `translateY(${shift}px) scale(${scale})`;
       });
     }
 
+    // ─── Open / close ───
     function openLightboxAt(index) {
       if (!currentList.length) return;
       currentIndex = index;
 
       buildViewerItems();
-      lightboxEl.setAttribute("aria-hidden", "false");
-      lightboxEl.style.setProperty('--bg-shift', '0px');
+
+      lightboxEl.classList.add("is-open");
       document.body.style.overflow = "hidden";
       lightboxScroll.scrollTop = 0;
 
+      // Show scroll hint only when there are multiple photos
+      if (currentList.length > 1) {
+        scrollHintEl.classList.remove("hidden");
+      }
+
       requestAnimationFrame(() => {
-        const target = lightboxTrack.querySelector(`[data-index="${index}"]`);
-        if (target) {
-          target.scrollIntoView({ behavior: "smooth", block: "center" });
-          requestAnimationFrame(syncViewerParallax);
+        lightboxEl.classList.add("is-visible");
+        // Scroll to the clicked photo (if not the first)
+        if (index > 0) {
+          const target = lightboxTrack.querySelector(`[data-index="${index}"]`);
+          if (target) {
+            setTimeout(() => {
+              target.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 60);
+          }
         }
+        requestAnimationFrame(syncParallax);
       });
     }
 
     function closeLightbox() {
-      lightboxEl.setAttribute("aria-hidden", "true");
+      lightboxEl.classList.remove("is-visible");
       document.body.style.overflow = "";
-      if (viewerObserver) {
-        viewerObserver.disconnect();
-        viewerObserver = null;
-      }
-      lightboxEl.style.setProperty('--bg-shift', '0px');
-      lightboxTrack.style.transform = "translateY(0)";
-      lightboxTrack.innerHTML = "";
+
+      setTimeout(() => {
+        lightboxEl.classList.remove("is-open");
+        if (viewerObserver) {
+          viewerObserver.disconnect();
+          viewerObserver = null;
+        }
+        lightboxTrack.innerHTML = "";
+      }, 360);
     }
 
     btnClose.addEventListener("click", closeLightbox);
@@ -429,30 +456,30 @@
       if (e.target === lightboxEl) closeLightbox();
     });
 
-    function handleViewerScroll() {
-      if (lightboxEl.getAttribute("aria-hidden") !== "false") return;
-      requestAnimationFrame(syncViewerParallax);
-    }
-
-    lightboxScroll.addEventListener("scroll", handleViewerScroll, { passive: true });
-    lightboxScroll.addEventListener("touchmove", handleViewerScroll, { passive: true });
+    lightboxScroll.addEventListener("scroll", () => {
+      if (!lightboxEl.classList.contains("is-open")) return;
+      requestAnimationFrame(syncParallax);
+    }, { passive: true });
 
     window.addEventListener("keydown", (e) => {
-      if (lightboxEl.getAttribute("aria-hidden") !== "false") return;
+      if (!lightboxEl.classList.contains("is-open")) return;
       if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+        const next = lightboxTrack.querySelector(`[data-index="${currentIndex + 1}"]`);
+        if (next) next.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+        const prev = lightboxTrack.querySelector(`[data-index="${currentIndex - 1}"]`);
+        if (prev) prev.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     });
 
+    // ─── Load album from worker ───
     async function load() {
-      // slug pode ser:
-      // - "drone" (pasta com fotos)
-      // - "Eventos Esportivos" (pasta que contém subpastas)
-      // - "Eventos Esportivos/Corrida" (subpasta com fotos)
-
       const slugDecoded = decodeURIComponent(String(slug)).replace(/\+/g, " ");
-      const albumPath = `portfolio/${slugDecoded}`;
+      const albumPath   = `portfolio/${slugDecoded}`;
 
-      // 1) Primeiro tenta ver se essa pasta tem subpastas
-      //    (Worker novo já retorna SOMENTE subpastas diretas quando usa ?path=)
+      // 1) Check if this path has sub-folders
       try {
         const foldersRes = await fetch(
           `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}`,
@@ -464,14 +491,12 @@
 
           if (Array.isArray(folders) && folders.length > 0) {
             titleEl.textContent = slugDecoded;
-            gridEl.innerHTML = "";
-            closeLightbox();
+            gridEl.innerHTML    = "";
 
             for (const folder of folders) {
               const folderSlug = folder.slug;
               const folderPath = folder.path;
-
-              const childSlug = `${slugDecoded}/${folderSlug}`;
+              const childSlug  = `${slugDecoded}/${folderSlug}`;
 
               let thumb = null;
               try {
@@ -485,27 +510,25 @@
                 }
               } catch {}
 
-              // ✅ Se não existe thumbnail, consideramos a subpasta vazia e não exibimos
               if (!thumb) continue;
 
-              const a = document.createElement("a");
+              const a     = document.createElement("a");
               a.className = "folder-card";
-              a.href = `/categoria.html?slug=${encodeURIComponent(childSlug)}`;
+              a.href      = `/categoria.html?slug=${encodeURIComponent(childSlug)}`;
 
-              const img = document.createElement("img");
-              img.src = thumb;
-              img.alt = folderSlug;
+              const img   = document.createElement("img");
+              img.src     = thumb;
+              img.alt     = folderSlug;
               img.loading = "lazy";
               a.appendChild(img);
 
-              const label = document.createElement("div");
-              label.className = "folder-label";
-              label.textContent = folderSlug;
+              const label          = document.createElement("div");
+              label.className      = "folder-label";
+              label.textContent    = folderSlug;
               a.appendChild(label);
 
               gridEl.appendChild(a);
             }
-
             return;
           }
         }
@@ -513,10 +536,11 @@
         console.warn("Falha ao listar subpastas, tentando carregar como álbum", err);
       }
 
-      // 2) Se não tem subpastas, trata como álbum de fotos
-      const url = `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}`;
-
-      const res = await fetch(url, { cache: "no-store" });
+      // 2) No sub-folders — load as photo album
+      const res = await fetch(
+        `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}`,
+        { cache: "no-store" }
+      );
       if (!res.ok) throw new Error(`Worker /album ${res.status}`);
 
       const data = await res.json();
@@ -528,7 +552,7 @@
         .map(i => (typeof i === "object" ? i.url : i))
         .filter(Boolean);
 
-      const list = images.length ? images : [data.thumbnail].filter(Boolean);
+      const list  = images.length ? images : [data.thumbnail].filter(Boolean);
       currentList = list;
 
       gridEl.innerHTML = "";
@@ -542,26 +566,13 @@
         const wrap = document.createElement("div");
         wrap.className = "img-wrap";
 
-        const img = document.createElement("img");
-        img.src = src;
-        img.loading = index < 4 ? "eager" : "lazy";
-        img.decoding = "async";
-
-        img.onload = () => {
-          markWide(img);
-
-          const ratio = img.naturalWidth / img.naturalHeight;
-          if (ratio >= 1.35) {
-            wrap.style.gridRow = "span 1";
-          } else if (ratio <= 0.8) {
-            wrap.style.gridRow = "span 2";
-          } else {
-            wrap.style.gridRow = "span 2";
-          }
-        };
+        const img       = document.createElement("img");
+        img.src         = src;
+        img.loading     = index < 4 ? "eager" : "lazy";
+        img.decoding    = "async";
+        img.alt         = `${slugTitle} ${index + 1}`;
 
         wrap.addEventListener("click", () => openLightboxAt(index));
-
         wrap.appendChild(img);
         gridEl.appendChild(wrap);
       });
