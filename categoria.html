@@ -405,6 +405,13 @@
     let currentIndex = 0;
     let currentList  = [];
     let viewerObserver = null;
+    let cachedItemPositions = [];
+
+    // Injeta transforms Cloudinary sem duplicar — reduz tamanho das imagens em 70-90%
+    function cloudUrl(src, t) {
+      if (!src || !src.includes('/upload/')) return src;
+      return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${t}/`);
+    }
 
     function buildBg() {
       if (!lightboxBgInner || !currentList.length) return;
@@ -413,7 +420,7 @@
       const needed = 96; // 6 cols × 16 rows — cobre viewport + margem para parallax em álbuns longos
       for (let i = 0; i < needed; i++) {
         const img = document.createElement("img");
-        img.src = currentList[i % currentList.length];
+        img.src = cloudUrl(currentList[i % currentList.length], 'f_auto,q_auto,w_200,h_200,c_fill');
         img.loading = i < 18 ? "eager" : "lazy";
         img.decoding = "async";
         img.alt = "";
@@ -437,7 +444,7 @@
         item.dataset.index = String(index);
 
         const img = document.createElement("img");
-        img.src = src;
+        img.src = cloudUrl(src, 'f_auto,q_auto,w_1400');
         img.alt = `${decodeURIComponent(String(slug)).replace(/\+/g, " ")} ${index + 1}`;
         img.loading = index <= 1 ? "eager" : "lazy";
         img.decoding = "async";
@@ -470,18 +477,23 @@
       });
     }
 
-    // Subtle parallax on item containers — keeps images feeling "alive" while scrolling
+    // Lê offsetTop uma vez após build para não causar reflow a cada frame de scroll
+    function cacheParallaxPositions() {
+      cachedItemPositions = Array.from(
+        lightboxTrack.querySelectorAll('.lightbox-item')
+      ).map(item => ({ el: item, center: item.offsetTop + item.offsetHeight / 2 }));
+    }
+
     function syncParallax() {
-      if (!lightboxScroll) return;
+      if (!lightboxScroll || !cachedItemPositions.length) return;
       const vh = lightboxScroll.clientHeight || window.innerHeight;
       const centerY = lightboxScroll.scrollTop + vh / 2;
 
-      lightboxTrack.querySelectorAll(".lightbox-item").forEach((item) => {
-        const itemCenter = item.offsetTop + item.offsetHeight / 2;
-        const distance = (itemCenter - centerY) / vh;
+      cachedItemPositions.forEach(({ el, center }) => {
+        const distance = (center - centerY) / vh;
         const shift = Math.max(-18, Math.min(18, distance * 26));
         const scale = 1 - Math.min(0.035, Math.abs(distance) * 0.045);
-        item.style.transform = `translateY(${shift}px) scale(${scale})`;
+        el.style.transform = `translateY(${shift}px) scale(${scale})`;
       });
     }
 
@@ -491,6 +503,7 @@
       currentIndex = index;
 
       buildViewerItems();
+      cacheParallaxPositions();
       buildBg();
 
       lightboxEl.classList.add("is-open");
@@ -564,7 +577,7 @@
       try {
         const foldersRes = await fetch(
           `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}`,
-          { cache: "no-store" }
+          {}
         );
 
         if (foldersRes.ok) {
@@ -583,7 +596,7 @@
               try {
                 const albumRes = await fetch(
                   `${WORKER_BASE}/album?path=${encodeURIComponent(folderPath)}`,
-                  { cache: "no-store" }
+                  {}
                 );
                 if (albumRes.ok) {
                   const albumData = await albumRes.json();
@@ -598,7 +611,7 @@
               a.href      = `/categoria.html?slug=${encodeURIComponent(childSlug)}`;
 
               const img   = document.createElement("img");
-              img.src     = thumb;
+              img.src     = cloudUrl(thumb, 'f_auto,q_auto,w_600');
               img.alt     = folderSlug;
               img.loading = "lazy";
               a.appendChild(img);
@@ -620,7 +633,7 @@
       // 2) No sub-folders — load as photo album
       const res = await fetch(
         `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}`,
-        { cache: "no-store" }
+        {}
       );
       if (!res.ok) throw new Error(`Worker /album ${res.status}`);
 
@@ -648,7 +661,7 @@
         wrap.className = "img-wrap";
 
         const img       = document.createElement("img");
-        img.src         = src;
+        img.src         = cloudUrl(src, 'f_auto,q_auto,w_900');
         img.loading     = index < 4 ? "eager" : "lazy";
         img.decoding    = "async";
         img.alt         = `${slugTitle} ${index + 1}`;
