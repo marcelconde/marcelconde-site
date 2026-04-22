@@ -1179,20 +1179,7 @@
 
       const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
 
-      // cache com expiração de 1h — atualiza automaticamente sem precisar limpar cache manualmente
-      const cacheKey = 'mc_portfolio_cards_v3';
-      const CACHE_TTL = 60 * 60 * 1000; // 1 hora em ms
-      try {
-        const raw = localStorage.getItem(cacheKey);
-        if (raw) {
-          const { html, ts } = JSON.parse(raw);
-          if (html && Date.now() - ts < CACHE_TTL) {
-            portfolioContainer.innerHTML = html;
-            document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
-            return;
-          }
-        }
-      } catch {}
+      // sem cache — dados sempre frescos do Worker
 
       // helpers
       const withTimeout = (p, ms = 12000) =>
@@ -1299,7 +1286,6 @@
         portfolioContainer.innerHTML = cardsHtml;
         document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
 
-        try { localStorage.setItem(cacheKey, JSON.stringify({ html: cardsHtml, ts: Date.now() })); } catch {}
       } catch (error) {
         console.error("Erro ao carregar portfólio:", error);
       }
