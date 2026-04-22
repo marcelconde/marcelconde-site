@@ -941,20 +941,6 @@
     </div>
   </section>
 
-  <!-- Rodapé -->
-  <footer style="background:#0a0a0a; color:rgba(255,255,255,0.5); padding:3rem 5%; text-align:center; font-size:0.9rem; border-top:1px solid rgba(255,255,255,0.07);">
-    <div style="max-width:1200px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1.5rem;">
-      <span>© <span id="footer-year"></span> Marcel Conde Fotografia — Recife, PE</span>
-      <nav aria-label="Links do rodapé" style="display:flex; gap:1.5rem; flex-wrap:wrap; justify-content:center;">
-        <a href="/#portfolio" style="color:rgba(255,255,255,0.5); text-decoration:none;">Portfólio</a>
-        <a href="/#contato" style="color:rgba(255,255,255,0.5); text-decoration:none;">Contato</a>
-        <a href="/encontre.html" style="color:rgba(255,255,255,0.5); text-decoration:none;">Encontre suas fotos</a>
-        <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.5); text-decoration:none;">Instagram</a>
-      </nav>
-    </div>
-  </footer>
-  <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
-
   <!-- Botao voltar ao topo -->
   <button id="backToTop" aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -1161,6 +1147,20 @@
     </div>
   </section>
 
+  <!-- Rodapé -->
+  <footer style="background:#0a0a0a; color:rgba(255,255,255,0.5); padding:3rem 5%; font-size:0.9rem; border-top:1px solid rgba(255,255,255,0.07);">
+    <div style="max-width:1200px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1.5rem;">
+      <span>© <span id="footer-year"></span> Marcel Conde Fotografia — Recife, PE</span>
+      <div role="navigation" aria-label="Links do rodapé" style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+        <a href="#portfolio" style="color:rgba(255,255,255,0.5); text-decoration:none;">Portfólio</a>
+        <a href="#contato" style="color:rgba(255,255,255,0.5); text-decoration:none;">Contato</a>
+        <a href="/encontre.html" style="color:rgba(255,255,255,0.5); text-decoration:none;">Encontre suas fotos</a>
+        <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.5); text-decoration:none;">Instagram</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
   <script>
     // Navbar (scrolled + fade out conforme rola)
     const navbar = document.getElementById('navbar');
