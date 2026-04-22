@@ -5,7 +5,26 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Marcel Conde - Fotógrafo Profissional | Recife-PE</title>
-  <meta name="description" content="Fotografia profissional de eventos, casamentos, corporativo e drone em Recife-PE">
+  <meta name="description" content="Marcel Conde — fotógrafo profissional em Recife-PE. Especialista em casamentos, aniversários, eventos corporativos, pré-wedding e drone. Orçamento sem compromisso.">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Marcel Conde">
+  <meta name="geo.region" content="BR-PE">
+  <meta name="geo.placename" content="Recife">
+  <link rel="canonical" href="https://marcelconde.com.br/">
+  <!-- Open Graph / redes sociais -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://marcelconde.com.br/">
+  <meta property="og:title" content="Marcel Conde — Fotógrafo Profissional em Recife-PE">
+  <meta property="og:description" content="Especialista em casamentos, aniversários, eventos corporativos, pré-wedding e drone em Recife. Orçamento sem compromisso.">
+  <meta property="og:image" content="https://marcelconde.com.br/images/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:site_name" content="Marcel Conde Fotografia">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Marcel Conde — Fotógrafo Profissional em Recife-PE">
+  <meta name="twitter:description" content="Especialista em casamentos, aniversários, eventos corporativos, pré-wedding e drone em Recife.">
+  <meta name="twitter:image" content="https://marcelconde.com.br/images/og-image.jpg">
   <!-- Performance hints -->
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="dns-prefetch" href="//res.cloudinary.com">
@@ -15,6 +34,46 @@
   <link rel="dns-prefetch" href="//www.googletagmanager.com">
   <link rel="icon" href="/images/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/images/favicon.png">
+  <!-- Schema.org structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "Marcel Conde Fotografia",
+    "description": "Fotógrafo profissional em Recife especializado em casamentos, aniversários, eventos corporativos, pré-wedding e drone.",
+    "url": "https://marcelconde.com.br",
+    "telephone": "+55-81-98409-4212",
+    "email": "contato@marcelconde.com.br",
+    "image": "https://marcelconde.com.br/images/og-image.jpg",
+    "priceRange": "$$",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Recife",
+      "addressRegion": "PE",
+      "addressCountry": "BR"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": -8.0476,
+      "longitude": -34.877
+    },
+    "sameAs": [
+      "https://www.instagram.com/mconde.foto/"
+    ],
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Serviços de Fotografia",
+      "itemListElement": [
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Fotografia de Casamentos"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Fotografia de Aniversários"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Fotografia Corporativa"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Fotografia com Drone"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Pré-Wedding"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Chá Revelação"}}
+      ]
+    }
+  }
+  </script>
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY"></script>
   <script>
@@ -124,7 +183,7 @@
       justify-content: space-between;
       align-items: center;
       background: transparent;
-      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease, background 0.4s ease, padding 0.4s ease, box-shadow 0.4s ease;
       opacity: 1;
     }
 
@@ -714,6 +773,74 @@
       display: block;
     }
 
+    /* === DEPOIMENTOS === */
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2.4rem;
+      margin-top: 3rem;
+    }
+    .testimonial-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 2.4rem;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .testimonial-card.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .testimonial-stars { color: #c9a96e; font-size: 1.3rem; letter-spacing: 2px; }
+    .testimonial-card p { font-size: 1.1rem; line-height: 1.8; color: #444; font-style: italic; flex: 1; }
+    .testimonial-author strong { display: block; font-size: 1rem; color: #111; }
+    .testimonial-author span { font-size: 0.9rem; color: #888; }
+    @media (max-width: 900px) { .testimonials-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .testimonials-grid { grid-template-columns: 1fr; } }
+
+    /* === FORMULÁRIO DE CONTATO === */
+    .contact-form {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 3rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.4rem;
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+    .form-group label { font-size: 0.9rem; color: rgba(255,255,255,0.7); letter-spacing: 0.05em; text-transform: uppercase; }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 8px;
+      padding: 0.9rem 1.2rem;
+      color: #fff;
+      font-size: 1rem;
+      font-family: inherit;
+      transition: border-color 0.3s ease, background 0.3s ease;
+      outline: none;
+    }
+    .form-group input::placeholder,
+    .form-group textarea::placeholder { color: rgba(255,255,255,0.35); }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--accent);
+      background: rgba(255,255,255,0.12);
+    }
+    .form-group select option { background: #1a1a1a; color: #fff; }
+    .form-group textarea { resize: vertical; min-height: 120px; }
+    @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } .contact-form { padding: 2rem; } }
+
     /* === BOTAO VOLTAR AO TOPO === */
     #backToTop {
       position: fixed;
@@ -813,6 +940,20 @@
       <span>Scroll</span>
     </div>
   </section>
+
+  <!-- Rodapé -->
+  <footer style="background:#0a0a0a; color:rgba(255,255,255,0.5); padding:3rem 5%; text-align:center; font-size:0.9rem; border-top:1px solid rgba(255,255,255,0.07);">
+    <div style="max-width:1200px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1.5rem;">
+      <span>© <span id="footer-year"></span> Marcel Conde Fotografia — Recife, PE</span>
+      <nav aria-label="Links do rodapé" style="display:flex; gap:1.5rem; flex-wrap:wrap; justify-content:center;">
+        <a href="/#portfolio" style="color:rgba(255,255,255,0.5); text-decoration:none;">Portfólio</a>
+        <a href="/#contato" style="color:rgba(255,255,255,0.5); text-decoration:none;">Contato</a>
+        <a href="/encontre.html" style="color:rgba(255,255,255,0.5); text-decoration:none;">Encontre suas fotos</a>
+        <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.5); text-decoration:none;">Instagram</a>
+      </nav>
+    </div>
+  </footer>
+  <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
 
   <!-- Botao voltar ao topo -->
   <button id="backToTop" aria-label="Voltar ao topo" title="Voltar ao topo">
@@ -922,43 +1063,99 @@
     </div>
   </section>
 
+  <!-- Depoimentos -->
+  <section class="section section-light" id="depoimentos">
+    <div class="container">
+      <div class="text-content" style="text-align: center; margin-bottom: 1rem;">
+        <h2>O que dizem os clientes</h2>
+        <p>Histórias reais de momentos eternizados</p>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card">
+          <div class="testimonial-stars">★★★★★</div>
+          <p>"Marcel capturou nossa festa de aniversário de forma incrível. Cada foto conta uma história e transmite exatamente o que vivemos naquele dia. Super recomendo!"</p>
+          <div class="testimonial-author">
+            <strong>Ana Paula S.</strong>
+            <span>Aniversário</span>
+          </div>
+        </div>
+        <div class="testimonial-card">
+          <div class="testimonial-stars">★★★★★</div>
+          <p>"Contratamos o Marcel para o nosso casamento e foi a melhor decisão. As fotos ficaram lindas, cheias de emoção. Ele é muito atencioso e profissional."</p>
+          <div class="testimonial-author">
+            <strong>Carla e Rafael M.</strong>
+            <span>Casamento</span>
+          </div>
+        </div>
+        <div class="testimonial-card">
+          <div class="testimonial-stars">★★★★★</div>
+          <p>"As fotos do nosso evento corporativo ficaram impecáveis. Marcel entendeu perfeitamente o que precisávamos e entregou muito além do esperado."</p>
+          <div class="testimonial-author">
+            <strong>Ricardo T.</strong>
+            <span>Evento Corporativo</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Contato -->
   <section class="section section-dark" id="contato">
     <div class="container">
       <div class="split-section">
         <div class="text-content">
           <h2>Vamos Criar Algo Incrível</h2>
-          <p>Entre em contato e vamos planejar juntos como eternizar os momentos mais especiais da sua vida ou do seu negócio.</p>
-          <p>Atendimento personalizado e orçamento sem compromisso.</p>
-
-          <div style="display: flex; gap: 2rem; margin-top: 2rem; flex-wrap: wrap;">
-            <a href="https://wa.me/5581984094212?text=Olá!%20Gostaria%20de%20saber%20mais%20sobre%20fotografia%20de%20eventos" class="cta-button" target="_blank" rel="noopener noreferrer">
-              WhatsApp
-            </a>
-            <a href="https://www.instagram.com/mconde.foto/" class="cta-button cta-button-outline" target="_blank" rel="noopener noreferrer">
-              Instagram
-            </a>
+          <p>Preencha o formulário e entro em contato em até 24h para conversarmos sobre o seu evento.</p>
+          <p style="margin-top: 1.5rem;">Ou fale diretamente:</p>
+          <div style="display: flex; gap: 2rem; margin-top: 1.2rem; flex-wrap: wrap;">
+            <a href="https://wa.me/5581984094212?text=Olá!%20Gostaria%20de%20saber%20mais%20sobre%20fotografia%20de%20eventos" class="cta-button" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <a href="https://www.instagram.com/mconde.foto/" class="cta-button cta-button-outline" target="_blank" rel="noopener noreferrer">Instagram</a>
+          </div>
+          <div style="margin-top: 2.5rem; display: flex; flex-direction: column; gap: 0.6rem;">
+            <a href="mailto:contato@marcelconde.com.br" style="color: var(--secondary); text-decoration: none; font-size: 1rem;">contato@marcelconde.com.br</a>
+            <span style="color: rgba(255,255,255,0.5); font-size: 0.95rem;">Recife, PE — Brasil</span>
           </div>
         </div>
 
-        <div class="text-content" style="text-align: right;">
-          <h3>Recife, PE</h3>
-          <p style="font-size: 1.4rem; margin-bottom: 2rem;">Brasil</p>
-
-          <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer"
-            style="display: inline-block; font-size: 1.3rem; margin-bottom: 1rem; color: var(--secondary); text-decoration: none; transition: all 0.3s ease;">
-            @mconde.foto
-          </a>
-          <br>
-          <a href="mailto:contato@marcelconde.com.br"
-            style="display: inline-block; font-size: 1.3rem; margin-bottom: 1rem; color: var(--secondary); text-decoration: none; transition: all 0.3s ease;">
-            contato@marcelconde.com.br
-          </a>
-          <br>
-          <a href="https://wa.me/5581984094212?text=Olá!%20Gostaria%20de%20saber%20mais%20sobre%20fotografia%20de%20eventos" target="_blank" rel="noopener noreferrer"
-            style="display: inline-block; font-size: 1.3rem; color: var(--secondary); text-decoration: none; transition: all 0.3s ease;">
-            WhatsApp
-          </a>
+        <div class="text-content">
+          <form class="contact-form" action="https://formsubmit.co/contato@marcelconde.com.br" method="POST">
+            <input type="hidden" name="_subject" value="Novo contato pelo site — Marcel Conde Fotografia">
+            <input type="hidden" name="_next" value="https://marcelconde.com.br/?enviado=1">
+            <input type="hidden" name="_captcha" value="false">
+            <input type="hidden" name="_template" value="table">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="nome">Nome</label>
+                <input type="text" id="nome" name="nome" placeholder="Seu nome" required>
+              </div>
+              <div class="form-group">
+                <label for="telefone">Telefone / WhatsApp</label>
+                <input type="tel" id="telefone" name="telefone" placeholder="(81) 9 0000-0000">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="email">E-mail</label>
+              <input type="email" id="email" name="email" placeholder="seu@email.com" required>
+            </div>
+            <div class="form-group">
+              <label for="tipo">Tipo de evento</label>
+              <select id="tipo" name="tipo_evento">
+                <option value="" disabled selected>Selecione...</option>
+                <option>Casamento</option>
+                <option>Aniversário</option>
+                <option>Pré-Wedding</option>
+                <option>Chá Revelação</option>
+                <option>Evento Corporativo</option>
+                <option>Drone</option>
+                <option>Outro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="mensagem">Mensagem</label>
+              <textarea id="mensagem" name="mensagem" placeholder="Conte um pouco sobre o seu evento, data prevista..."></textarea>
+            </div>
+            <button type="submit" class="cta-button" style="align-self: flex-start;">Enviar mensagem</button>
+          </form>
         </div>
       </div>
     </div>
@@ -998,38 +1195,42 @@
       else openMenu();
     }
 
+    let lastScrollY = 0;
     function updateNavbar() {
       const y = window.scrollY || 0;
+
       if (navbar.classList.contains('menu-open')) {
+        navbar.style.transform = 'translateY(0)';
         navbar.style.opacity = '1';
         navbar.style.pointerEvents = 'auto';
         navbar.style.visibility = 'visible';
+        lastScrollY = y;
         return;
       }
 
-      // mantém o efeito "scrolled" atual
-      navbar.classList.toggle('scrolled', y > 100);
-      const start = 0;
-      const end = 220;
-      // se a navbar ficou totalmente invisível, tira a classe scrolled para não "vazar" estilo
-      if (y > end) {
-        navbar.classList.remove('scrolled');
-      }
+      navbar.classList.toggle('scrolled', y > 50);
 
-      // Fade out suave conforme rola (0px -> 1.0 | 220px+ -> 0.0)
-      const t = Math.min(1, Math.max(0, (y - start) / (end - start)));
-      const opacity = Math.max(0, 1 - t); // 1.0 -> 0.0
-
-      // garante 0% mesmo (evita ficar "clarinho")
-      if (opacity <= 0.01) {
+      if (y < 50) {
+        // No topo — sempre visível
+        navbar.style.transform = 'translateY(0)';
+        navbar.style.opacity = '1';
+        navbar.style.pointerEvents = 'auto';
+        navbar.style.visibility = 'visible';
+      } else if (y > lastScrollY + 8) {
+        // Rolando para baixo — esconde
+        navbar.style.transform = 'translateY(-100%)';
         navbar.style.opacity = '0';
         navbar.style.pointerEvents = 'none';
         navbar.style.visibility = 'hidden';
-      } else {
-        navbar.style.opacity = String(opacity);
-        navbar.style.pointerEvents = '';
+      } else if (y < lastScrollY - 4) {
+        // Rolando para cima — aparece
+        navbar.style.transform = 'translateY(0)';
+        navbar.style.opacity = '1';
+        navbar.style.pointerEvents = 'auto';
         navbar.style.visibility = 'visible';
       }
+
+      lastScrollY = y;
     }
 
     window.addEventListener('scroll', updateNavbar, { passive: true });
@@ -1057,7 +1258,7 @@
       });
     }, { threshold: 0.15, rootMargin: '0px 0px -100px 0px' });
 
-    document.querySelectorAll('.text-content, .insta-post, .service-card').forEach(el => observer.observe(el));
+    document.querySelectorAll('.text-content, .insta-post, .service-card, .testimonial-card').forEach(el => observer.observe(el));
 
     // Smooth Scroll (só para links com #)
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
