@@ -874,30 +874,7 @@
     .anim-btn.active { background: rgba(255,255,255,0.14); color: #fff; }
     .anim-btn:hover:not(.active) { color: rgba(255,255,255,0.75); }
 
-    /* Light leaks — efeito de vazamento de luz analógica */
-    @keyframes leak1 {
-      0%, 100% { opacity: 0;    transform: rotate(-38deg) translate(-4%, 3%); }
-      20%      { opacity: 0; }
-      45%      { opacity: 0.9;  transform: rotate(-38deg) translate(2%, -1%); }
-      55%      { opacity: 0.9; }
-      80%      { opacity: 0; }
-    }
-    @keyframes leak2 {
-      0%       { opacity: 0.15; transform: rotate(22deg) scale(1); }
-      40%      { opacity: 0.75; transform: rotate(22deg) scale(1.12); }
-      80%      { opacity: 0.15; transform: rotate(22deg) scale(0.95); }
-      100%     { opacity: 0.15; transform: rotate(22deg) scale(1); }
-    }
-    @keyframes leak3 {
-      0%, 100% { opacity: 0;    transform: rotate(-58deg) translate(3%, -3%); }
-      30%      { opacity: 0; }
-      55%      { opacity: 0.7;  transform: rotate(-58deg) translate(-2%, 2%); }
-      70%      { opacity: 0; }
-    }
-    @keyframes leak4 {
-      0%, 100% { opacity: 0.06; transform: scale(0.9)  rotate(8deg); }
-      50%      { opacity: 0.45; transform: scale(1.18) rotate(8deg); }
-    }
+    /* Flare — os elementos são posicionados via JS, nenhum keyframe necessário */
 
     /* === BOTAO VOLTAR AO TOPO === */
     #backToTop {
@@ -998,7 +975,7 @@
       <span>Scroll</span>
     </div>
     <div class="anim-toggle" id="animToggle" aria-label="Trocar animação do fundo">
-      <button class="anim-btn" data-anim="leaks">Light Leaks</button>
+      <button class="anim-btn" data-anim="flare">Flare</button>
       <button class="anim-btn" data-anim="particles">Clássico</button>
     </div>
   </section>
@@ -1339,32 +1316,107 @@
 
     function rand(min, max) { return Math.random() * (max - min) + min; }
 
-    // --- LIGHT LEAKS: vazamento de luz analógica ---
-    function startLeaks() {
+    // --- FLARE: efeito de flare de lente com scroll ---
+    function startFlare() {
       animLayer.innerHTML = '';
-      // [left%, top%, w%, h%, rotation, gradient, keyframe, duration, delay]
-      [
-        ['-30%','20%','110%','55%',-38,
-          'linear-gradient(90deg,transparent 0%,rgba(255,150,30,0.55) 38%,rgba(220,90,10,0.45) 62%,transparent 100%)',
-          'leak1',15,0],
-        ['15%','-35%','85%','90%',22,
-          'radial-gradient(ellipse,rgba(255,200,50,0.5) 0%,rgba(200,80,15,0.3) 45%,transparent 72%)',
-          'leak2',20,-7],
-        ['35%','-25%','95%','65%',-58,
-          'linear-gradient(90deg,transparent 0%,rgba(240,110,15,0.48) 32%,rgba(200,70,10,0.55) 58%,transparent 100%)',
-          'leak3',18,-12],
-        ['50%','35%','75%','85%',8,
-          'radial-gradient(ellipse,rgba(255,160,25,0.35) 0%,rgba(180,55,5,0.2) 45%,transparent 72%)',
-          'leak4',13,-3],
-      ].forEach(([l,t,w,h,rot,grad,anim,dur,del]) => {
+      const hero = animLayer.parentElement;
+
+      // Ghost ring definitions: [axisOffset, diameter_px, rgba_color]
+      const ghosts = [
+        [0.42, 110, 'rgba(60,140,255,0.60)'],
+        [0.75, 65,  'rgba(40,210,190,0.55)'],
+        [1.08, 85,  'rgba(160,70,255,0.50)'],
+        [1.45, 52,  'rgba(255,90,180,0.50)'],
+        [1.78, 68,  'rgba(30,120,255,0.45)'],
+        [2.15, 40,  'rgba(255,160,60,0.45)'],
+      ];
+
+      // Large warm halo around the light source
+      const glow = document.createElement('div');
+      glow.style.cssText =
+        'position:absolute;border-radius:50%;mix-blend-mode:screen;pointer-events:none;' +
+        'background:radial-gradient(ellipse,rgba(255,245,220,0.85) 0%,rgba(255,200,100,0.40) 28%,rgba(255,140,30,0.15) 55%,transparent 75%);' +
+        'width:360px;height:360px;transform:translate(-50%,-50%);will-change:left,top;';
+      animLayer.appendChild(glow);
+
+      // Bright point source
+      const dot = document.createElement('div');
+      dot.style.cssText =
+        'position:absolute;width:6px;height:6px;border-radius:50%;pointer-events:none;' +
+        'background:#fff;mix-blend-mode:screen;transform:translate(-50%,-50%);' +
+        'box-shadow:0 0 10px 5px rgba(255,255,255,1),0 0 30px 15px rgba(255,230,160,0.7),0 0 80px 40px rgba(255,180,60,0.3);' +
+        'will-change:left,top;';
+      animLayer.appendChild(dot);
+
+      // Horizontal anamorphic streak through the source
+      const streak = document.createElement('div');
+      streak.style.cssText =
+        'position:absolute;left:0;right:0;height:1px;mix-blend-mode:screen;pointer-events:none;' +
+        'background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0) 4%,rgba(255,255,255,0.55) 35%,rgba(255,255,255,0.95) 50%,rgba(255,255,255,0.55) 65%,rgba(255,255,255,0) 96%,transparent 100%);' +
+        'transform:translateY(-50%);will-change:top;';
+      animLayer.appendChild(streak);
+
+      // Ghost ring elements positioned along the reflection axis
+      const ghostEls = ghosts.map(([factor, size, color]) => {
+        const bg = color.replace(/,([\d.]+)\)$/, (_, a) => `,${(parseFloat(a) * 0.12).toFixed(2)})`);
         const el = document.createElement('div');
         el.style.cssText =
-          `position:absolute;left:${l};top:${t};width:${w};height:${h};`+
-          `background:${grad};mix-blend-mode:screen;pointer-events:none;`+
-          `transform:rotate(${rot}deg);`+
-          `animation:${anim} ${dur}s ease-in-out ${del}s infinite;`;
+          `position:absolute;width:${size}px;height:${size}px;border-radius:50%;mix-blend-mode:screen;pointer-events:none;` +
+          `border:2px solid ${color};background:${bg};` +
+          `box-shadow:0 0 ${Math.round(size * 0.45)}px ${color};` +
+          `transform:translate(-50%,-50%);will-change:left,top;`;
         animLayer.appendChild(el);
+        return [el, factor];
       });
+
+      function positionFlare(t) {
+        const W = animLayer.offsetWidth  || window.innerWidth;
+        const H = animLayer.offsetHeight || window.innerHeight;
+
+        // Light source: top-right (t=0) → left-center (t=1)
+        const sx = (0.82 - 0.64 * t) * W;
+        const sy = (0.08 + 0.48 * t) * H;
+
+        // Reflection axis pivot = center of hero
+        const cx = W * 0.5;
+        const cy = H * 0.5;
+
+        // Fade as hero scrolls out of view
+        const alpha = t < 0.70 ? 1 : 1 - (t - 0.70) / 0.30;
+        animLayer.style.opacity = (alpha * 0.88).toFixed(3);
+
+        glow.style.left   = sx + 'px';
+        glow.style.top    = sy + 'px';
+        dot.style.left    = sx + 'px';
+        dot.style.top     = sy + 'px';
+        streak.style.top  = sy + 'px';
+
+        ghostEls.forEach(([el, factor]) => {
+          el.style.left = (cx + (cx - sx) * factor) + 'px';
+          el.style.top  = (cy + (cy - sy) * factor) + 'px';
+        });
+      }
+
+      positionFlare(0);
+
+      let rafId = null;
+      function onScroll() {
+        if (rafId) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          const H = hero.offsetHeight || window.innerHeight;
+          positionFlare(Math.min(1, window.scrollY / H));
+        });
+      }
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+
+      return function cleanup() {
+        window.removeEventListener('scroll', onScroll);
+        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+        animLayer.innerHTML = '';
+        animLayer.style.opacity = '0.8';
+      };
     }
 
     // --- CLÁSSICO: partículas originais ---
@@ -1388,7 +1440,7 @@
 
     // --- CONTROLE DO TOGGLE ---
     const ANIM_KEY = 'mc_hero_anim';
-    const ANIMS    = { leaks: startLeaks, particles: startParticles };
+    const ANIMS    = { flare: startFlare, particles: startParticles };
 
     function setHeroAnim(name) {
       if (heroCleanup) { heroCleanup(); heroCleanup = null; }
@@ -1401,13 +1453,13 @@
 
     animBtns.forEach(btn => btn.addEventListener('click', () => setHeroAnim(btn.dataset.anim)));
 
-    const savedAnim = (() => { try { return localStorage.getItem(ANIM_KEY); } catch {} })() || 'leaks';
+    const savedAnim = (() => { try { return localStorage.getItem(ANIM_KEY); } catch {} })() || 'flare';
     setHeroAnim(savedAnim);
 
     window.addEventListener('resize', () => {
       clearTimeout(window.__animResize);
       window.__animResize = setTimeout(() => {
-        const cur = (() => { try { return localStorage.getItem(ANIM_KEY); } catch {} })() || 'leaks';
+        const cur = (() => { try { return localStorage.getItem(ANIM_KEY); } catch {} })() || 'flare';
         setHeroAnim(cur);
       }, 250);
     });
