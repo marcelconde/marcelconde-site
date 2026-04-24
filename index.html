@@ -841,40 +841,6 @@
     .form-group textarea { resize: vertical; min-height: 120px; }
     @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } .contact-form { padding: 2rem; } }
 
-    /* === TOGGLE DE ANIMAÇÃO DO HERO === */
-    .anim-toggle {
-      position: absolute;
-      bottom: 5rem;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10;
-      display: flex;
-      background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.13);
-      border-radius: 999px;
-      padding: 4px;
-      backdrop-filter: blur(12px);
-      gap: 0;
-    }
-    .anim-btn {
-      background: transparent;
-      border: none;
-      color: rgba(255,255,255,0.4);
-      font-size: 0.68rem;
-      font-weight: 700;
-      letter-spacing: 0.1em;
-      padding: 0.38rem 0.9rem;
-      border-radius: 999px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      text-transform: uppercase;
-      font-family: inherit;
-      white-space: nowrap;
-    }
-    .anim-btn.active { background: rgba(255,255,255,0.14); color: #fff; }
-    .anim-btn:hover:not(.active) { color: rgba(255,255,255,0.75); }
-
-    /* Flare — os elementos são posicionados via JS, nenhum keyframe necessário */
 
     /* === BOTAO VOLTAR AO TOPO === */
     #backToTop {
@@ -973,10 +939,6 @@
     </div>
     <div class="scroll-indicator">
       <span>Scroll</span>
-    </div>
-    <div class="anim-toggle" id="animToggle" aria-label="Trocar animação do fundo">
-      <button class="anim-btn" data-anim="flare">Flare</button>
-      <button class="anim-btn" data-anim="particles">Clássico</button>
     </div>
   </section>
 
@@ -1318,127 +1280,10 @@
     });
 
     // === ANIMAÇÕES DO HERO ===
-    const animLayer  = document.querySelector('.hero-particles');
-    const animBtns   = document.querySelectorAll('.anim-btn');
-    let heroCleanup  = null;
+    const animLayer = document.querySelector('.hero-particles');
 
     function rand(min, max) { return Math.random() * (max - min) + min; }
 
-    // --- FLARE: efeito de flare de lente com scroll ---
-    function startFlare() {
-      animLayer.innerHTML = '';
-      const hero = animLayer.parentElement;
-
-      // Ghost definitions: [factor, size_px, r, g, b, opacity]
-      // Soft radial rings — sem bordas sólidas, só gradiente difuso
-      const ghosts = [
-        [0.38, 96,  60, 140, 255, 0.32],   // azul médio
-        [0.68, 52,  40, 200, 170, 0.26],   // teal
-        [1.04, 74,  150, 65, 255, 0.24],   // roxo
-        [1.40, 40,  255, 75, 170, 0.22],   // rosa
-        [1.72, 58,  30, 110, 255, 0.18],   // azul profundo
-      ];
-
-      // Grande halo quente em torno da fonte de luz
-      const glow = document.createElement('div');
-      glow.style.cssText =
-        'position:absolute;border-radius:50%;mix-blend-mode:screen;pointer-events:none;' +
-        'background:radial-gradient(ellipse,rgba(255,245,200,0.92) 0%,rgba(255,210,110,0.50) 18%,rgba(255,160,40,0.22) 42%,rgba(255,90,10,0.06) 65%,transparent 80%);' +
-        'width:420px;height:420px;transform:translate(-50%,-50%);will-change:left,top;';
-      animLayer.appendChild(glow);
-
-      // Ponto luminoso central
-      const dot = document.createElement('div');
-      dot.style.cssText =
-        'position:absolute;width:5px;height:5px;border-radius:50%;pointer-events:none;' +
-        'background:#fff;mix-blend-mode:screen;transform:translate(-50%,-50%);' +
-        'box-shadow:0 0 8px 4px #fff,0 0 22px 11px rgba(255,235,165,0.80),0 0 65px 32px rgba(255,190,65,0.28);' +
-        'will-change:left,top;';
-      animLayer.appendChild(dot);
-
-      // Streak anamórfico horizontal principal (fino e brilhante)
-      const streak1 = document.createElement('div');
-      streak1.style.cssText =
-        'position:absolute;left:0;right:0;height:1px;mix-blend-mode:screen;pointer-events:none;' +
-        'background:linear-gradient(90deg,transparent 0%,transparent 2%,rgba(255,250,220,0.55) 32%,rgba(255,255,255,0.90) 50%,rgba(255,250,220,0.55) 68%,transparent 98%,transparent 100%);' +
-        'transform:translateY(-50%);will-change:top;';
-      animLayer.appendChild(streak1);
-
-      // Streak suave secundário (mais difuso, glowing)
-      const streak2 = document.createElement('div');
-      streak2.style.cssText =
-        'position:absolute;left:0;right:0;height:4px;mix-blend-mode:screen;pointer-events:none;' +
-        'background:linear-gradient(90deg,transparent 0%,transparent 5%,rgba(255,220,140,0.12) 28%,rgba(255,240,190,0.26) 50%,rgba(255,220,140,0.12) 72%,transparent 95%,transparent 100%);' +
-        'filter:blur(2px);transform:translateY(-50%);will-change:top;';
-      animLayer.appendChild(streak2);
-
-      // Ghost elements: gradiente radial suave (anel difuso, sem borda dura)
-      const ghostEls = ghosts.map(([factor, size, r, g, b, a]) => {
-        const mid  = `rgba(${r},${g},${b},${a})`;
-        const rim  = `rgba(${r},${g},${b},${(a * 0.55).toFixed(2)})`;
-        const blur = size > 65 ? 3 : 2;
-        const el = document.createElement('div');
-        el.style.cssText =
-          `position:absolute;width:${size}px;height:${size}px;border-radius:50%;mix-blend-mode:screen;pointer-events:none;` +
-          `background:radial-gradient(circle at center,transparent 0%,transparent 28%,${mid} 48%,${rim} 62%,transparent 80%);` +
-          `filter:blur(${blur}px);` +
-          `transform:translate(-50%,-50%);will-change:left,top;`;
-        animLayer.appendChild(el);
-        return [el, factor];
-      });
-
-      function positionFlare(t) {
-        const W = animLayer.offsetWidth  || window.innerWidth;
-        const H = animLayer.offsetHeight || window.innerHeight;
-
-        // Fonte de luz: canto superior-direito (t=0) → esquerda-centro (t=1)
-        const sx = (0.85 - 0.68 * t) * W;
-        const sy = (0.10 + 0.40 * t) * H;
-
-        // Eixo de reflexão pivotado no centro do hero
-        const cx = W * 0.5;
-        const cy = H * 0.5;
-
-        // Fade suave ao sair do hero
-        const alpha = t < 0.72 ? 1 : 1 - (t - 0.72) / 0.28;
-        animLayer.style.opacity = (alpha * 0.85).toFixed(3);
-
-        glow.style.left    = sx + 'px';
-        glow.style.top     = sy + 'px';
-        dot.style.left     = sx + 'px';
-        dot.style.top      = sy + 'px';
-        streak1.style.top  = sy + 'px';
-        streak2.style.top  = sy + 'px';
-
-        ghostEls.forEach(([el, factor]) => {
-          el.style.left = (cx + (cx - sx) * factor) + 'px';
-          el.style.top  = (cy + (cy - sy) * factor) + 'px';
-        });
-      }
-
-      positionFlare(0);
-
-      let rafId = null;
-      function onScroll() {
-        if (rafId) return;
-        rafId = requestAnimationFrame(() => {
-          rafId = null;
-          const H = hero.offsetHeight || window.innerHeight;
-          positionFlare(Math.min(1, window.scrollY / H));
-        });
-      }
-
-      window.addEventListener('scroll', onScroll, { passive: true });
-
-      return function cleanup() {
-        window.removeEventListener('scroll', onScroll);
-        if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-        animLayer.innerHTML = '';
-        animLayer.style.opacity = '0.8';
-      };
-    }
-
-    // --- CLÁSSICO: partículas originais ---
     function startParticles() {
       animLayer.innerHTML = '';
       const mobile = window.matchMedia('(max-width:768px)').matches;
@@ -1457,30 +1302,11 @@
       }
     }
 
-    // --- CONTROLE DO TOGGLE ---
-    const ANIM_KEY = 'mc_hero_anim';
-    const ANIMS    = { flare: startFlare, particles: startParticles };
-
-    function setHeroAnim(name) {
-      if (heroCleanup) { heroCleanup(); heroCleanup = null; }
-      animLayer.style.opacity = name === 'grain' ? '1' : '0.8';
-      const result = ANIMS[name]?.();
-      if (typeof result === 'function') heroCleanup = result;
-      animBtns.forEach(b => b.classList.toggle('active', b.dataset.anim === name));
-      try { localStorage.setItem(ANIM_KEY, name); } catch {}
-    }
-
-    animBtns.forEach(btn => btn.addEventListener('click', () => setHeroAnim(btn.dataset.anim)));
-
-    const savedAnim = (() => { try { return localStorage.getItem(ANIM_KEY); } catch {} })() || 'flare';
-    setHeroAnim(savedAnim);
+    startParticles();
 
     window.addEventListener('resize', () => {
       clearTimeout(window.__animResize);
-      window.__animResize = setTimeout(() => {
-        const cur = (() => { try { return localStorage.getItem(ANIM_KEY); } catch {} })() || 'flare';
-        setHeroAnim(cur);
-      }, 250);
+      window.__animResize = setTimeout(startParticles, 250);
     });
 
     // Hover effect nos links de contato (após DOM pronto)
