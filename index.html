@@ -1321,49 +1321,59 @@
       animLayer.innerHTML = '';
       const hero = animLayer.parentElement;
 
-      // Ghost ring definitions: [axisOffset, diameter_px, rgba_color]
+      // Ghost definitions: [factor, size_px, r, g, b, opacity]
+      // Soft radial rings — sem bordas sólidas, só gradiente difuso
       const ghosts = [
-        [0.42, 110, 'rgba(60,140,255,0.60)'],
-        [0.75, 65,  'rgba(40,210,190,0.55)'],
-        [1.08, 85,  'rgba(160,70,255,0.50)'],
-        [1.45, 52,  'rgba(255,90,180,0.50)'],
-        [1.78, 68,  'rgba(30,120,255,0.45)'],
-        [2.15, 40,  'rgba(255,160,60,0.45)'],
+        [0.38, 96,  60, 140, 255, 0.32],   // azul médio
+        [0.68, 52,  40, 200, 170, 0.26],   // teal
+        [1.04, 74,  150, 65, 255, 0.24],   // roxo
+        [1.40, 40,  255, 75, 170, 0.22],   // rosa
+        [1.72, 58,  30, 110, 255, 0.18],   // azul profundo
       ];
 
-      // Large warm halo around the light source
+      // Grande halo quente em torno da fonte de luz
       const glow = document.createElement('div');
       glow.style.cssText =
         'position:absolute;border-radius:50%;mix-blend-mode:screen;pointer-events:none;' +
-        'background:radial-gradient(ellipse,rgba(255,245,220,0.85) 0%,rgba(255,200,100,0.40) 28%,rgba(255,140,30,0.15) 55%,transparent 75%);' +
-        'width:360px;height:360px;transform:translate(-50%,-50%);will-change:left,top;';
+        'background:radial-gradient(ellipse,rgba(255,245,200,0.92) 0%,rgba(255,210,110,0.50) 18%,rgba(255,160,40,0.22) 42%,rgba(255,90,10,0.06) 65%,transparent 80%);' +
+        'width:420px;height:420px;transform:translate(-50%,-50%);will-change:left,top;';
       animLayer.appendChild(glow);
 
-      // Bright point source
+      // Ponto luminoso central
       const dot = document.createElement('div');
       dot.style.cssText =
-        'position:absolute;width:6px;height:6px;border-radius:50%;pointer-events:none;' +
+        'position:absolute;width:5px;height:5px;border-radius:50%;pointer-events:none;' +
         'background:#fff;mix-blend-mode:screen;transform:translate(-50%,-50%);' +
-        'box-shadow:0 0 10px 5px rgba(255,255,255,1),0 0 30px 15px rgba(255,230,160,0.7),0 0 80px 40px rgba(255,180,60,0.3);' +
+        'box-shadow:0 0 8px 4px #fff,0 0 22px 11px rgba(255,235,165,0.80),0 0 65px 32px rgba(255,190,65,0.28);' +
         'will-change:left,top;';
       animLayer.appendChild(dot);
 
-      // Horizontal anamorphic streak through the source
-      const streak = document.createElement('div');
-      streak.style.cssText =
+      // Streak anamórfico horizontal principal (fino e brilhante)
+      const streak1 = document.createElement('div');
+      streak1.style.cssText =
         'position:absolute;left:0;right:0;height:1px;mix-blend-mode:screen;pointer-events:none;' +
-        'background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0) 4%,rgba(255,255,255,0.55) 35%,rgba(255,255,255,0.95) 50%,rgba(255,255,255,0.55) 65%,rgba(255,255,255,0) 96%,transparent 100%);' +
+        'background:linear-gradient(90deg,transparent 0%,transparent 2%,rgba(255,250,220,0.55) 32%,rgba(255,255,255,0.90) 50%,rgba(255,250,220,0.55) 68%,transparent 98%,transparent 100%);' +
         'transform:translateY(-50%);will-change:top;';
-      animLayer.appendChild(streak);
+      animLayer.appendChild(streak1);
 
-      // Ghost ring elements positioned along the reflection axis
-      const ghostEls = ghosts.map(([factor, size, color]) => {
-        const bg = color.replace(/,([\d.]+)\)$/, (_, a) => `,${(parseFloat(a) * 0.12).toFixed(2)})`);
+      // Streak suave secundário (mais difuso, glowing)
+      const streak2 = document.createElement('div');
+      streak2.style.cssText =
+        'position:absolute;left:0;right:0;height:4px;mix-blend-mode:screen;pointer-events:none;' +
+        'background:linear-gradient(90deg,transparent 0%,transparent 5%,rgba(255,220,140,0.12) 28%,rgba(255,240,190,0.26) 50%,rgba(255,220,140,0.12) 72%,transparent 95%,transparent 100%);' +
+        'filter:blur(2px);transform:translateY(-50%);will-change:top;';
+      animLayer.appendChild(streak2);
+
+      // Ghost elements: gradiente radial suave (anel difuso, sem borda dura)
+      const ghostEls = ghosts.map(([factor, size, r, g, b, a]) => {
+        const mid  = `rgba(${r},${g},${b},${a})`;
+        const rim  = `rgba(${r},${g},${b},${(a * 0.55).toFixed(2)})`;
+        const blur = size > 65 ? 3 : 2;
         const el = document.createElement('div');
         el.style.cssText =
           `position:absolute;width:${size}px;height:${size}px;border-radius:50%;mix-blend-mode:screen;pointer-events:none;` +
-          `border:2px solid ${color};background:${bg};` +
-          `box-shadow:0 0 ${Math.round(size * 0.45)}px ${color};` +
+          `background:radial-gradient(circle at center,transparent 0%,transparent 28%,${mid} 48%,${rim} 62%,transparent 80%);` +
+          `filter:blur(${blur}px);` +
           `transform:translate(-50%,-50%);will-change:left,top;`;
         animLayer.appendChild(el);
         return [el, factor];
@@ -1373,23 +1383,24 @@
         const W = animLayer.offsetWidth  || window.innerWidth;
         const H = animLayer.offsetHeight || window.innerHeight;
 
-        // Light source: top-right (t=0) → left-center (t=1)
-        const sx = (0.82 - 0.64 * t) * W;
-        const sy = (0.08 + 0.48 * t) * H;
+        // Fonte de luz: canto superior-direito (t=0) → esquerda-centro (t=1)
+        const sx = (0.85 - 0.68 * t) * W;
+        const sy = (0.10 + 0.40 * t) * H;
 
-        // Reflection axis pivot = center of hero
+        // Eixo de reflexão pivotado no centro do hero
         const cx = W * 0.5;
         const cy = H * 0.5;
 
-        // Fade as hero scrolls out of view
-        const alpha = t < 0.70 ? 1 : 1 - (t - 0.70) / 0.30;
-        animLayer.style.opacity = (alpha * 0.88).toFixed(3);
+        // Fade suave ao sair do hero
+        const alpha = t < 0.72 ? 1 : 1 - (t - 0.72) / 0.28;
+        animLayer.style.opacity = (alpha * 0.85).toFixed(3);
 
-        glow.style.left   = sx + 'px';
-        glow.style.top    = sy + 'px';
-        dot.style.left    = sx + 'px';
-        dot.style.top     = sy + 'px';
-        streak.style.top  = sy + 'px';
+        glow.style.left    = sx + 'px';
+        glow.style.top     = sy + 'px';
+        dot.style.left     = sx + 'px';
+        dot.style.top      = sy + 'px';
+        streak1.style.top  = sy + 'px';
+        streak2.style.top  = sy + 'px';
 
         ghostEls.forEach(([el, factor]) => {
           el.style.left = (cx + (cx - sx) * factor) + 'px';
