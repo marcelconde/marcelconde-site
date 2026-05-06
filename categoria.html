@@ -259,12 +259,13 @@
 
     /* The image itself animates in when its parent becomes visible */
     .lightbox-item img {
-      max-width: min(92vw, 1500px);
-      max-height: 84vh;
+      max-width: min(96vw, 1800px);
+      max-height: 92vh;
       width: auto;
       height: auto;
       display: block;
       border-radius: 8px;
+      object-fit: contain;
       box-shadow: 0 32px 90px rgba(0,0,0,0.55);
       /* Initial (hidden) state */
       opacity: 0;
@@ -345,7 +346,10 @@
       .lightbox-bg-inner { grid-template-columns: repeat(4, 1fr); }
       .lightbox-scroll { height: 100dvh; }
       .lightbox-item { height: 100dvh; padding: 60px 12px; }
-      .lightbox-item img { max-width: 96vw; max-height: 74dvh; }
+      .lightbox-item img {
+        max-width: 98vw;
+        max-height: 88dvh;
+      }
       .lightbox-close { top: 14px; right: 14px; width: 42px; height: 42px; font-size: 22px; }
       .lightbox-counter { top: 16px; left: 14px; font-size: .78rem; padding: 7px 12px; }
     }
@@ -356,7 +360,10 @@
 
     @media (orientation: landscape) and (max-height: 500px) {
       .lightbox-item { padding: 50px 60px; height: 100vh; }
-      .lightbox-item img { max-height: 82vh; max-width: 70vw; }
+      .lightbox-item img {
+        max-height: 90vh;
+        max-width: 88vw;
+      }
       .lightbox-bg-inner { grid-template-columns: repeat(8, 1fr); }
     }
   </style>
