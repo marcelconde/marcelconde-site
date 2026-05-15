@@ -91,8 +91,13 @@
     }
 
     :root {
-      --primary: #000;
-      --secondary: #fff;
+      --primary: #f4f4f2;
+      --secondary: #111315;
+      --surface: #16181b;
+      --surface-soft: #1b1e22;
+      --muted: rgba(244, 244, 242, 0.72);
+      --muted-strong: rgba(244, 244, 242, 0.86);
+      --line: rgba(255, 255, 255, 0.08);
       --accent: #d4a574;
       --accent-dark: #b08d5e;
       --accent-light: #e8c9a0;
@@ -119,7 +124,7 @@
 
     .cloud-bg {
       position: absolute;
-      background: radial-gradient(ellipse at center, rgba(212, 165, 116, 0.08) 0%, transparent 70%);
+      background: radial-gradient(ellipse at center, rgba(212, 165, 116, 0.12) 0%, transparent 70%);
       border-radius: 50%;
       filter: blur(80px);
       opacity: 0;
@@ -194,10 +199,11 @@
     }
 
     nav.scrolled {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(30px) saturate(180%);
+      background: rgba(17, 19, 21, 0.92);
+      backdrop-filter: blur(30px) saturate(160%);
       padding: 1.2rem 5%;
-      box-shadow: 0 4px 40px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 40px rgba(0, 0, 0, 0.35);
+      border-bottom: 1px solid var(--line);
     }
 
     .logo-container {
@@ -217,7 +223,7 @@
     }
 
     nav.scrolled .logo-img {
-      filter: brightness(1) invert(0);
+      filter: brightness(0) invert(1);
     }
 
     .logo-img:hover {
@@ -451,11 +457,13 @@
       z-index: 1;
     }
 
-    .section-dark { background: var(--primary); color: var(--secondary); }
+    .section-dark { background: #0d0f11; color: var(--primary); }
     .section-light { background: var(--secondary); color: var(--primary); }
     .section-accent {
-      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+      background: linear-gradient(135deg, #181a1d 0%, #101214 100%);
       color: var(--primary);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
     }
 
     .container {
@@ -486,6 +494,7 @@
     .text-content p {
       font-size: 1.3rem;
       line-height: 1.9;
+      color: var(--muted);
       opacity: 0;
       transform: translateX(-100px);
       transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
@@ -531,7 +540,7 @@
       opacity: 0;
       transform: scale(0.8) translateY(50px) rotateX(10deg);
       transition: all 0.9s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.45);
     }
 
     .insta-post.visible {
@@ -585,7 +594,7 @@
       display: inline-block;
       padding: 1.8rem 5rem;
       background: var(--accent);
-      color: var(--primary);
+      color: #0f1113;
       text-decoration: none;
       font-weight: 700;
       font-size: 1.1rem;
@@ -615,18 +624,18 @@
     .cta-button:hover {
       transform: translateY(-5px);
       box-shadow: 0 20px 60px rgba(212, 165, 116, 0.5);
-      color: var(--secondary);
+      color: var(--primary);
     }
 
     .cta-button-outline {
       background: transparent;
       border: 3px solid var(--accent);
-      color: var(--secondary);
+      color: var(--primary);
     }
 
     .cta-button-outline:hover {
       background: var(--accent);
-      color: var(--primary);
+      color: #0f1113;
     }
 
     .cta-button-outline::before { display: none; }
@@ -641,13 +650,14 @@
 
     .service-card {
       padding: 3rem;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.045);
       backdrop-filter: blur(10px);
-      border: 1px solid rgba(212, 165, 116, 0.2);
+      border: 1px solid rgba(212, 165, 116, 0.18);
       border-radius: 8px;
       transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
       opacity: 0;
       transform: translateY(50px);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.22);
     }
 
     .service-card.visible {
@@ -670,6 +680,7 @@
 
     .service-card p {
       line-height: 1.8;
+      color: var(--muted);
       opacity: 0.9;
     }
 
@@ -764,7 +775,7 @@
       max-width: 450px;
       border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
     }
 
     .about-image img {
@@ -781,10 +792,11 @@
       margin-top: 3rem;
     }
     .testimonial-card {
-      background: #fff;
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
       border-radius: 16px;
       padding: 2.4rem;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.28);
       display: flex;
       flex-direction: column;
       gap: 1.2rem;
@@ -797,33 +809,34 @@
       transform: translateY(0);
     }
     .testimonial-stars { color: #c9a96e; font-size: 1.3rem; letter-spacing: 2px; }
-    .testimonial-card p { font-size: 1.1rem; line-height: 1.8; color: #444; font-style: italic; flex: 1; }
-    .testimonial-author strong { display: block; font-size: 1rem; color: #111; }
-    .testimonial-author span { font-size: 0.9rem; color: #888; }
+    .testimonial-card p { font-size: 1.1rem; line-height: 1.8; color: var(--muted); font-style: italic; flex: 1; }
+    .testimonial-author strong { display: block; font-size: 1rem; color: var(--primary); }
+    .testimonial-author span { font-size: 0.9rem; color: rgba(244,244,242,0.55); }
     @media (max-width: 900px) { .testimonials-grid { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 600px) { .testimonials-grid { grid-template-columns: 1fr; } }
 
     /* === FORMULÁRIO DE CONTATO === */
     .contact-form {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.045);
+      border: 1px solid var(--line);
       border-radius: 16px;
       padding: 3rem;
       display: flex;
       flex-direction: column;
       gap: 1.4rem;
+      box-shadow: 0 20px 70px rgba(0,0,0,0.28);
     }
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
     .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
-    .form-group label { font-size: 0.9rem; color: rgba(255,255,255,0.7); letter-spacing: 0.05em; text-transform: uppercase; }
+    .form-group label { font-size: 0.9rem; color: rgba(244,244,242,0.7); letter-spacing: 0.05em; text-transform: uppercase; }
     .form-group input,
     .form-group select,
     .form-group textarea {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.14);
       border-radius: 8px;
       padding: 0.9rem 1.2rem;
-      color: #fff;
+      color: var(--primary);
       font-size: 1rem;
       font-family: inherit;
       transition: border-color 0.3s ease, background 0.3s ease;
@@ -837,7 +850,7 @@
       border-color: var(--accent);
       background: rgba(255,255,255,0.12);
     }
-    .form-group select option { background: #1a1a1a; color: #fff; }
+    .form-group select option { background: #111315; color: var(--primary); }
     .form-group textarea { resize: vertical; min-height: 120px; }
     @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } .contact-form { padding: 2rem; } }
 
@@ -852,7 +865,7 @@
       border: none;
       border-radius: 999px;
       background: var(--accent);
-      color: var(--primary);
+      color: #0f1113;
       display: grid;
       place-items: center;
       cursor: pointer;
@@ -1107,8 +1120,8 @@
             <a href="https://www.instagram.com/mconde.foto/" class="cta-button cta-button-outline" target="_blank" rel="noopener noreferrer">Instagram</a>
           </div>
           <div style="margin-top: 2.5rem; display: flex; flex-direction: column; gap: 0.6rem;">
-            <a href="mailto:contato@marcelconde.com.br" style="color: var(--secondary); text-decoration: none; font-size: 1rem;">contato@marcelconde.com.br</a>
-            <span style="color: rgba(255,255,255,0.5); font-size: 0.95rem;">Recife, PE — Brasil</span>
+            <a href="mailto:contato@marcelconde.com.br" style="color: var(--primary); text-decoration: none; font-size: 1rem;">contato@marcelconde.com.br</a>
+            <span style="color: rgba(244,244,242,0.55); font-size: 0.95rem;">Recife, PE — Brasil</span>
           </div>
         </div>
 
@@ -1157,14 +1170,14 @@
   </section>
 
   <!-- Rodapé -->
-  <footer style="background:#0a0a0a; color:rgba(255,255,255,0.5); padding:3rem 5%; font-size:0.9rem; border-top:1px solid rgba(255,255,255,0.07);">
+  <footer style="background:#0a0c0d; color:rgba(244,244,242,0.55); padding:3rem 5%; font-size:0.9rem; border-top:1px solid rgba(255,255,255,0.07);">
     <div style="max-width:1200px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1.5rem;">
       <span>© <span id="footer-year"></span> Marcel Conde Fotografia — Recife, PE</span>
       <div role="navigation" aria-label="Links do rodapé" style="display:flex; gap:1.5rem; flex-wrap:wrap;">
-        <a href="#portfolio" style="color:rgba(255,255,255,0.5); text-decoration:none;">Portfólio</a>
-        <a href="#contato" style="color:rgba(255,255,255,0.5); text-decoration:none;">Contato</a>
-        <a href="/encontre.html" style="color:rgba(255,255,255,0.5); text-decoration:none;">Encontre suas fotos</a>
-        <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.5); text-decoration:none;">Instagram</a>
+        <a href="#portfolio" style="color:rgba(244,244,242,0.55); text-decoration:none;">Portfólio</a>
+        <a href="#contato" style="color:rgba(244,244,242,0.55); text-decoration:none;">Contato</a>
+        <a href="/encontre.html" style="color:rgba(244,244,242,0.55); text-decoration:none;">Encontre suas fotos</a>
+        <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" style="color:rgba(244,244,242,0.55); text-decoration:none;">Instagram</a>
       </div>
     </div>
   </footer>
