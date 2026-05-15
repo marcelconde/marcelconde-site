@@ -142,6 +142,15 @@
     .photo-heart.liked { background: rgba(220,50,50,0.75); }
     .photo-heart.liked svg { fill: #fff; stroke: none; }
 
+    .like-count {
+      color: #fff;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .03em;
+      min-width: 16px;
+      display: none;
+    }
+
     /* ─── FOLDER CARDS ─── */
     .folder-card {
       break-inside: avoid;
@@ -739,7 +748,14 @@
             <button class="photo-btn photo-heart" aria-label="Curtir">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
             </button>
+            <span class="like-count" id="lc-${index}"></span>
           </div>`;
+
+        const likedKey = `liked:${slugDecoded}:${index}`;
+        const alreadyLiked = localStorage.getItem(likedKey) === '1';
+        const heartBtn = overlay.querySelector(".photo-heart");
+        const countEl  = overlay.querySelector(".like-count");
+        if (alreadyLiked) heartBtn.classList.add("liked");
 
         overlay.querySelectorAll(".photo-social").forEach(btn => {
           btn.addEventListener("click", e => {
@@ -747,9 +763,28 @@
             window.open(btn.dataset.url, "_blank", "noopener,noreferrer");
           });
         });
-        overlay.querySelector(".photo-heart").addEventListener("click", e => {
+
+        heartBtn.addEventListener("click", async e => {
           e.stopPropagation();
-          e.currentTarget.classList.toggle("liked");
+          if (localStorage.getItem(likedKey) === '1') {
+            // Já curtiu: só alterna visual, não decrementa backend
+            heartBtn.classList.toggle("liked");
+            return;
+          }
+          // Primeira curtida: salva localmente e manda pro servidor
+          heartBtn.classList.add("liked");
+          localStorage.setItem(likedKey, '1');
+          try {
+            const r = await fetch(`${WORKER_BASE}/like`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ album: slugDecoded, albumName: titleEl.textContent, index })
+            });
+            if (r.ok) {
+              const { likes } = await r.json();
+              if (countEl && likes > 0) { countEl.textContent = likes; countEl.style.display = 'inline'; }
+            }
+          } catch {}
         });
 
         wrap.addEventListener("click", () => openLightboxAt(index));
@@ -757,6 +792,19 @@
         wrap.appendChild(overlay);
         gridEl.appendChild(wrap);
       });
+
+      // Busca curtidas já existentes e exibe nos contadores
+      fetch(`${WORKER_BASE}/likes?album=${encodeURIComponent(slugDecoded)}`)
+        .then(r => r.ok ? r.json() : {})
+        .then(likes => {
+          Object.entries(likes).forEach(([idx, count]) => {
+            if (count > 0) {
+              const el = document.getElementById(`lc-${idx}`);
+              if (el) { el.textContent = count; el.style.display = 'inline'; }
+            }
+          });
+        })
+        .catch(() => {});
     }
 
     load().catch(err => {
