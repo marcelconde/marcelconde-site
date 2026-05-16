@@ -390,60 +390,187 @@
     .social-bar {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin: -14px 0 28px;
-      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      /* Rompe o padding do body para ir borda a borda */
+      margin: -14px -24px 32px;
+      padding: 11px 24px;
+      background: #0d0d0d;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
     }
 
     .social-bar-label {
-      font-size: .75rem;
-      font-weight: 600;
-      letter-spacing: .12em;
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .18em;
       text-transform: uppercase;
-      color: rgba(255,255,255,0.38);
+      color: rgba(255,255,255,0.28);
+      margin-right: 6px;
     }
 
     .social-bar-divider {
       width: 1px;
-      height: 16px;
-      background: rgba(255,255,255,0.12);
+      height: 14px;
+      background: rgba(255,255,255,0.10);
+      margin: 0 4px;
     }
 
     .social-bar-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 7px;
-      padding: 7px 14px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.11);
-      background: rgba(255,255,255,0.05);
-      color: rgba(255,255,255,0.72);
-      font-size: .8rem;
-      font-weight: 600;
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.09);
+      background: transparent;
+      color: rgba(255,255,255,0.55);
       text-decoration: none;
       cursor: pointer;
-      transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
+      transition: background .2s ease, border-color .2s ease, color .2s ease;
+    }
+
+    .social-bar-btn:hover { color: #fff; border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.07); }
+    .social-bar-btn svg { width: 17px; height: 17px; flex-shrink: 0; }
+
+    .social-bar-btn.whatsapp:hover  { color: #25d366; border-color: rgba(37,211,102,0.35); background: rgba(37,211,102,0.08); }
+    .social-bar-btn.instagram:hover { color: #e1306c; border-color: rgba(225,48,108,0.35); background: rgba(225,48,108,0.08); }
+    .social-bar-btn.pinterest:hover { color: #e60023; border-color: rgba(230,0,35,0.35);   background: rgba(230,0,35,0.08); }
+
+    /* ─── BOTÃO FLUTUANTE DE ORÇAMENTO ─── */
+    .quote-fab {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 13px 20px;
+      background: #161616;
+      color: #f5f5f5;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 3px;
+      font-size: .82rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 8px 36px rgba(0,0,0,0.55);
+      transition: background .2s, box-shadow .2s, transform .2s;
+    }
+    .quote-fab:hover {
+      background: #202020;
+      transform: translateY(-2px);
+      box-shadow: 0 14px 48px rgba(0,0,0,0.65);
+    }
+    .quote-fab svg { width: 18px; height: 18px; flex-shrink: 0; color: #25d366; }
+
+    /* ─── POPUP DE ORÇAMENTO ─── */
+    .quote-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 600;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 0 28px 96px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s ease;
+    }
+    .quote-overlay.open { opacity: 1; pointer-events: all; }
+
+    .quote-popup {
+      width: 320px;
+      background: #141414;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 4px;
+      overflow: hidden;
+      transform: translateY(16px);
+      transition: transform .28s cubic-bezier(.22,1,.36,1);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+    }
+    .quote-overlay.open .quote-popup { transform: none; }
+
+    .quote-popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: #0d0d0d;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .quote-popup-header span {
+      font-size: .8rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+    }
+    .quote-close {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.38);
+      font-size: 20px;
+      cursor: pointer;
       line-height: 1;
-      white-space: nowrap;
+      padding: 0;
+      transition: color .15s;
     }
+    .quote-close:hover { color: #fff; }
 
-    .social-bar-btn:hover {
-      background: rgba(255,255,255,0.12);
-      border-color: rgba(255,255,255,0.25);
-      color: #fff;
-      transform: translateY(-1px);
+    .quote-popup-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
-
-    .social-bar-btn svg {
-      width: 15px;
-      height: 15px;
-      flex-shrink: 0;
+    .quote-popup-msg {
+      font-size: .8rem;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.5;
+      margin-bottom: 2px;
     }
+    .quote-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #1c1c1c;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 3px;
+      color: #f5f5f5;
+      font-size: .82rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s;
+      box-sizing: border-box;
+    }
+    .quote-input:focus { border-color: rgba(255,255,255,0.28); }
+    .quote-input::placeholder { color: rgba(255,255,255,0.22); }
+    textarea.quote-input { resize: none; height: 76px; }
 
-    .social-bar-btn.whatsapp:hover { background: rgba(37,211,102,0.18); border-color: rgba(37,211,102,0.38); color: #25d366; }
-    .social-bar-btn.instagram:hover { background: rgba(225,48,108,0.18); border-color: rgba(225,48,108,0.38); color: #e1306c; }
-    .social-bar-btn.pinterest:hover { background: rgba(230,0,35,0.18); border-color: rgba(230,0,35,0.38); color: #e60023; }
+    .quote-submit {
+      width: 100%;
+      padding: 12px;
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 3px;
+      color: #f5f5f5;
+      font-size: .82rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background .2s;
+      margin-top: 2px;
+    }
+    .quote-submit:hover { background: #252525; }
+    .quote-submit svg { width: 16px; height: 16px; color: #25d366; }
 
     /* ─── RESPONSIVE ─── */
     @media (max-width: 1200px) {
@@ -452,6 +579,10 @@
 
     @media (max-width: 800px) {
       body { padding: 16px; }
+      .social-bar { margin: -14px -16px 24px; }
+      .quote-fab { bottom: 18px; right: 18px; padding: 11px 16px; font-size: .76rem; }
+      .quote-overlay { padding: 0 18px 80px; }
+      .quote-popup { width: 290px; }
       .grid { columns: 2; column-gap: 10px; }
       .img-wrap, .folder-card { margin-bottom: 10px; }
       .lightbox-bg-inner { grid-template-columns: repeat(4, 1fr); }
@@ -487,28 +618,46 @@
     <h1 id="title">Carregando...</h1>
   </div>
 
-  <!-- Barra de redes sociais -->
+  <!-- Barra de compartilhamento -->
   <div class="social-bar">
     <span class="social-bar-label">Compartilhe</span>
     <div class="social-bar-divider"></div>
-
-    <a id="whatsapp-btn" class="social-bar-btn whatsapp" href="#" target="_blank" rel="noopener noreferrer">
-      <!-- WhatsApp -->
+    <a id="whatsapp-btn" class="social-bar-btn whatsapp" href="#" target="_blank" rel="noopener noreferrer" title="Compartilhar no WhatsApp">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.86L.057 23.428a.75.75 0 0 0 .915.914l5.677-1.474A11.953 11.953 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.71 9.71 0 0 1-4.952-1.355l-.355-.211-3.67.952.975-3.566-.232-.368A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>
-      WhatsApp
     </a>
-
-    <a class="social-bar-btn instagram" href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer">
-      <!-- Instagram -->
+    <a class="social-bar-btn instagram" href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" title="Instagram">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><circle cx="17.5" cy="6.5" r=".5" fill="currentColor" stroke="none"/></svg>
-      Instagram
     </a>
-
-    <a class="social-bar-btn pinterest" href="https://br.pinterest.com/marcelconde/" target="_blank" rel="noopener noreferrer">
-      <!-- Pinterest -->
+    <a class="social-bar-btn pinterest" href="https://br.pinterest.com/marcelconde/" target="_blank" rel="noopener noreferrer" title="Pinterest">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>
-      Pinterest
     </a>
+  </div>
+
+  <!-- Botão flutuante de orçamento -->
+  <button class="quote-fab" id="quote-fab" type="button">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.86L.057 23.428a.75.75 0 0 0 .915.914l5.677-1.474A11.953 11.953 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.71 9.71 0 0 1-4.952-1.355l-.355-.211-3.67.952.975-3.566-.232-.368A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>
+    Pedir Orçamento
+  </button>
+
+  <!-- Popup de orçamento -->
+  <div class="quote-overlay" id="quote-overlay">
+    <div class="quote-popup">
+      <div class="quote-popup-header">
+        <span>Solicitar Orçamento</span>
+        <button class="quote-close" id="quote-close" type="button">×</button>
+      </div>
+      <div class="quote-popup-body">
+        <p class="quote-popup-msg">Preencha os dados e te retorno com o orçamento pelo WhatsApp 😊</p>
+        <input class="quote-input" id="q-nome"      type="text"  placeholder="Nome *" required />
+        <input class="quote-input" id="q-telefone"  type="tel"   placeholder="Telefone / WhatsApp *" required />
+        <input class="quote-input" id="q-email"     type="email" placeholder="E-mail" />
+        <textarea class="quote-input" id="q-msg"    placeholder="Sobre o trabalho (evento, data, local...)"></textarea>
+        <button class="quote-submit" id="quote-submit" type="button">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.86L.057 23.428a.75.75 0 0 0 .915.914l5.677-1.474A11.953 11.953 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.71 9.71 0 0 1-4.952-1.355l-.355-.211-3.67.952.975-3.566-.232-.368A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>
+          Enviar via WhatsApp
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -548,6 +697,41 @@
     if (whatsappBtn) {
       whatsappBtn.href = `https://wa.me/?text=${encodeURIComponent("Veja esse álbum de fotos! " + shareUrl.toString())}`;
     }
+
+    // ─── Popup de orçamento ───
+    const quoteFab     = document.getElementById("quote-fab");
+    const quoteOverlay = document.getElementById("quote-overlay");
+    const quoteClose   = document.getElementById("quote-close");
+    const quoteSubmit  = document.getElementById("quote-submit");
+
+    quoteFab.addEventListener("click", () => quoteOverlay.classList.add("open"));
+    quoteClose.addEventListener("click", () => quoteOverlay.classList.remove("open"));
+    quoteOverlay.addEventListener("click", (e) => {
+      if (e.target === quoteOverlay) quoteOverlay.classList.remove("open");
+    });
+
+    quoteSubmit.addEventListener("click", () => {
+      const nome     = document.getElementById("q-nome").value.trim();
+      const telefone = document.getElementById("q-telefone").value.trim();
+      const email    = document.getElementById("q-email").value.trim();
+      const msg      = document.getElementById("q-msg").value.trim();
+
+      if (!nome || !telefone) {
+        document.getElementById("q-nome").style.borderColor     = nome     ? "" : "rgba(220,50,50,0.6)";
+        document.getElementById("q-telefone").style.borderColor = telefone ? "" : "rgba(220,50,50,0.6)";
+        return;
+      }
+
+      const albumAtual = document.getElementById("title").textContent || "portfólio";
+      let texto = `Olá Marcel! Vi o álbum "${albumAtual}" e gostaria de um orçamento.\n\n`;
+      texto += `Nome: ${nome}\n`;
+      texto += `Telefone: ${telefone}\n`;
+      if (email)    texto += `E-mail: ${email}\n`;
+      if (msg)      texto += `\nDetalhes: ${msg}`;
+
+      window.open(`https://wa.me/5581984094212?text=${encodeURIComponent(texto)}`, "_blank", "noopener,noreferrer");
+      quoteOverlay.classList.remove("open");
+    });
 
     if (!slug) {
       titleEl.textContent = "Álbum não informado (?slug=nome-do-album)";
