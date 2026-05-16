@@ -386,6 +386,65 @@
       50%       { opacity: 0.9;  transform: translateY(4px);  }
     }
 
+    /* ─── SOCIAL SHARE BAR ─── */
+    .social-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: -14px 0 28px;
+      flex-wrap: wrap;
+    }
+
+    .social-bar-label {
+      font-size: .75rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.38);
+    }
+
+    .social-bar-divider {
+      width: 1px;
+      height: 16px;
+      background: rgba(255,255,255,0.12);
+    }
+
+    .social-bar-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.11);
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.72);
+      font-size: .8rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .social-bar-btn:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.25);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .social-bar-btn svg {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+    }
+
+    .social-bar-btn.whatsapp:hover { background: rgba(37,211,102,0.18); border-color: rgba(37,211,102,0.38); color: #25d366; }
+    .social-bar-btn.instagram:hover { background: rgba(225,48,108,0.18); border-color: rgba(225,48,108,0.38); color: #e1306c; }
+    .social-bar-btn.pinterest:hover { background: rgba(230,0,35,0.18); border-color: rgba(230,0,35,0.38); color: #e60023; }
+
     /* ─── RESPONSIVE ─── */
     @media (max-width: 1200px) {
       .grid { columns: 3; }
@@ -453,10 +512,10 @@
     const gridEl   = document.getElementById("grid");
     const WORKER_BASE = "https://api.marcelconde.com.br";
 
-    const params    = new URLSearchParams(location.search);
-    const slug      = params.get("slug");
-    const ADMIN_KEY = "mc2025";               // ← sua senha secreta
-    const isAdmin   = params.get("admin") === ADMIN_KEY;
+    const params      = new URLSearchParams(location.search);
+    const slug        = params.get("slug");
+    // adminToken é opaco para o front-end — o Worker valida contra a secret criptografada
+    const adminToken  = params.get("admin") || "";
 
     if (!slug) {
       titleEl.textContent = "Álbum não informado (?slug=nome-do-album)";
@@ -777,14 +836,17 @@
           heartBtn.classList.add("liked");
           localStorage.setItem(likedKey, '1');
           try {
+            const headers = { 'content-type': 'application/json' };
+            if (adminToken) headers['X-Admin-Token'] = adminToken;
             const r = await fetch(`${WORKER_BASE}/like`, {
               method: 'POST',
-              headers: { 'content-type': 'application/json' },
+              headers,
               body: JSON.stringify({ album: slugDecoded, albumName: titleEl.textContent, index })
             });
             if (r.ok) {
-              const { likes } = await r.json();
-              if (isAdmin && countEl && likes > 0) { countEl.textContent = likes; countEl.style.display = 'inline'; }
+              const { likes, isAdmin: adminConfirmed } = await r.json();
+              // Só exibe contagem se o Worker confirmou que o token é válido
+              if (adminConfirmed && countEl && likes > 0) { countEl.textContent = likes; countEl.style.display = 'inline'; }
             }
           } catch {}
         });
@@ -795,12 +857,15 @@
         gridEl.appendChild(wrap);
       });
 
-      // Busca curtidas — só exibe contadores para o admin
-      if (isAdmin) {
-        fetch(`${WORKER_BASE}/likes?album=${encodeURIComponent(slugDecoded)}`)
+      // Busca curtidas — token enviado via header; Worker decide se é admin válido
+      if (adminToken) {
+        fetch(`${WORKER_BASE}/likes?album=${encodeURIComponent(slugDecoded)}`, {
+          headers: { 'X-Admin-Token': adminToken }
+        })
           .then(r => r.ok ? r.json() : {})
-          .then(likes => {
-            Object.entries(likes).forEach(([idx, count]) => {
+          .then(({ _authorized, ...counts }) => {
+            if (!_authorized) return; // token inválido — Worker rejeitou
+            Object.entries(counts).forEach(([idx, count]) => {
               if (count > 0) {
                 const el = document.getElementById(`lc-${idx}`);
                 if (el) { el.textContent = count; el.style.display = 'inline'; }
