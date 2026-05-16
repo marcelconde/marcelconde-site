@@ -453,8 +453,10 @@
     const gridEl   = document.getElementById("grid");
     const WORKER_BASE = "https://api.marcelconde.com.br";
 
-    const params = new URLSearchParams(location.search);
-    const slug   = params.get("slug");
+    const params    = new URLSearchParams(location.search);
+    const slug      = params.get("slug");
+    const ADMIN_KEY = "mc2025";               // ← sua senha secreta
+    const isAdmin   = params.get("admin") === ADMIN_KEY;
 
     if (!slug) {
       titleEl.textContent = "Álbum não informado (?slug=nome-do-album)";
@@ -782,7 +784,7 @@
             });
             if (r.ok) {
               const { likes } = await r.json();
-              if (countEl && likes > 0) { countEl.textContent = likes; countEl.style.display = 'inline'; }
+              if (isAdmin && countEl && likes > 0) { countEl.textContent = likes; countEl.style.display = 'inline'; }
             }
           } catch {}
         });
@@ -793,18 +795,20 @@
         gridEl.appendChild(wrap);
       });
 
-      // Busca curtidas já existentes e exibe nos contadores
-      fetch(`${WORKER_BASE}/likes?album=${encodeURIComponent(slugDecoded)}`)
-        .then(r => r.ok ? r.json() : {})
-        .then(likes => {
-          Object.entries(likes).forEach(([idx, count]) => {
-            if (count > 0) {
-              const el = document.getElementById(`lc-${idx}`);
-              if (el) { el.textContent = count; el.style.display = 'inline'; }
-            }
-          });
-        })
-        .catch(() => {});
+      // Busca curtidas — só exibe contadores para o admin
+      if (isAdmin) {
+        fetch(`${WORKER_BASE}/likes?album=${encodeURIComponent(slugDecoded)}`)
+          .then(r => r.ok ? r.json() : {})
+          .then(likes => {
+            Object.entries(likes).forEach(([idx, count]) => {
+              if (count > 0) {
+                const el = document.getElementById(`lc-${idx}`);
+                if (el) { el.textContent = count; el.style.display = 'inline'; }
+              }
+            });
+          })
+          .catch(() => {});
+      }
     }
 
     load().catch(err => {
