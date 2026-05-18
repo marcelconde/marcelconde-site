@@ -562,16 +562,19 @@
     .insta-overlay {
       position: absolute;
       inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.10) 55%, transparent 75%);
+      background: linear-gradient(to top, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.08) 50%, transparent 70%);
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
       padding: 1.4rem 1.6rem;
-      opacity: 0;
-      transition: opacity 0.4s ease;
+      /* Sempre visível — sem necessidade de hover ou dois cliques no celular */
+      opacity: 1;
     }
 
-    .insta-post:hover .insta-overlay { opacity: 1; }
+    /* Leve intensidade extra no hover para dar feedback visual */
+    .insta-post:hover .insta-overlay {
+      background: linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.14) 55%, transparent 75%);
+    }
 
     .overlay-title {
       color: #fff;
