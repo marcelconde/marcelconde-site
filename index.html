@@ -1431,22 +1431,7 @@
 
       .hero-inner { grid-column: 1; }
 
-      /* reel visível no mobile com gradiente top-down */
-      .hero-photo-reel { display: block; }
-
-      .hero-photo-reel::before {
-        background: linear-gradient(
-          to bottom,
-          var(--bg)            0%,
-          rgba(8,8,8,0.78)     30%,
-          rgba(8,8,8,0.40)     60%,
-          rgba(8,8,8,0.15)     100%
-        );
-      }
-
-      .hero-reel-img {
-        object-position: center 25%;
-      }
+      .hero-photo-reel { display: none; }
 
       nav {
         padding: 1.4rem 5%;
