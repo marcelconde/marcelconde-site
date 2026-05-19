@@ -2291,60 +2291,66 @@
         ? 'f_auto,q_auto,w_800,h_1200,c_fill'
         : 'f_auto,q_auto,w_1920,h_1080,c_fill';
 
-      let allImgs = [];   // lista crescente de elementos <img> no reel
-      let current  = 0;
-      let timer    = null;
-
-      function addToReel(src) {
-        const img = document.createElement('img');
-        img.className = 'hero-reel-img';
-        img.src = src;
-        img.alt = '';
-        img.decoding = 'async';
-        img.loading = 'lazy';
-        reel.appendChild(img);
-        allImgs.push(img);
-
-        // Ativa a primeira foto imediatamente
-        if (allImgs.length === 1) {
-          img.classList.add('active');
-          img.loading = 'eager';
-        }
-
-        // Começa o ciclo quando tiver ao menos 2 fotos
-        if (allImgs.length === 2 && !timer) {
-          timer = setInterval(() => {
-            allImgs[current].classList.remove('active');
-            current = (current + 1) % allImgs.length;
-            allImgs[current].classList.add('active');
-          }, 4000);
-        }
-      }
-
       try {
         const albums = await fetch(`${WORKER_BASE}/albums`).then(r => r.json());
         if (!Array.isArray(albums) || !albums.length) return;
 
-        // Embaralha todos os álbuns (sem limite)
-        const shuffled = albums.sort(() => Math.random() - 0.5);
-
-        // Busca todos os álbuns em paralelo — cada um adiciona fotos ao reel
-        // conforme vai chegando, sem esperar todos terminarem
-        await Promise.allSettled(
-          shuffled.map(a =>
+        // Busca todos os álbuns em paralelo e aguarda todos terminarem
+        const albumPhotos = await Promise.allSettled(
+          albums.map(a =>
             fetch(`${WORKER_BASE}/album?path=${encodeURIComponent(a.path)}`)
               .then(r => r.json())
-              .then(d => {
-                // Pega TODAS as fotos do álbum, embaralhadas
-                const urls = (d.images || [])
+              .then(d =>
+                (d.images || [])
                   .map(i => (typeof i === 'object' ? i.url : i))
                   .filter(Boolean)
-                  .sort(() => Math.random() - 0.5);
-                urls.forEach(u => addToReel(cloudUrl(u, transform)));
-              })
-              .catch(() => {})
+                  .sort(() => Math.random() - 0.5)   // embaralha dentro do álbum
+              )
+              .catch(() => [])
           )
         );
+
+        // Filtra álbuns que retornaram fotos
+        const buckets = albumPhotos
+          .filter(r => r.status === 'fulfilled' && r.value.length > 0)
+          .map(r => ({ photos: r.value, idx: 0 }))
+          .sort(() => Math.random() - 0.5);  // embaralha a ordem dos álbuns
+
+        if (!buckets.length) return;
+
+        // Intercala: pega 1 foto de cada álbum em rotação (round-robin)
+        // até esgotar todas as fotos de todos os álbuns
+        const interleaved = [];
+        let remaining = buckets.length;
+        while (remaining > 0) {
+          remaining = 0;
+          for (const b of buckets) {
+            if (b.idx < b.photos.length) {
+              interleaved.push(cloudUrl(b.photos[b.idx++], transform));
+              if (b.idx < b.photos.length) remaining++;
+            }
+          }
+        }
+
+        // Cria os elementos e inicia o ciclo
+        interleaved.forEach((src, i) => {
+          const img = document.createElement('img');
+          img.className = 'hero-reel-img';
+          img.src = src;
+          img.alt = '';
+          img.decoding = 'async';
+          img.loading = i === 0 ? 'eager' : 'lazy';
+          if (i === 0) img.classList.add('active');
+          reel.appendChild(img);
+        });
+
+        const imgs = reel.querySelectorAll('.hero-reel-img');
+        let current = 0;
+        setInterval(() => {
+          imgs[current].classList.remove('active');
+          current = (current + 1) % imgs.length;
+          imgs[current].classList.add('active');
+        }, 4000);
 
       } catch (err) {
         console.warn('Hero reel:', err);
