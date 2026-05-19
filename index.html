@@ -1404,7 +1404,22 @@
 
       .hero-inner { grid-column: 1; }
 
-      .hero-photo-reel { display: none; }
+      /* reel visível no mobile com gradiente top-down */
+      .hero-photo-reel { display: block; }
+
+      .hero-photo-reel::before {
+        background: linear-gradient(
+          to bottom,
+          var(--bg)            0%,
+          rgba(8,8,8,0.78)     30%,
+          rgba(8,8,8,0.40)     60%,
+          rgba(8,8,8,0.15)     100%
+        );
+      }
+
+      .hero-reel-img {
+        object-position: center 25%;
+      }
 
       nav {
         padding: 1.4rem 5%;
@@ -2255,10 +2270,16 @@
         );
 
         // Aplana, aplica transform Cloudinary e embaralha
+        // Mobile: crop vertical (portrait); desktop: landscape 16:9
+        const isMobile = window.innerWidth <= 768;
+        const transform = isMobile
+          ? 'f_auto,q_auto,w_800,h_1200,c_fill'
+          : 'f_auto,q_auto,w_1920,h_1080,c_fill';
+
         const all = results.flat().filter(Boolean);
         const thumbs = all
           .sort(() => Math.random() - 0.5)
-          .map(u => cloudUrl(u, 'f_auto,q_auto,w_1920,h_1080,c_fill'));
+          .map(u => cloudUrl(u, transform));
 
         if (!thumbs.length) return;
 
