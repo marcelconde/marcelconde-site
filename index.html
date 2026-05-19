@@ -379,9 +379,9 @@
       position: relative;
       height: 100vh;
       min-height: 600px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      display: grid;
+      grid-template-columns: 55% 45%;
+      grid-template-rows: 1fr auto;
       overflow: hidden;
       background: var(--bg);
     }
@@ -409,13 +409,61 @@
     }
 
     .hero-inner {
+      grid-column: 1;
+      grid-row: 1;
       position: relative;
       z-index: 2;
       padding: 0 8%;
-      flex: 1;
       display: flex;
       flex-direction: column;
       justify-content: center;
+    }
+
+    /* ─── HERO PHOTO REEL ─── */
+    .hero-photo-reel {
+      grid-column: 2;
+      grid-row: 1;
+      position: relative;
+      overflow: hidden;
+      z-index: 1;
+    }
+
+    /* gradiente que funde a foto com o fundo escuro à esquerda */
+    .hero-photo-reel::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 140px;
+      background: linear-gradient(to right, var(--bg) 0%, transparent 100%);
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    /* gradiente sutil no topo e base */
+    .hero-photo-reel::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to bottom, var(--bg) 0%, transparent 18%),
+        linear-gradient(to top, var(--bg) 0%, transparent 18%);
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .hero-reel-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 1.6s ease;
+      filter: brightness(0.72) saturate(0.88);
+    }
+
+    .hero-reel-img.active {
+      opacity: 1;
     }
 
     .hero-eyebrow {
@@ -570,10 +618,9 @@
 
     /* Hero Marquee */
     .hero-marquee {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      grid-column: 1 / -1;
+      grid-row: 2;
+      position: relative;
       z-index: 2;
       overflow: hidden;
       border-top: 1px solid var(--ink-faint);
@@ -1343,6 +1390,15 @@
     }
 
     @media (max-width: 768px) {
+      .hero {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+
+      .hero-inner { grid-column: 1; }
+
+      .hero-photo-reel { display: none; }
+
       nav {
         padding: 1.4rem 5%;
       }
@@ -1524,6 +1580,9 @@
         <a href="#contato" class="btn-ghost">Falar Comigo</a>
       </div>
     </div>
+
+    <!-- Photo reel (right side) -->
+    <div class="hero-photo-reel" id="hero-reel" aria-hidden="true"></div>
 
     <!-- Scroll indicator -->
     <div class="hero-scroll" aria-hidden="true">
@@ -2150,11 +2209,85 @@
       }
     });
 
+    // -------------------------------------------------------
+    // HERO PHOTO REEL — fotos do portfólio passando aleatoriamente
+    // -------------------------------------------------------
+    async function initHeroReel() {
+      const reel = document.getElementById('hero-reel');
+      if (!reel) return;
+
+      const WORKER_BASE = "https://api.marcelconde.com.br";
+
+      function cloudUrl(src, t) {
+        if (!src || !src.includes('/upload/')) return src;
+        return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${t}/`);
+      }
+
+      try {
+        const albums = await fetch(`${WORKER_BASE}/albums`).then(r => r.json());
+        if (!Array.isArray(albums) || !albums.length) return;
+
+        // Busca thumbnails em paralelo (máx 10 álbuns, embaralhados)
+        const picked = albums.sort(() => Math.random() - 0.5).slice(0, 10);
+        const results = await Promise.all(
+          picked.map(a =>
+            fetch(`${WORKER_BASE}/album?path=${encodeURIComponent(a.path)}`)
+              .then(r => r.json())
+              .then(d => {
+                const urls = [];
+                if (d.thumbnail) urls.push(d.thumbnail);
+                // pega mais 1-2 fotos de cada álbum para variedade
+                (d.images || []).slice(1, 3).forEach(i => {
+                  const u = typeof i === 'object' ? i.url : i;
+                  if (u) urls.push(u);
+                });
+                return urls;
+              })
+              .catch(() => [])
+          )
+        );
+
+        // Aplana, aplica transform Cloudinary e embaralha
+        const all = results.flat().filter(Boolean);
+        const thumbs = all
+          .sort(() => Math.random() - 0.5)
+          .map(u => cloudUrl(u, 'f_auto,q_auto,w_1200,h_900,c_fill'));
+
+        if (!thumbs.length) return;
+
+        // Cria elementos de imagem
+        thumbs.forEach((src, i) => {
+          const img = document.createElement('img');
+          img.className = 'hero-reel-img';
+          img.src = src;
+          img.alt = '';
+          img.decoding = 'async';
+          img.loading = i === 0 ? 'eager' : 'lazy';
+          if (i === 0) img.classList.add('active');
+          reel.appendChild(img);
+        });
+
+        // Cicla as fotos a cada 4s
+        let current = 0;
+        const imgs = reel.querySelectorAll('.hero-reel-img');
+        setInterval(() => {
+          imgs[current].classList.remove('active');
+          current = (current + 1) % imgs.length;
+          imgs[current].classList.add('active');
+        }, 4000);
+
+      } catch (err) {
+        console.warn('Hero reel:', err);
+      }
+    }
+
     // Load portfolio when browser is idle
     if ('requestIdleCallback' in window) {
       requestIdleCallback(() => loadPortfolio(), { timeout: 2000 });
+      requestIdleCallback(() => initHeroReel(), { timeout: 1500 });
     } else {
       setTimeout(() => loadPortfolio(), 0);
+      setTimeout(() => initHeroReel(), 0);
     }
 
     // -------------------------------------------------------
