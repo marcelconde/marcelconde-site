@@ -462,7 +462,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      object-position: center 30%; /* foca parte superior das fotos */
+      object-position: center center;
       opacity: 0;
       transition: opacity 1.6s ease;
       filter: brightness(0.80) saturate(0.85);
@@ -2258,7 +2258,7 @@
         const all = results.flat().filter(Boolean);
         const thumbs = all
           .sort(() => Math.random() - 0.5)
-          .map(u => cloudUrl(u, 'f_auto,q_auto,w_1200,h_900,c_fill'));
+          .map(u => cloudUrl(u, 'f_auto,q_auto,w_1920,h_1080,c_fill'));
 
         if (!thumbs.length) return;
 
