@@ -687,10 +687,37 @@
 
     .manifesto-grid {
       display: grid;
-      grid-template-columns: 180px 1fr;
+      grid-template-columns: 180px 1fr 340px;
       gap: 4rem;
-      align-items: start;
-      max-width: 1200px;
+      align-items: center;
+      max-width: 1300px;
+    }
+
+    .manifesto-photo {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .manifesto-photo img {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      object-position: center top;
+      display: block;
+      filter: grayscale(18%) brightness(0.92);
+      transition: filter 0.5s ease;
+    }
+
+    .manifesto-photo img:hover {
+      filter: grayscale(0%) brightness(1);
+    }
+
+    .manifesto-photo::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 1px solid rgba(184,149,106,0.25);
+      pointer-events: none;
     }
 
     .manifesto-label {
@@ -1480,6 +1507,16 @@
         padding: 6rem 5%;
       }
 
+      .manifesto-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      .manifesto-photo {
+        max-width: 280px;
+        margin: 0 auto;
+      }
+
       .services {
         padding: 6rem 5%;
       }
@@ -1635,6 +1672,9 @@
       <p class="manifesto-text">
         Cada clique é uma decisão consciente. Cada luz, uma escolha deliberada. Trabalho com casamentos, ensaios e eventos capturando o instante único que nunca mais vai se repetir — e transformando em memórias que duram para sempre.
       </p>
+      <div class="manifesto-photo reveal">
+        <img src="/images/marcelconde.JPG" alt="Marcel Conde — fotógrafo profissional em Recife" loading="lazy">
+      </div>
     </div>
   </section>
 
