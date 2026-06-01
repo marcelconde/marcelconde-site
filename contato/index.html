@@ -12,6 +12,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;0,700;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="icon" href="/images/favicon.png" type="image/png">
 
+  <!-- Google Analytics / Google tag -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-R8TFN8B8YY');
+  </script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -355,6 +364,13 @@
       txt += `E-mail: ${email}\n`;
       if (tipo) txt += `Tipo de evento: ${tipo}\n`;
       if (mensagem) txt += `\nMensagem: ${mensagem}`;
+
+      if (typeof gtag === 'function') {
+        gtag('event', 'generate_lead', {
+          event_category: 'Contato',
+          event_label: tipo || 'Formulário de contato',
+        });
+      }
 
       window.open(`https://wa.me/5581984094212?text=${encodeURIComponent(txt)}`, '_blank', 'noopener,noreferrer');
     });
