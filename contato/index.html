@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contato | Marcel Conde Fotografia</title>
+  <meta name="description" content="Entre em contato com Marcel Conde Fotografia em Recife-PE para orçamento de casamento, ensaio, evento corporativo, drone e mais.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://marcelconde.com.br/contato/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;0,700;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="/images/favicon.png" type="image/png">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080808;
+      --bg2: #0d0c0b;
+      --bg3: #141210;
+      --ink: #f0ece3;
+      --ink-dim: rgba(240, 236, 227, 0.42);
+      --ink-faint: rgba(240, 236, 227, 0.09);
+      --gold: #b8956a;
+      --gold-light: #d4b48a;
+      --serif: 'Cormorant Garamond', Georgia, serif;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--sans);
+      background:
+        radial-gradient(circle at 16% 20%, rgba(184,149,106,0.08), transparent 34%),
+        radial-gradient(circle at 88% 80%, rgba(184,149,106,0.04), transparent 30%),
+        var(--bg);
+      color: var(--ink);
+    }
+
+    .page-link {
+      position: fixed;
+      top: 28px;
+      left: 8%;
+      z-index: 5;
+      font-family: var(--serif);
+      font-size: 1.1rem;
+      color: rgba(240,236,227,0.62);
+      text-decoration: none;
+      letter-spacing: .04em;
+      transition: color .25s ease;
+    }
+
+    .page-link span { color: var(--gold); }
+    .page-link:hover { color: var(--ink); }
+
+    .contact {
+      min-height: 100vh;
+      padding: 8rem 8% 5rem;
+      display: flex;
+      align-items: center;
+    }
+
+    .contact-grid {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(280px, 0.9fr) minmax(420px, 1.35fr);
+      gap: clamp(3rem, 8vw, 8rem);
+      align-items: start;
+    }
+
+    .contact-headline {
+      font-family: var(--serif);
+      font-size: clamp(3.4rem, 6vw, 5.8rem);
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 0.98;
+      margin-bottom: 2.2rem;
+      letter-spacing: -.03em;
+    }
+
+    .contact-headline em {
+      display: inline-block;
+      font-style: italic;
+      color: var(--gold);
+      font-weight: 600;
+    }
+
+    .contact-description {
+      font-size: 0.94rem;
+      font-weight: 300;
+      color: var(--ink-dim);
+      line-height: 1.9;
+      max-width: 380px;
+      margin-bottom: 3.4rem;
+    }
+
+    .contact-links {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 1.45rem;
+    }
+
+    .contact-link-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .contact-link-label {
+      font-size: 0.58rem;
+      font-weight: 600;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .contact-link-value {
+      font-size: 0.95rem;
+      color: var(--ink);
+      text-decoration: none;
+      transition: color .25s ease;
+    }
+
+    .contact-link-value:hover { color: var(--gold); }
+
+    .contact-location {
+      margin-top: 3rem;
+      font-size: 0.82rem;
+      font-weight: 300;
+      color: var(--ink-dim);
+      letter-spacing: .06em;
+    }
+
+    .contact-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1.4rem;
+      padding-top: 0.25rem;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.4rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+    }
+
+    .form-group label {
+      font-size: 0.6rem;
+      font-weight: 600;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      background: rgba(20,18,16,0.86);
+      border: 1px solid var(--ink-faint);
+      border-radius: 0;
+      padding: 0.98rem 1rem;
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 0.9rem;
+      font-weight: 300;
+      outline: none;
+      appearance: none;
+      transition: border-color .25s ease, background .25s ease;
+    }
+
+    .form-group input::placeholder,
+    .form-group textarea::placeholder { color: rgba(240,236,227,0.23); }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--gold);
+      background: rgba(26,23,20,0.96);
+    }
+
+    .form-group select {
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(240,236,227,0.42)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      padding-right: 2.5rem;
+    }
+
+    .form-group select option {
+      background: var(--bg3);
+      color: var(--ink);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 150px;
+    }
+
+    .field-error {
+      border-color: rgba(220, 60, 60, 0.8) !important;
+    }
+
+    .btn-submit {
+      align-self: flex-start;
+      margin-top: 0.1rem;
+      background: var(--gold);
+      color: var(--bg);
+      border: 0;
+      border-radius: 0;
+      padding: 1.05rem 2.3rem;
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background .25s ease, transform .25s ease;
+    }
+
+    .btn-submit:hover {
+      background: var(--gold-light);
+      transform: translateY(-1px);
+    }
+
+    @media (max-width: 900px) {
+      .page-link {
+        left: 5%;
+        top: 22px;
+      }
+
+      .contact {
+        padding: 7rem 5% 4rem;
+        align-items: flex-start;
+      }
+
+      .contact-grid {
+        grid-template-columns: 1fr;
+        gap: 3.5rem;
+      }
+
+      .contact-description {
+        max-width: 100%;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <a class="page-link" href="/" aria-label="Voltar para a página inicial">Marcel<span>·</span>Conde</a>
+
+  <main class="contact" id="contato" aria-label="Contato">
+    <div class="contact-grid">
+      <section>
+        <h1 class="contact-headline">Vamos criar algo<br><em>incrível.</em></h1>
+        <p class="contact-description">
+          Preencha o formulário ao lado e entro em contato em até 24h para conversarmos sobre o seu evento.
+        </p>
+
+        <ul class="contact-links">
+          <li class="contact-link-item">
+            <span class="contact-link-label">WhatsApp</span>
+            <a href="https://wa.me/5581984094212?text=Olá!%20Gostaria%20de%20solicitar%20um%20orçamento" class="contact-link-value" target="_blank" rel="noopener noreferrer">(81) 98409-4212</a>
+          </li>
+          <li class="contact-link-item">
+            <span class="contact-link-label">Instagram</span>
+            <a href="https://www.instagram.com/mconde.foto/" class="contact-link-value" target="_blank" rel="noopener noreferrer">@mconde.foto</a>
+          </li>
+          <li class="contact-link-item">
+            <span class="contact-link-label">Pinterest</span>
+            <a href="https://br.pinterest.com/marcelconde/" class="contact-link-value" target="_blank" rel="noopener noreferrer">pinterest.com/marcelconde</a>
+          </li>
+          <li class="contact-link-item">
+            <span class="contact-link-label">E-mail</span>
+            <a href="mailto:contato@marcelconde.com.br" class="contact-link-value">contato@marcelconde.com.br</a>
+          </li>
+        </ul>
+
+        <p class="contact-location">Recife, PE — Brasil</p>
+      </section>
+
+      <section>
+        <form class="contact-form" id="contact-form" novalidate>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="nome">Nome</label>
+              <input type="text" id="nome" name="nome" placeholder="Seu nome" required>
+            </div>
+            <div class="form-group">
+              <label for="telefone">Telefone / WhatsApp</label>
+              <input type="tel" id="telefone" name="telefone" placeholder="(81) 9 0000-0000">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="email">E-mail</label>
+            <input type="email" id="email" name="email" placeholder="seu@email.com" required>
+          </div>
+
+          <div class="form-group">
+            <label for="tipo">Tipo de evento</label>
+            <select id="tipo" name="tipo_evento">
+              <option value="" disabled selected>Selecione...</option>
+              <option>Casamento</option>
+              <option>Aniversário</option>
+              <option>Pré-Wedding</option>
+              <option>Chá Revelação</option>
+              <option>Evento Corporativo</option>
+              <option>Drone</option>
+              <option>Outro</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="mensagem">Mensagem</label>
+            <textarea id="mensagem" name="mensagem" placeholder="Conte um pouco sobre o seu evento, data prevista..."></textarea>
+          </div>
+
+          <button type="submit" class="btn-submit">Enviar via WhatsApp →</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    document.getElementById('contact-form')?.addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const nome = (this.querySelector('#nome')?.value || '').trim();
+      const telefone = (this.querySelector('#telefone')?.value || '').trim();
+      const email = (this.querySelector('#email')?.value || '').trim();
+      const tipo = (this.querySelector('#tipo')?.value || '').trim();
+      const mensagem = (this.querySelector('#mensagem')?.value || '').trim();
+
+      if (!nome || !email) {
+        if (!nome) this.querySelector('#nome')?.classList.add('field-error');
+        if (!email) this.querySelector('#email')?.classList.add('field-error');
+        return;
+      }
+
+      let txt = `Olá Marcel! Vim pelo site e gostaria de mais informações.\n\n`;
+      txt += `Nome: ${nome}\n`;
+      if (telefone) txt += `Telefone: ${telefone}\n`;
+      txt += `E-mail: ${email}\n`;
+      if (tipo) txt += `Tipo de evento: ${tipo}\n`;
+      if (mensagem) txt += `\nMensagem: ${mensagem}`;
+
+      window.open(`https://wa.me/5581984094212?text=${encodeURIComponent(txt)}`, '_blank', 'noopener,noreferrer');
+    });
+
+    document.querySelectorAll('.contact-form input, .contact-form select, .contact-form textarea').forEach(el => {
+      el.addEventListener('input', () => el.classList.remove('field-error'));
+    });
+  </script>
+</body>
+</html>
