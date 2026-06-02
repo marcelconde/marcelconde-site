@@ -215,6 +215,12 @@ input:focus {
   color: #d5b486;
 }
 
+.reset-copy {
+  margin: 0 0 18px;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
 .form-msg {
   display: block;
   min-height: 20px;

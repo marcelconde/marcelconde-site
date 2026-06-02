@@ -1,6 +1,7 @@
 const CONFIG = {
   workerUrl: "https://api.marcelconde.com.br",
   tokenKey: "mc_admin_token",
+  adminEmail: "marcel.conde@hotmail.com",
 };
 
 const state = {
@@ -185,8 +186,9 @@ function showLogin(message = "") {
   forgotForm.classList.add("hidden");
   resetForm.classList.add("hidden");
   loginMsg.textContent = message;
+  loginEmail.value = CONFIG.adminEmail;
   loginPassword.value = "";
-  loginEmail.focus();
+  loginPassword.focus();
 }
 
 function showAdmin() {
@@ -243,9 +245,9 @@ forgotLink.addEventListener("click", () => {
   loginForm.classList.add("hidden");
   resetForm.classList.add("hidden");
   forgotForm.classList.remove("hidden");
-  forgotEmail.value = loginEmail.value.trim();
+  forgotEmail.value = CONFIG.adminEmail;
   forgotMsg.textContent = "";
-  forgotEmail.focus();
+  forgotBtn.focus();
 });
 
 backToLogin.addEventListener("click", () => showLogin());
@@ -732,6 +734,8 @@ $("#refreshLikesBtn").addEventListener("click", loadLikesOverview);
 (async function init() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("reset")) {
+    loginEmail.value = CONFIG.adminEmail;
+    forgotEmail.value = CONFIG.adminEmail;
     adminShell.classList.add("hidden");
     loginScreen.classList.remove("hidden");
     loginForm.classList.add("hidden");
@@ -743,6 +747,8 @@ $("#refreshLikesBtn").addEventListener("click", loadLikesOverview);
 
   const token = getToken();
   if (!token) {
+    loginEmail.value = CONFIG.adminEmail;
+    forgotEmail.value = CONFIG.adminEmail;
     showLogin();
     return;
   }
