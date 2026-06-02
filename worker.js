@@ -187,37 +187,27 @@ function randomToken(bytes = 32) {
     .replace(/=+$/g, "");
 }
 
-async function hashPassword(password, saltBase64 = "", iterations = 120000) {
-  const salt = saltBase64 ? base64ToBytes(saltBase64) : crypto.getRandomValues(new Uint8Array(16));
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(password),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits"]
-  );
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations,
-      hash: "SHA-256",
-    },
-    key,
-    256
-  );
+async function hashPassword(password, saltBase64 = "", pepper = "") {
+  const saltBytes = saltBase64 ? base64ToBytes(saltBase64) : crypto.getRandomValues(new Uint8Array(16));
+  const salt = bytesToBase64(saltBytes);
+  const data = new TextEncoder().encode(`${salt}:${password}:${pepper}`);
+  const digest = await crypto.subtle.digest("SHA-256", data);
 
   return {
-    salt: bytesToBase64(salt),
-    hash: bytesToBase64(new Uint8Array(bits)),
-    iterations,
+    algorithm: "SHA-256",
+    salt,
+    hash: bytesToBase64(new Uint8Array(digest)),
   };
 }
 
-async function verifyPassword(password, stored) {
+async function verifyPassword(password, stored, env) {
   if (!stored?.hash || !stored?.salt) return false;
-  const candidate = await hashPassword(password, stored.salt, stored.iterations || 120000);
+  const candidate = await hashPassword(password, stored.salt, authPepper(env));
   return candidate.hash === stored.hash;
+}
+
+function authPepper(env) {
+  return env.AUTH_PEPPER || env.ADMIN_KEY || env.ADMIN_PASSWORD || "";
 }
 
 function adminEmail(env) {
@@ -231,7 +221,7 @@ async function getStoredAdmin(env) {
 
 async function saveAdminPassword(env, password) {
   if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
-  const passwordHash = await hashPassword(password);
+  const passwordHash = await hashPassword(password, "", authPepper(env));
   const user = {
     email: adminEmail(env),
     name: env.ADMIN_NAME || "Marcel Conde",
@@ -247,7 +237,7 @@ async function validateAdminLogin(env, email, password) {
   if (normalizeEmail(email) !== expectedEmail) return null;
 
   const stored = await getStoredAdmin(env);
-  if (stored?.passwordHash && await verifyPassword(password, stored.passwordHash)) {
+  if (stored?.passwordHash && await verifyPassword(password, stored.passwordHash, env)) {
     return {
       email: expectedEmail,
       name: stored.name || env.ADMIN_NAME || "Marcel Conde",
@@ -399,21 +389,28 @@ export default {
     }
 
     if (url.pathname === "/auth/reset" && request.method === "POST") {
-      const body = await readJson(request);
-      const token = String(body.token || "").trim();
-      const password = String(body.password || "");
+      try {
+        const body = await readJson(request);
+        const token = String(body.token || "").trim();
+        const password = String(body.password || "");
 
-      if (!token || password.length < 6) return errorJson("Token ou senha inválidos.", 400);
-      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+        if (!token || password.length < 6) return errorJson("Token ou senha inválidos.", 400);
+        if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
 
-      const reset = await env.LIKES_KV.get(`admin_reset:${token}`, "json");
-      if (!reset || reset.email !== adminEmail(env) || Number(reset.expiresAt || 0) < Date.now()) {
-        return errorJson("Token inválido ou expirado.", 400);
+        const reset = await env.LIKES_KV.get(`admin_reset:${token}`, "json");
+        if (!reset || reset.email !== adminEmail(env) || Number(reset.expiresAt || 0) < Date.now()) {
+          return errorJson("Token inválido ou expirado.", 400);
+        }
+
+        await saveAdminPassword(env, password);
+        await env.LIKES_KV.delete(`admin_reset:${token}`);
+        return json({ ok: true });
+      } catch (err) {
+        console.error("Reset password error:", err);
+        return errorJson("Falha ao redefinir senha.", 500, {
+          detail: String(err?.message || err || "unknown"),
+        });
       }
-
-      await saveAdminPassword(env, password);
-      await env.LIKES_KV.delete(`admin_reset:${token}`);
-      return json({ ok: true });
     }
 
     // ── ADMIN ───────────────────────────────────────────────────
