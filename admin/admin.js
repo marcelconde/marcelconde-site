@@ -219,16 +219,28 @@ forgotForm.addEventListener("submit", async (event) => {
   forgotBtn.disabled = true;
   forgotBtn.textContent = "Enviando...";
   forgotMsg.textContent = "";
+  forgotMsg.classList.remove("success");
 
   try {
-    await fetch(`${CONFIG.workerUrl}/auth/forgot`, {
+    const res = await fetch(`${CONFIG.workerUrl}/auth/forgot`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
     });
-    forgotMsg.textContent = "Se esse e-mail estiver cadastrado, você receberá o link de redefinição.";
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      forgotMsg.textContent = data.detail || data.error || "Erro ao enviar. Verifique o Resend no Worker.";
+      forgotMsg.classList.remove("success");
+      return;
+    }
+    if (!data.emailQueued) {
+      forgotMsg.textContent = "Esse e-mail não é o e-mail admin configurado no Worker.";
+      forgotMsg.classList.remove("success");
+      return;
+    }
+    forgotMsg.textContent = "Link de redefinição enviado para o seu e-mail.";
     forgotMsg.classList.add("success");
-  } catch {
+  } catch (err) {
     forgotMsg.textContent = "Erro ao enviar. Tente novamente.";
     forgotMsg.classList.remove("success");
   } finally {

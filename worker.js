@@ -221,7 +221,7 @@ async function verifyPassword(password, stored) {
 }
 
 function adminEmail(env) {
-  return normalizeEmail(env.ADMIN_EMAIL || "contato@marcelconde.com.br");
+  return normalizeEmail(env.ADMIN_EMAIL || "marcel.conde@hotmail.com");
 }
 
 async function getStoredAdmin(env) {
@@ -289,11 +289,13 @@ async function getSession(env, token) {
 }
 
 async function sendResetEmail(env, request, email, token) {
-  if (!env.RESEND_API_KEY) return;
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY não configurada no Worker.");
+  }
 
   const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
   const resetUrl = `${origin}/admin/?reset=${encodeURIComponent(token)}`;
-  await fetch("https://api.resend.com/emails", {
+  const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -308,6 +310,17 @@ async function sendResetEmail(env, request, email, token) {
              <p>Este link expira em 1 hora.</p>`,
     }),
   });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
 }
 
 export default {
@@ -356,9 +369,10 @@ export default {
     if (url.pathname === "/auth/forgot" && request.method === "POST") {
       const body = await readJson(request);
       const email = normalizeEmail(body.email || "");
+      const expectedEmail = adminEmail(env);
 
       // Resposta neutra para não revelar se o e-mail existe.
-      if (email && email === adminEmail(env) && env.LIKES_KV) {
+      if (email && email === expectedEmail && env.LIKES_KV) {
         const token = randomToken(36);
         await env.LIKES_KV.put(
           `admin_reset:${token}`,
@@ -371,13 +385,17 @@ export default {
         );
 
         try {
-          await sendResetEmail(env, request, email, token);
+          const resend = await sendResetEmail(env, request, email, token);
+          return json({ ok: true, emailQueued: true, resendId: resend?.id || null });
         } catch (err) {
           console.error("Reset email error:", err);
+          return errorJson("Falha ao enviar e-mail pelo Resend.", 502, {
+            detail: String(err?.message || err || "unknown"),
+          });
         }
       }
 
-      return json({ ok: true });
+      return json({ ok: true, emailQueued: false });
     }
 
     if (url.pathname === "/auth/reset" && request.method === "POST") {
