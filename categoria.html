@@ -996,12 +996,13 @@
       const slugTitle = slugDecoded.split("/").filter(Boolean).pop() || slugDecoded;
       titleEl.textContent = data.title || slugTitle;
 
-      const images = (data.images || [])
-        .map(i => (typeof i === "object" ? i.url : i))
-        .filter(Boolean);
+      const imageItems = (data.images || [])
+        .map(i => (typeof i === "object" ? i : { url: i }))
+        .filter(i => i && i.url);
 
-      const list  = images.length ? images : [data.thumbnail].filter(Boolean);
-      currentList = list;
+      const fallbackItems = data.thumbnail ? [{ url: data.thumbnail, public_id: "", display_name: "" }] : [];
+      const list  = imageItems.length ? imageItems : fallbackItems;
+      currentList = list.map(item => item.url);
 
       gridEl.innerHTML = "";
 
@@ -1010,7 +1011,9 @@
         return;
       }
 
-      list.forEach((src, index) => {
+      list.forEach((item, index) => {
+        const src = item.url;
+        const publicId = item.public_id || "";
         const wrap = document.createElement("div");
         wrap.className = "img-wrap";
 
@@ -1037,7 +1040,7 @@
             <span class="like-count" id="lc-${index}"></span>
           </div>`;
 
-        const likedKey = `liked:${slugDecoded}:${index}`;
+        const likedKey = `liked:${slugDecoded}:${publicId || index}`;
         const alreadyLiked = localStorage.getItem(likedKey) === '1';
         const heartBtn = overlay.querySelector(".photo-heart");
         const countEl  = overlay.querySelector(".like-count");
@@ -1066,7 +1069,7 @@
             const r = await fetch(`${WORKER_BASE}/like`, {
               method: 'POST',
               headers,
-              body: JSON.stringify({ album: slugDecoded, albumName: titleEl.textContent, index })
+              body: JSON.stringify({ album: slugDecoded, albumName: titleEl.textContent, index, publicId })
             });
             if (r.ok) {
               const { likes, isAdmin: adminConfirmed } = await r.json();
@@ -1088,9 +1091,13 @@
           headers: { 'X-Admin-Token': adminToken }
         })
           .then(r => r.ok ? r.json() : {})
-          .then(({ _authorized, ...counts }) => {
+          .then(({ _authorized, _byAsset = {}, ...counts }) => {
             if (!_authorized) return; // token inválido — Worker rejeitou
-            Object.entries(counts).forEach(([idx, count]) => {
+            list.forEach((item, idx) => {
+              const count = Math.max(
+                Number(item.public_id ? _byAsset[item.public_id] || 0 : 0),
+                Number(counts[String(idx)] || 0)
+              );
               if (count > 0) {
                 const el = document.getElementById(`lc-${idx}`);
                 if (el) { el.textContent = count; el.style.display = 'inline'; }

@@ -77,12 +77,274 @@ function checkAdmin(request, env) {
   return !!(env.ADMIN_KEY && token === env.ADMIN_KEY);
 }
 
+function requireAdmin(request, env) {
+  if (checkAdmin(request, env)) return null;
+  return errorJson("Unauthorized", 401);
+}
+
+function isAllowedAssetPath(path) {
+  return (
+    path === "portfolio" ||
+    path.startsWith("portfolio/") ||
+    path === "site" ||
+    path.startsWith("site/")
+  );
+}
+
+function cleanDisplayName(name = "") {
+  return String(name)
+    .replace(/\//g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+function getAlbumSlugFromPath(path = "") {
+  return String(path).replace(/^portfolio\//, "");
+}
+
+async function readJson(request) {
+  try {
+    return await request.json();
+  } catch {
+    return {};
+  }
+}
+
+async function sha1Hex(value) {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-1", data);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function signCloudinaryParams(params, apiSecret) {
+  const serialized = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+
+  return sha1Hex(`${serialized}${apiSecret}`);
+}
+
+async function clearWorkerCache(cache, request, path = "") {
+  const origin = new URL(request.url).origin;
+  const urls = new Set([
+    `${origin}/albums`,
+  ]);
+
+  if (path) {
+    urls.add(`${origin}/album?path=${encodeURIComponent(path)}`);
+
+    const parts = path.split("/").filter(Boolean);
+    for (let i = 1; i <= parts.length; i++) {
+      urls.add(`${origin}/albums?path=${encodeURIComponent(parts.slice(0, i).join("/"))}`);
+    }
+  }
+
+  await Promise.allSettled([...urls].map((item) => cache.delete(makeCacheKey(item))));
+}
+
+function sanitizePublicId(publicId = "") {
+  return String(publicId).trim().replace(/\.(jpg|jpeg|png|webp|gif|heic|avif)$/i, "");
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders() });
+    }
+
+    // ── ADMIN ───────────────────────────────────────────────────
+
+    if (url.pathname === "/admin/me" && request.method === "GET") {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+
+      return json({
+        ok: true,
+        service: "marcel-admin",
+        time: new Date().toISOString(),
+      });
+    }
+
+    if (url.pathname === "/admin/upload-signature" && request.method === "POST") {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const folderPath = String(body.folderPath || "").trim();
+      const displayName = cleanDisplayName(body.displayName || "");
+
+      if (!folderPath || !isAllowedAssetPath(folderPath)) {
+        return errorJson("Invalid folder path", 400);
+      }
+
+      const timestamp = Math.round(Date.now() / 1000);
+      const params = {
+        asset_folder: folderPath,
+        display_name: displayName || "foto",
+        timestamp,
+        unique_filename: "true",
+        overwrite: "false",
+      };
+
+      const signature = await signCloudinaryParams(params, apiSecret);
+
+      return json({
+        cloudName,
+        apiKey,
+        uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        params,
+        signature,
+      });
+    }
+
+    if (url.pathname === "/admin/delete-image" && request.method === "POST") {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const publicId = sanitizePublicId(body.public_id || body.publicId || "");
+      const albumPath = String(body.albumPath || "").trim();
+
+      if (!publicId) return errorJson("Missing public_id", 400);
+      if (albumPath && !isAllowedAssetPath(albumPath)) return errorJson("Invalid album path", 400);
+
+      const timestamp = Math.round(Date.now() / 1000);
+      const params = {
+        public_id: publicId,
+        invalidate: "true",
+        timestamp,
+      };
+      const signature = await signCloudinaryParams(params, apiSecret);
+
+      const destroyBody = new URLSearchParams({
+        ...params,
+        api_key: apiKey,
+        signature,
+      });
+
+      const res = await fetchWithTimeout(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: destroyBody,
+        },
+        15000
+      );
+
+      const text = await res.text();
+      if (!res.ok) {
+        return new Response(text, {
+          status: res.status,
+          headers: {
+            ...corsHeaders(),
+            "Content-Type": res.headers.get("Content-Type") || "application/json",
+          },
+        });
+      }
+
+      if (albumPath) {
+        const albumSlug = getAlbumSlugFromPath(albumPath);
+        if (env.LIKES_KV && albumSlug) {
+          const assetLikesKey = `asset_likes:${albumSlug}`;
+          const assetLikes = (await env.LIKES_KV.get(assetLikesKey, "json")) || {};
+          delete assetLikes[publicId];
+          await env.LIKES_KV.put(assetLikesKey, JSON.stringify(assetLikes));
+        }
+        await clearWorkerCache(caches.default, request, albumPath);
+      }
+
+      return new Response(text, {
+        status: res.status,
+        headers: {
+          ...corsHeaders(),
+          "Content-Type": res.headers.get("Content-Type") || "application/json",
+        },
+      });
+    }
+
+    if (url.pathname === "/admin/update-image" && request.method === "POST") {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const publicId = sanitizePublicId(body.public_id || body.publicId || "");
+      const displayName = cleanDisplayName(body.displayName || "");
+      const albumPath = String(body.albumPath || "").trim();
+
+      if (!publicId) return errorJson("Missing public_id", 400);
+      if (!displayName) return errorJson("Missing displayName", 400);
+      if (albumPath && !isAllowedAssetPath(albumPath)) return errorJson("Invalid album path", 400);
+
+      const timestamp = Math.round(Date.now() / 1000);
+      const params = {
+        public_id: publicId,
+        type: "upload",
+        display_name: displayName,
+        timestamp,
+      };
+      const signature = await signCloudinaryParams(params, apiSecret);
+
+      const explicitBody = new URLSearchParams({
+        ...params,
+        api_key: apiKey,
+        signature,
+      });
+
+      const res = await fetchWithTimeout(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/explicit`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: explicitBody,
+        },
+        15000
+      );
+
+      const text = await res.text();
+      if (albumPath) await clearWorkerCache(caches.default, request, albumPath);
+
+      return new Response(text, {
+        status: res.status,
+        headers: {
+          ...corsHeaders(),
+          "Content-Type": res.headers.get("Content-Type") || "application/json",
+        },
+      });
+    }
+
+    if (url.pathname === "/admin/clear-cache" && request.method === "POST") {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+
+      const body = await readJson(request);
+      const path = String(body.path || "").trim();
+      if (path && !isAllowedAssetPath(path)) return errorJson("Invalid path", 400);
+
+      await clearWorkerCache(caches.default, request, path);
+      return json({ ok: true, path });
     }
 
     // ── CURTIDAS ─────────────────────────────────────────────────
@@ -98,17 +360,27 @@ export default {
       }
 
       const data = (await env.LIKES_KV?.get(`likes:${album}`, "json")) || {};
-      return json({ _authorized: true, ...data });
+      const byAsset = (await env.LIKES_KV?.get(`asset_likes:${album}`, "json")) || {};
+      return json({ _authorized: true, _byAsset: byAsset, ...data });
     }
 
     if (url.pathname === "/like" && request.method === "POST") {
-      const { album = "", albumName = "álbum", index = 0 } = await request.json();
+      const { album = "", albumName = "álbum", index = 0, publicId = "" } = await request.json();
       const isAdmin = checkAdmin(request, env);
 
       const key  = `likes:${album}`;
       const data = (await env.LIKES_KV?.get(key, "json")) || {};
       data[String(index)] = (data[String(index)] || 0) + 1;
       await env.LIKES_KV?.put(key, JSON.stringify(data));
+
+      let assetLikes = null;
+      const cleanPublicId = sanitizePublicId(publicId);
+      if (cleanPublicId && env.LIKES_KV) {
+        const assetKey = `asset_likes:${album}`;
+        assetLikes = (await env.LIKES_KV.get(assetKey, "json")) || {};
+        assetLikes[cleanPublicId] = (assetLikes[cleanPublicId] || 0) + 1;
+        await env.LIKES_KV.put(assetKey, JSON.stringify(assetLikes));
+      }
 
       if (env.RESEND_API_KEY) {
         try {
@@ -133,7 +405,7 @@ export default {
       }
 
       // isAdmin informa ao front-end se pode exibir a contagem
-      return json({ likes: data[String(index)], isAdmin });
+      return json({ likes: cleanPublicId && assetLikes ? assetLikes[cleanPublicId] : data[String(index)], isAdmin });
     }
 
     // ─────────────────────────────────────────────────────────────
