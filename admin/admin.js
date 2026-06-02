@@ -20,7 +20,20 @@ const adminShell = $("#adminShell");
 const loginForm = $("#loginForm");
 const loginBtn = $("#loginBtn");
 const loginMsg = $("#loginMsg");
-const adminTokenInput = $("#adminToken");
+const loginEmail = $("#loginEmail");
+const loginPassword = $("#loginPassword");
+const togglePassword = $("#togglePassword");
+const forgotLink = $("#forgotLink");
+const forgotForm = $("#forgotForm");
+const forgotEmail = $("#forgotEmail");
+const forgotBtn = $("#forgotBtn");
+const forgotMsg = $("#forgotMsg");
+const backToLogin = $("#backToLogin");
+const resetForm = $("#resetForm");
+const resetPassword = $("#resetPassword");
+const resetPasswordConfirm = $("#resetPasswordConfirm");
+const resetBtn = $("#resetBtn");
+const resetMsg = $("#resetMsg");
 const logoutBtn = $("#logoutBtn");
 const albumList = $("#albumList");
 const albumTitle = $("#albumTitle");
@@ -99,7 +112,10 @@ function safeAlbumName(value) {
 async function workerFetch(path, options = {}) {
   const headers = new Headers(options.headers || {});
   const token = getToken();
-  if (token) headers.set("X-Admin-Token", token);
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("X-Admin-Token", token);
+  }
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -121,8 +137,12 @@ async function getJson(path, options = {}) {
 function showLogin(message = "") {
   adminShell.classList.add("hidden");
   loginScreen.classList.remove("hidden");
+  loginForm.classList.remove("hidden");
+  forgotForm.classList.add("hidden");
+  resetForm.classList.add("hidden");
   loginMsg.textContent = message;
-  adminTokenInput.focus();
+  loginPassword.value = "";
+  loginEmail.focus();
 }
 
 function showAdmin() {
@@ -130,9 +150,8 @@ function showAdmin() {
   adminShell.classList.remove("hidden");
 }
 
-async function validateLogin(token) {
-  setToken(token);
-  const res = await workerFetch("/admin/me");
+async function validateSession() {
+  const res = await workerFetch("/auth/me");
   if (!res.ok) {
     clearToken();
     return false;
@@ -142,22 +161,31 @@ async function validateLogin(token) {
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const token = adminTokenInput.value.trim();
-  if (!token) return;
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value;
+  if (!email || !password) return;
 
   loginBtn.disabled = true;
   loginBtn.textContent = "Entrando...";
   loginMsg.textContent = "";
 
   try {
-    const ok = await validateLogin(token);
-    if (!ok) {
-      loginMsg.textContent = "Senha inválida ou painel ainda não configurado.";
+    const res = await fetch(`${CONFIG.workerUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      loginMsg.textContent = data.error || "E-mail ou senha inválidos.";
+      loginPassword.value = "";
+      loginPassword.focus();
       return;
     }
+    setToken(data.token);
     showAdmin();
     await loadAlbums(true);
-  } catch {
+  } catch (err) {
     clearToken();
     loginMsg.textContent = "Não consegui conectar ao Worker.";
   } finally {
@@ -166,7 +194,95 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-logoutBtn.addEventListener("click", () => {
+togglePassword.addEventListener("click", () => {
+  const showing = loginPassword.type === "text";
+  loginPassword.type = showing ? "password" : "text";
+  togglePassword.textContent = showing ? "Mostrar" : "Ocultar";
+});
+
+forgotLink.addEventListener("click", () => {
+  loginForm.classList.add("hidden");
+  resetForm.classList.add("hidden");
+  forgotForm.classList.remove("hidden");
+  forgotEmail.value = loginEmail.value.trim();
+  forgotMsg.textContent = "";
+  forgotEmail.focus();
+});
+
+backToLogin.addEventListener("click", () => showLogin());
+
+forgotForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const email = forgotEmail.value.trim();
+  if (!email) return;
+
+  forgotBtn.disabled = true;
+  forgotBtn.textContent = "Enviando...";
+  forgotMsg.textContent = "";
+
+  try {
+    await fetch(`${CONFIG.workerUrl}/auth/forgot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    forgotMsg.textContent = "Se esse e-mail estiver cadastrado, você receberá o link de redefinição.";
+    forgotMsg.classList.add("success");
+  } catch {
+    forgotMsg.textContent = "Erro ao enviar. Tente novamente.";
+    forgotMsg.classList.remove("success");
+  } finally {
+    forgotBtn.disabled = false;
+    forgotBtn.textContent = "Enviar link";
+  }
+});
+
+resetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("reset") || "";
+  const password = resetPassword.value;
+  const passwordConfirm = resetPasswordConfirm.value;
+
+  resetMsg.classList.remove("success");
+  if (password !== passwordConfirm) {
+    resetMsg.textContent = "As senhas não coincidem.";
+    return;
+  }
+  if (password.length < 6) {
+    resetMsg.textContent = "A senha precisa ter pelo menos 6 caracteres.";
+    return;
+  }
+
+  resetBtn.disabled = true;
+  resetBtn.textContent = "Salvando...";
+  resetMsg.textContent = "";
+
+  try {
+    const res = await fetch(`${CONFIG.workerUrl}/auth/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      resetMsg.textContent = data.error || "Token inválido ou expirado.";
+      return;
+    }
+    resetMsg.classList.add("success");
+    resetMsg.textContent = "Senha redefinida. Você já pode entrar.";
+    window.history.replaceState({}, "", "/admin/");
+    setTimeout(() => showLogin(), 1400);
+  } catch {
+    resetMsg.textContent = "Erro de conexão. Tente novamente.";
+  } finally {
+    resetBtn.disabled = false;
+    resetBtn.textContent = "Salvar nova senha";
+  }
+});
+
+logoutBtn.addEventListener("click", async () => {
+  await workerFetch("/auth/logout", { method: "POST" }).catch(() => {});
   clearToken();
   showLogin();
 });
@@ -573,6 +689,17 @@ async function loadLikesOverview() {
 $("#refreshLikesBtn").addEventListener("click", loadLikesOverview);
 
 (async function init() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("reset")) {
+    adminShell.classList.add("hidden");
+    loginScreen.classList.remove("hidden");
+    loginForm.classList.add("hidden");
+    forgotForm.classList.add("hidden");
+    resetForm.classList.remove("hidden");
+    resetPassword.focus();
+    return;
+  }
+
   const token = getToken();
   if (!token) {
     showLogin();
@@ -580,7 +707,7 @@ $("#refreshLikesBtn").addEventListener("click", loadLikesOverview);
   }
 
   try {
-    const ok = await validateLogin(token);
+    const ok = await validateSession();
     if (!ok) return showLogin("Entre novamente.");
     showAdmin();
     await loadAlbums(true);

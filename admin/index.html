@@ -13,16 +13,46 @@
 </head>
 <body>
   <section class="login-screen" id="loginScreen">
-    <form class="login-card" id="loginForm">
+    <div class="login-card">
       <span class="eyebrow">Painel Administrativo</span>
       <h1>Marcel Conde</h1>
       <p>Gerencie portfólios, fotos, capas e curtidas do site.</p>
 
-      <label for="adminToken">Senha de admin</label>
-      <input id="adminToken" name="adminToken" type="password" autocomplete="current-password" placeholder="Digite a senha" required>
-      <button class="btn btn-primary" id="loginBtn" type="submit">Entrar</button>
-      <span class="form-msg" id="loginMsg"></span>
-    </form>
+      <form id="loginForm">
+        <label for="loginEmail">E-mail</label>
+        <input id="loginEmail" name="email" type="email" autocomplete="email" placeholder="contato@marcelconde.com.br" required>
+
+        <label for="loginPassword">Senha</label>
+        <div class="password-wrap">
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+          <button class="toggle-password" id="togglePassword" type="button" aria-label="Mostrar senha">Mostrar</button>
+        </div>
+
+        <button class="btn btn-primary" id="loginBtn" type="submit">Entrar</button>
+        <span class="form-msg" id="loginMsg"></span>
+        <button class="text-link" id="forgotLink" type="button">Esqueci minha senha</button>
+      </form>
+
+      <form class="hidden" id="forgotForm">
+        <label for="forgotEmail">E-mail para redefinição</label>
+        <input id="forgotEmail" name="email" type="email" autocomplete="email" placeholder="contato@marcelconde.com.br" required>
+
+        <button class="btn btn-primary" id="forgotBtn" type="submit">Enviar link</button>
+        <span class="form-msg" id="forgotMsg"></span>
+        <button class="text-link" id="backToLogin" type="button">Voltar para login</button>
+      </form>
+
+      <form class="hidden" id="resetForm">
+        <label for="resetPassword">Nova senha</label>
+        <input id="resetPassword" name="password" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" required>
+
+        <label for="resetPasswordConfirm">Confirmar senha</label>
+        <input id="resetPasswordConfirm" name="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repita a senha" required>
+
+        <button class="btn btn-primary" id="resetBtn" type="submit">Salvar nova senha</button>
+        <span class="form-msg" id="resetMsg"></span>
+      </form>
+    </div>
   </section>
 
   <div class="admin-shell hidden" id="adminShell">

@@ -71,14 +71,16 @@ function pickCover(images) {
   );
 }
 
-// Valida o token de admin contra a secret do Cloudflare (nunca exposta no front-end)
-function checkAdmin(request, env) {
-  const token = request.headers.get("X-Admin-Token") || "";
-  return !!(env.ADMIN_KEY && token === env.ADMIN_KEY);
+// Valida sessão do admin. ADMIN_KEY continua como fallback para links antigos.
+async function checkAdmin(request, env) {
+  const token = getAdminToken(request);
+  if (!token) return false;
+  if (env.ADMIN_KEY && token === env.ADMIN_KEY) return true;
+  return !!(await getSession(env, token));
 }
 
-function requireAdmin(request, env) {
-  if (checkAdmin(request, env)) return null;
+async function requireAdmin(request, env) {
+  if (await checkAdmin(request, env)) return null;
   return errorJson("Unauthorized", 401);
 }
 
@@ -151,6 +153,163 @@ function sanitizePublicId(publicId = "") {
   return String(publicId).trim().replace(/\.(jpg|jpeg|png|webp|gif|heic|avif)$/i, "");
 }
 
+function getBearerToken(request) {
+  const auth = request.headers.get("Authorization") || "";
+  if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
+  return "";
+}
+
+function getAdminToken(request) {
+  return request.headers.get("X-Admin-Token") || getBearerToken(request);
+}
+
+function normalizeEmail(email = "") {
+  return String(email).trim().toLowerCase();
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  bytes.forEach((byte) => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function base64ToBytes(base64) {
+  const binary = atob(base64);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function randomToken(bytes = 32) {
+  const data = new Uint8Array(bytes);
+  crypto.getRandomValues(data);
+  return bytesToBase64(data)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+async function hashPassword(password, saltBase64 = "", iterations = 120000) {
+  const salt = saltBase64 ? base64ToBytes(saltBase64) : crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"]
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations,
+      hash: "SHA-256",
+    },
+    key,
+    256
+  );
+
+  return {
+    salt: bytesToBase64(salt),
+    hash: bytesToBase64(new Uint8Array(bits)),
+    iterations,
+  };
+}
+
+async function verifyPassword(password, stored) {
+  if (!stored?.hash || !stored?.salt) return false;
+  const candidate = await hashPassword(password, stored.salt, stored.iterations || 120000);
+  return candidate.hash === stored.hash;
+}
+
+function adminEmail(env) {
+  return normalizeEmail(env.ADMIN_EMAIL || "contato@marcelconde.com.br");
+}
+
+async function getStoredAdmin(env) {
+  if (!env.LIKES_KV) return null;
+  return env.LIKES_KV.get(`admin_user:${adminEmail(env)}`, "json");
+}
+
+async function saveAdminPassword(env, password) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const passwordHash = await hashPassword(password);
+  const user = {
+    email: adminEmail(env),
+    name: env.ADMIN_NAME || "Marcel Conde",
+    passwordHash,
+    updatedAt: new Date().toISOString(),
+  };
+  await env.LIKES_KV.put(`admin_user:${user.email}`, JSON.stringify(user));
+  return user;
+}
+
+async function validateAdminLogin(env, email, password) {
+  const expectedEmail = adminEmail(env);
+  if (normalizeEmail(email) !== expectedEmail) return null;
+
+  const stored = await getStoredAdmin(env);
+  if (stored?.passwordHash && await verifyPassword(password, stored.passwordHash)) {
+    return {
+      email: expectedEmail,
+      name: stored.name || env.ADMIN_NAME || "Marcel Conde",
+    };
+  }
+
+  const initialPassword = env.ADMIN_PASSWORD || env.ADMIN_KEY || "";
+  if (!stored && initialPassword && password === initialPassword) {
+    return {
+      email: expectedEmail,
+      name: env.ADMIN_NAME || "Marcel Conde",
+    };
+  }
+
+  return null;
+}
+
+async function createSession(env, user) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const token = randomToken(36);
+  const now = Date.now();
+  const session = {
+    email: user.email,
+    name: user.name,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: now + 1000 * 60 * 60 * 12,
+  };
+  await env.LIKES_KV.put(`admin_session:${token}`, JSON.stringify(session), {
+    expirationTtl: 60 * 60 * 12,
+  });
+  return { token, user: { email: user.email, name: user.name } };
+}
+
+async function getSession(env, token) {
+  if (!token || !env.LIKES_KV) return null;
+  const session = await env.LIKES_KV.get(`admin_session:${token}`, "json");
+  if (!session || Number(session.expiresAt || 0) < Date.now()) return null;
+  return session;
+}
+
+async function sendResetEmail(env, request, email, token) {
+  if (!env.RESEND_API_KEY) return;
+
+  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+  const resetUrl = `${origin}/admin/?reset=${encodeURIComponent(token)}`;
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      to: [email],
+      subject: "Redefinir senha do admin — Marcel Conde",
+      html: `<p>Você solicitou a redefinição da senha do painel administrativo.</p>
+             <p><a href="${resetUrl}">Clique aqui para criar uma nova senha</a></p>
+             <p>Este link expira em 1 hora.</p>`,
+    }),
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -159,10 +318,90 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
+    // ── AUTH ────────────────────────────────────────────────────
+
+    if (url.pathname === "/auth/login" && request.method === "POST") {
+      const body = await readJson(request);
+      const email = normalizeEmail(body.email || "");
+      const password = String(body.password || "");
+
+      if (!email || !password) return errorJson("E-mail e senha são obrigatórios.", 400);
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const user = await validateAdminLogin(env, email, password);
+      if (!user) return errorJson("Credenciais inválidas.", 401);
+
+      const session = await createSession(env, user);
+      return json(session);
+    }
+
+    if (url.pathname === "/auth/me" && request.method === "GET") {
+      const token = getAdminToken(request);
+      if (env.ADMIN_KEY && token === env.ADMIN_KEY) {
+        return json({ user: { email: adminEmail(env), name: env.ADMIN_NAME || "Marcel Conde" } });
+      }
+
+      const session = await getSession(env, token);
+      if (!session) return errorJson("Unauthorized", 401);
+
+      return json({ user: { email: session.email, name: session.name || "Marcel Conde" } });
+    }
+
+    if (url.pathname === "/auth/logout" && request.method === "POST") {
+      const token = getAdminToken(request);
+      if (token && env.LIKES_KV) await env.LIKES_KV.delete(`admin_session:${token}`);
+      return json({ ok: true });
+    }
+
+    if (url.pathname === "/auth/forgot" && request.method === "POST") {
+      const body = await readJson(request);
+      const email = normalizeEmail(body.email || "");
+
+      // Resposta neutra para não revelar se o e-mail existe.
+      if (email && email === adminEmail(env) && env.LIKES_KV) {
+        const token = randomToken(36);
+        await env.LIKES_KV.put(
+          `admin_reset:${token}`,
+          JSON.stringify({
+            email,
+            createdAt: new Date().toISOString(),
+            expiresAt: Date.now() + 1000 * 60 * 60,
+          }),
+          { expirationTtl: 60 * 60 }
+        );
+
+        try {
+          await sendResetEmail(env, request, email, token);
+        } catch (err) {
+          console.error("Reset email error:", err);
+        }
+      }
+
+      return json({ ok: true });
+    }
+
+    if (url.pathname === "/auth/reset" && request.method === "POST") {
+      const body = await readJson(request);
+      const token = String(body.token || "").trim();
+      const password = String(body.password || "");
+
+      if (!token || password.length < 6) return errorJson("Token ou senha inválidos.", 400);
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const reset = await env.LIKES_KV.get(`admin_reset:${token}`, "json");
+      if (!reset || reset.email !== adminEmail(env) || Number(reset.expiresAt || 0) < Date.now()) {
+        return errorJson("Token inválido ou expirado.", 400);
+      }
+
+      await saveAdminPassword(env, password);
+      await env.LIKES_KV.delete(`admin_reset:${token}`);
+      return json({ ok: true });
+    }
+
     // ── ADMIN ───────────────────────────────────────────────────
 
     if (url.pathname === "/admin/me" && request.method === "GET") {
-      const denied = requireAdmin(request, env);
+      const denied = await requireAdmin(request, env);
       if (denied) return denied;
 
       return json({
@@ -173,7 +412,7 @@ export default {
     }
 
     if (url.pathname === "/admin/upload-signature" && request.method === "POST") {
-      const denied = requireAdmin(request, env);
+      const denied = await requireAdmin(request, env);
       if (denied) return denied;
 
       const cloudName = env.CLOUDINARY_CLOUD_NAME;
@@ -210,7 +449,7 @@ export default {
     }
 
     if (url.pathname === "/admin/delete-image" && request.method === "POST") {
-      const denied = requireAdmin(request, env);
+      const denied = await requireAdmin(request, env);
       if (denied) return denied;
 
       const cloudName = env.CLOUDINARY_CLOUD_NAME;
@@ -281,7 +520,7 @@ export default {
     }
 
     if (url.pathname === "/admin/update-image" && request.method === "POST") {
-      const denied = requireAdmin(request, env);
+      const denied = await requireAdmin(request, env);
       if (denied) return denied;
 
       const cloudName = env.CLOUDINARY_CLOUD_NAME;
@@ -336,7 +575,7 @@ export default {
     }
 
     if (url.pathname === "/admin/clear-cache" && request.method === "POST") {
-      const denied = requireAdmin(request, env);
+      const denied = await requireAdmin(request, env);
       if (denied) return denied;
 
       const body = await readJson(request);
@@ -351,7 +590,7 @@ export default {
 
     if (url.pathname === "/likes" && request.method === "GET") {
       const album   = url.searchParams.get("album") || "";
-      const isAdmin = checkAdmin(request, env);
+      const isAdmin = await checkAdmin(request, env);
 
       // Token inválido ou ausente → retorna apenas {_authorized: false}
       // O front-end não recebe nenhuma contagem
@@ -366,7 +605,7 @@ export default {
 
     if (url.pathname === "/like" && request.method === "POST") {
       const { album = "", albumName = "álbum", index = 0, publicId = "" } = await request.json();
-      const isAdmin = checkAdmin(request, env);
+      const isAdmin = await checkAdmin(request, env);
 
       const key  = `likes:${album}`;
       const data = (await env.LIKES_KV?.get(key, "json")) || {};

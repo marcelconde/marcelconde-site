@@ -158,6 +158,7 @@ input {
   width: 100%;
   min-height: 46px;
   margin-top: 8px;
+  margin-bottom: 14px;
   border: 1px solid var(--line);
   background: rgba(255,255,255,0.035);
   color: var(--ink);
@@ -174,12 +175,56 @@ input:focus {
   margin-top: 18px;
 }
 
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap input {
+  padding-right: 86px;
+}
+
+.toggle-password,
+.text-link {
+  border: 0;
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+}
+
+.toggle-password {
+  position: absolute;
+  right: 12px;
+  top: 18px;
+  min-height: 34px;
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.text-link {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  text-align: center;
+  font-size: 0.86rem;
+}
+
+.text-link:hover {
+  color: #d5b486;
+}
+
 .form-msg {
   display: block;
   min-height: 20px;
   margin-top: 12px;
   color: #f4b1b1;
   font-size: 0.86rem;
+}
+
+.form-msg.success {
+  color: #a7d8b3;
 }
 
 .admin-shell {
