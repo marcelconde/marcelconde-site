@@ -651,7 +651,14 @@ async function setCoverByPublicId(publicId, silent = false) {
     }),
   });
 
-  if (!res.ok) throw new Error("Falha ao definir capa.");
+  if (res.status === 404 || res.status === 405) {
+    throw new Error("Worker desatualizado. Cole o worker.js novo na Cloudflare.");
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Falha ao definir capa.");
+  }
 
   const data = await res.json().catch(() => ({}));
   state.coverPublicId = data.cover_public_id || publicId;
