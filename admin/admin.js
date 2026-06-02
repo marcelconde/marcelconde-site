@@ -271,8 +271,10 @@ resetForm.addEventListener("submit", async (event) => {
   resetMsg.textContent = "";
 
   try {
-    const res = await fetch(`${CONFIG.workerUrl}/auth/reset`, {
+    const resetUrl = `${CONFIG.workerUrl}/auth/reset`;
+    const res = await fetch(resetUrl, {
       method: "POST",
+      mode: "cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password }),
     });
@@ -285,8 +287,8 @@ resetForm.addEventListener("submit", async (event) => {
     resetMsg.textContent = "Senha redefinida. Você já pode entrar.";
     window.history.replaceState({}, "", "/admin/");
     setTimeout(() => showLogin(), 1400);
-  } catch {
-    resetMsg.textContent = "Erro de conexão. Tente novamente.";
+  } catch (err) {
+    resetMsg.textContent = `Erro de conexão com a API. Recarregue a página e tente novamente. (${err?.message || "falha no fetch"})`;
   } finally {
     resetBtn.disabled = false;
     resetBtn.textContent = "Salvar nova senha";
