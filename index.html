@@ -1319,7 +1319,15 @@
       color: var(--ink-dim);
     }
 
-    .footer-location {
+    .footer-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      align-items: flex-end;
+    }
+
+    .footer-location,
+    .footer-cnpj {
       font-family: var(--sans);
       font-size: 0.68rem;
       font-weight: 300;
@@ -1785,7 +1793,10 @@
       <a href="https://br.pinterest.com/marcelconde/" target="_blank" rel="noopener noreferrer">Pinterest</a>
     </div>
 
-    <span class="footer-location">Recife, PE — Brasil</span>
+    <div class="footer-meta">
+      <span class="footer-location">Recife, PE — Brasil</span>
+      <span class="footer-cnpj">Marcel Conde | Photography · CNPJ 67.096.533/0001-90</span>
+    </div>
   </footer>
 
   <!-- Back to Top -->
