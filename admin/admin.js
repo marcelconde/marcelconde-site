@@ -11,6 +11,7 @@ const state = {
   images: [],
   likesByIndex: {},
   likesByAsset: {},
+  coverPublicId: "",
   loading: false,
 };
 
@@ -396,6 +397,7 @@ async function selectAlbum(path) {
   state.images = [];
   state.likesByIndex = {};
   state.likesByAsset = {};
+  state.coverPublicId = "";
 
   renderAlbumList();
   albumTitle.textContent = albumName(path);
@@ -415,6 +417,8 @@ async function selectAlbum(path) {
     ]);
 
     state.images = (album.images || []).filter(Boolean);
+    state.coverPublicId = album.cover_public_id || album.cover_debug?.public_id || "";
+
     if (likes._authorized) {
       const { _authorized, _byAsset = {}, ...byIndex } = likes;
       state.likesByIndex = byIndex;
@@ -444,7 +448,9 @@ function renderPhotos() {
   photoGrid.innerHTML = state.images.map((image, index) => {
     const likes = totalLikesForImage(image, index);
     const displayName = image.display_name || image.filename || `foto-${index + 1}`;
-    const isCover = displayName.toLowerCase().startsWith("0_capa");
+    const isCover = state.coverPublicId
+      ? image.public_id === state.coverPublicId
+      : displayName.toLowerCase().startsWith("0_capa");
     const src = cloudUrl(image.url, "f_auto,q_auto,w_520,h_390,c_fill");
     const safeName = escapeHtml(displayName);
     const safePublicId = escapeHtml(image.public_id || "");
@@ -574,9 +580,7 @@ uploadBtn.addEventListener("click", async () => {
   try {
     for (const [index, file] of files.entries()) {
       const typedName = singleDisplayName.value.trim();
-      const displayName = firstAsCover.checked && index === 0
-        ? "0_capa"
-        : (files.length === 1 && typedName ? typedName : fileBaseName(file.name));
+      const displayName = files.length === 1 && typedName ? typedName : fileBaseName(file.name);
 
       setQueueProgress(file.name, 12);
       const signature = await getJson("/admin/upload-signature", {
@@ -596,6 +600,12 @@ uploadBtn.addEventListener("click", async () => {
       setQueueProgress(file.name, 35);
       const uploadRes = await fetch(signature.uploadUrl, { method: "POST", body: form });
       if (!uploadRes.ok) throw new Error(`Upload falhou: ${file.name}`);
+      const uploaded = await uploadRes.json().catch(() => ({}));
+
+      if (firstAsCover.checked && index === 0 && uploaded.public_id) {
+        await setCoverByPublicId(uploaded.public_id, true);
+      }
+
       setQueueProgress(file.name, 100);
     }
 
@@ -630,32 +640,29 @@ async function updateImageDisplayName(image, displayName) {
   if (!res.ok) throw new Error("Falha ao renomear.");
 }
 
-function defaultDisplayName(image, fallback = "foto") {
-  const fromFilename = image?.filename || "";
-  const publicLast = String(image?.public_id || "").split("/").pop() || "";
-  const current = image?.display_name || "";
-  const candidate = current && !current.toLowerCase().startsWith("0_capa")
-    ? current
-    : fromFilename || publicLast || fallback;
+async function setCoverByPublicId(publicId, silent = false) {
+  if (!publicId || !state.selectedPath) return;
 
-  return candidate.replace(/^0_capa[-_\s]*/i, "") || fallback;
+  const res = await workerFetch("/admin/set-cover", {
+    method: "POST",
+    body: JSON.stringify({
+      albumPath: state.selectedPath,
+      public_id: publicId,
+    }),
+  });
+
+  if (!res.ok) throw new Error("Falha ao definir capa.");
+
+  const data = await res.json().catch(() => ({}));
+  state.coverPublicId = data.cover_public_id || publicId;
+  if (!silent) showToast("Capa atualizada.");
 }
 
 async function setAlbumCover(selectedImage) {
   if (!selectedImage?.public_id) return;
 
   try {
-    const oldCovers = state.images.filter((image) => {
-      const name = String(image.display_name || "").toLowerCase();
-      return image.public_id !== selectedImage.public_id && name.startsWith("0_capa");
-    });
-
-    for (const oldCover of oldCovers) {
-      await updateImageDisplayName(oldCover, defaultDisplayName(oldCover, "foto"));
-    }
-
-    await updateImageDisplayName(selectedImage, "0_capa");
-    showToast("Capa atualizada.");
+    await setCoverByPublicId(selectedImage.public_id);
     await selectAlbum(state.selectedPath);
   } catch (err) {
     showToast(err.message || "Erro ao atualizar capa.");

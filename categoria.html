@@ -930,8 +930,8 @@
       // 1) Check if this path has sub-folders
       try {
         const foldersRes = await fetch(
-          `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}`,
-          {}
+          `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}&refresh=1`,
+          { cache: "no-store" }
         );
 
         if (foldersRes.ok) {
@@ -949,8 +949,8 @@
               let thumb = null;
               try {
                 const albumRes = await fetch(
-                  `${WORKER_BASE}/album?path=${encodeURIComponent(folderPath)}`,
-                  {}
+                  `${WORKER_BASE}/album?path=${encodeURIComponent(folderPath)}&refresh=1`,
+                  { cache: "no-store" }
                 );
                 if (albumRes.ok) {
                   const albumData = await albumRes.json();
@@ -986,8 +986,8 @@
 
       // 2) No sub-folders — load as photo album
       const res = await fetch(
-        `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}`,
-        {}
+        `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}&refresh=1`,
+        { cache: "no-store" }
       );
       if (!res.ok) throw new Error(`Worker /album ${res.status}`);
 

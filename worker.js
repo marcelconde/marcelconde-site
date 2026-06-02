@@ -32,7 +32,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
   }
 }
 
-function cacheHeaders(seconds = 21600) {
+function cacheHeaders(seconds = 60) {
   return {
     "Cache-Control": `public, max-age=${seconds}`,
     "X-Worker-Cache-TTL": String(seconds),
@@ -42,6 +42,8 @@ function cacheHeaders(seconds = 21600) {
 function makeCacheKey(requestUrl) {
   const url = new URL(requestUrl);
   url.searchParams.delete("refresh");
+  url.searchParams.delete("v");
+  url.searchParams.delete("_");
   return new Request(url.toString(), { method: "GET" });
 }
 
@@ -69,6 +71,29 @@ function pickCover(images) {
       );
     }) || images[0] || null
   );
+}
+
+function albumCoverKey(path = "") {
+  return `album_cover:${path}`;
+}
+
+async function getStoredCover(env, path = "") {
+  if (!env.LIKES_KV || !path) return null;
+  return env.LIKES_KV.get(albumCoverKey(path), "json");
+}
+
+async function saveStoredCover(env, path = "", publicId = "") {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const cleanPublicId = sanitizePublicId(publicId);
+  if (!path || !cleanPublicId) throw new Error("Missing cover data");
+
+  const cover = {
+    public_id: cleanPublicId,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await env.LIKES_KV.put(albumCoverKey(path), JSON.stringify(cover));
+  return cover;
 }
 
 // Valida sessão do admin. ADMIN_KEY continua como fallback para links antigos.
@@ -521,6 +546,11 @@ export default {
           const assetLikes = (await env.LIKES_KV.get(assetLikesKey, "json")) || {};
           delete assetLikes[publicId];
           await env.LIKES_KV.put(assetLikesKey, JSON.stringify(assetLikes));
+
+          const storedCover = await getStoredCover(env, albumPath);
+          if (storedCover?.public_id === publicId) {
+            await env.LIKES_KV.delete(albumCoverKey(albumPath));
+          }
         }
         await clearWorkerCache(caches.default, request, albumPath);
       }
@@ -586,6 +616,27 @@ export default {
           ...corsHeaders(),
           "Content-Type": res.headers.get("Content-Type") || "application/json",
         },
+      });
+    }
+
+    if (url.pathname === "/admin/set-cover" && request.method === "POST") {
+      const denied = await requireAdmin(request, env);
+      if (denied) return denied;
+
+      const body = await readJson(request);
+      const albumPath = String(body.albumPath || body.path || "").trim();
+      const publicId = sanitizePublicId(body.public_id || body.publicId || "");
+
+      if (!albumPath || !isAllowedAssetPath(albumPath)) return errorJson("Invalid album path", 400);
+      if (!publicId) return errorJson("Missing public_id", 400);
+
+      const cover = await saveStoredCover(env, albumPath, publicId);
+      await clearWorkerCache(caches.default, request, albumPath);
+
+      return json({
+        ok: true,
+        path: albumPath,
+        cover_public_id: cover.public_id,
       });
     }
 
@@ -714,7 +765,7 @@ export default {
         }
         const data   = JSON.parse(text);
         const albums = (data.folders || []).map((f) => ({ slug: f.name, path: f.path }));
-        response = json(albums, 200, { ...cacheHeaders(21600), "X-Worker-Cache": forceRefresh ? "REFRESH" : "MISS" });
+        response = json(albums, 200, { ...cacheHeaders(60), "X-Worker-Cache": forceRefresh ? "REFRESH" : "MISS" });
       }
 
       else if (url.pathname === "/album") {
@@ -753,15 +804,29 @@ export default {
           const na = getAssetName(a), nb = getAssetName(b);
           return na < nb ? -1 : na > nb ? 1 : 0;
         });
-        const cover = pickCover(images);
+        const storedCover = await getStoredCover(env, path);
+        let cover = null;
+        let coverSource = "display_name";
+
+        if (storedCover?.public_id) {
+          cover = images.find((image) => image.public_id === storedCover.public_id) || null;
+          if (cover) coverSource = "kv";
+        }
+
+        if (!cover) {
+          cover = pickCover(images);
+        }
+
         response = json(
           {
             title: path.split("/").pop(), path,
             thumbnail: cover?.url ?? null, images,
+            cover_public_id: cover?.public_id ?? null,
+            cover_source: coverSource,
             cover_debug: cover ? { public_id: cover.public_id, display_name: cover.display_name, filename: cover.filename } : null,
           },
           200,
-          { ...cacheHeaders(21600), "X-Worker-Cache": forceRefresh ? "REFRESH" : "MISS" }
+          { ...cacheHeaders(60), "X-Worker-Cache": forceRefresh ? "REFRESH" : "MISS" }
         );
       }
 

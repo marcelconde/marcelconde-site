@@ -2029,8 +2029,15 @@
           new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
         ]);
 
+      function freshWorkerUrl(url) {
+        const freshUrl = new URL(url);
+        freshUrl.searchParams.set('refresh', '1');
+        freshUrl.searchParams.set('_', String(Date.now()));
+        return freshUrl.toString();
+      }
+
       async function fetchJson(url) {
-        const res = await withTimeout(fetch(url));
+        const res = await withTimeout(fetch(freshWorkerUrl(url), { cache: 'no-store' }));
         if (!res.ok) throw new Error(`${url} -> ${res.status}`);
         return res.json();
       }
@@ -2188,13 +2195,13 @@
         : 'f_auto,q_auto,w_1920,h_1080,c_fill';
 
       try {
-        const albums = await fetch(`${WORKER_BASE}/albums`).then(r => r.json());
+        const albums = await fetch(`${WORKER_BASE}/albums?refresh=1&_=${Date.now()}`, { cache: 'no-store' }).then(r => r.json());
         if (!Array.isArray(albums) || !albums.length) return;
 
         // Busca todos os álbuns em paralelo e aguarda todos terminarem
         const albumPhotos = await Promise.allSettled(
           albums.map(a =>
-            fetch(`${WORKER_BASE}/album?path=${encodeURIComponent(a.path)}`)
+            fetch(`${WORKER_BASE}/album?path=${encodeURIComponent(a.path)}&refresh=1&_=${Date.now()}`, { cache: 'no-store' })
               .then(r => r.json())
               .then(d =>
                 (d.images || [])
@@ -2256,7 +2263,10 @@
     // Carrega foto de perfil do álbum site/about no Cloudinary
     async function loadAboutPhoto() {
       try {
-        const data = await fetch('https://api.marcelconde.com.br/album?path=site/about').then(r => r.json());
+        const data = await fetch(
+          `https://api.marcelconde.com.br/album?path=site/about&refresh=1&_=${Date.now()}`,
+          { cache: 'no-store' }
+        ).then(r => r.json());
         const first = (data.images || [])[0];
         const url = first ? (typeof first === 'object' ? first.url : first) : null;
         if (url) {
