@@ -128,6 +128,50 @@ async function workerFetch(path, options = {}) {
   return res;
 }
 
+async function postJson(path, payload) {
+  const url = `${CONFIG.workerUrl}${path}`;
+  const body = JSON.stringify(payload || {});
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      mode: "cors",
+      credentials: "omit",
+      cache: "no-store",
+      referrerPolicy: "no-referrer",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  } catch (fetchErr) {
+    return new Promise((resolve, reject) => {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
+        xhr.timeout = 15000;
+        xhr.setRequestHeader("Content-Type", "application/json");
+        xhr.onload = () => {
+          let data = {};
+          try { data = JSON.parse(xhr.responseText || "{}"); } catch {}
+          resolve({
+            res: {
+              ok: xhr.status >= 200 && xhr.status < 300,
+              status: xhr.status,
+            },
+            data,
+          });
+        };
+        xhr.onerror = () => reject(new Error(`fetch falhou e XHR também falhou: ${fetchErr.message}`));
+        xhr.ontimeout = () => reject(new Error("tempo limite ao conectar com a API"));
+        xhr.send(body);
+      } catch (xhrErr) {
+        reject(new Error(`${fetchErr.message}; fallback XHR: ${xhrErr.message}`));
+      }
+    });
+  }
+}
+
 async function getJson(path, options = {}) {
   const res = await workerFetch(path, options);
   if (!res.ok) throw new Error(`${path} -> ${res.status}`);
@@ -170,12 +214,7 @@ loginForm.addEventListener("submit", async (event) => {
   loginMsg.textContent = "";
 
   try {
-    const res = await fetch(`${CONFIG.workerUrl}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data } = await postJson("/auth/login", { email, password });
     if (!res.ok) {
       loginMsg.textContent = data.error || "E-mail ou senha inválidos.";
       loginPassword.value = "";
@@ -222,12 +261,7 @@ forgotForm.addEventListener("submit", async (event) => {
   forgotMsg.classList.remove("success");
 
   try {
-    const res = await fetch(`${CONFIG.workerUrl}/auth/forgot`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data } = await postJson("/auth/forgot", { email });
     if (!res.ok) {
       forgotMsg.textContent = data.detail || data.error || "Erro ao enviar. Verifique o Resend no Worker.";
       forgotMsg.classList.remove("success");
@@ -271,14 +305,7 @@ resetForm.addEventListener("submit", async (event) => {
   resetMsg.textContent = "";
 
   try {
-    const resetUrl = `${CONFIG.workerUrl}/auth/reset`;
-    const res = await fetch(resetUrl, {
-      method: "POST",
-      mode: "cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, password }),
-    });
-    const data = await res.json().catch(() => ({}));
+    const { res, data } = await postJson("/auth/reset", { token, password });
     if (!res.ok) {
       resetMsg.textContent = data.error || "Token inválido ou expirado.";
       return;
