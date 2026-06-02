@@ -476,7 +476,7 @@ function renderPhotos() {
       const card = btn.closest(".photo-card");
       const image = state.images[Number(card.dataset.index)];
       const action = btn.dataset.action;
-      if (action === "cover") return updateDisplayName(image, "0_capa");
+      if (action === "cover") return setAlbumCover(image);
       if (action === "rename") return renameImage(image);
       if (action === "delete") return deleteImage(image);
     });
@@ -617,22 +617,48 @@ uploadBtn.addEventListener("click", async () => {
   }
 });
 
-async function updateDisplayName(image, displayName) {
+async function updateImageDisplayName(image, displayName) {
   if (!image?.public_id) return;
+  const res = await workerFetch("/admin/update-image", {
+    method: "POST",
+    body: JSON.stringify({
+      public_id: image.public_id,
+      albumPath: state.selectedPath,
+      displayName,
+    }),
+  });
+  if (!res.ok) throw new Error("Falha ao renomear.");
+}
+
+function defaultDisplayName(image, fallback = "foto") {
+  const fromFilename = image?.filename || "";
+  const publicLast = String(image?.public_id || "").split("/").pop() || "";
+  const current = image?.display_name || "";
+  const candidate = current && !current.toLowerCase().startsWith("0_capa")
+    ? current
+    : fromFilename || publicLast || fallback;
+
+  return candidate.replace(/^0_capa[-_\s]*/i, "") || fallback;
+}
+
+async function setAlbumCover(selectedImage) {
+  if (!selectedImage?.public_id) return;
+
   try {
-    const res = await workerFetch("/admin/update-image", {
-      method: "POST",
-      body: JSON.stringify({
-        public_id: image.public_id,
-        albumPath: state.selectedPath,
-        displayName,
-      }),
+    const oldCovers = state.images.filter((image) => {
+      const name = String(image.display_name || "").toLowerCase();
+      return image.public_id !== selectedImage.public_id && name.startsWith("0_capa");
     });
-    if (!res.ok) throw new Error("Falha ao renomear.");
-    showToast(displayName === "0_capa" ? "Capa atualizada." : "Nome atualizado.");
+
+    for (const oldCover of oldCovers) {
+      await updateImageDisplayName(oldCover, defaultDisplayName(oldCover, "foto"));
+    }
+
+    await updateImageDisplayName(selectedImage, "0_capa");
+    showToast("Capa atualizada.");
     await selectAlbum(state.selectedPath);
   } catch (err) {
-    showToast(err.message || "Erro ao atualizar imagem.");
+    showToast(err.message || "Erro ao atualizar capa.");
   }
 }
 
@@ -640,7 +666,12 @@ function renameImage(image) {
   const current = image.display_name || image.filename || "";
   const next = prompt("Novo nome exibido no Cloudinary:", current);
   if (!next || next.trim() === current) return;
-  updateDisplayName(image, next.trim());
+  updateImageDisplayName(image, next.trim())
+    .then(() => {
+      showToast("Nome atualizado.");
+      return selectAlbum(state.selectedPath);
+    })
+    .catch((err) => showToast(err.message || "Erro ao atualizar imagem."));
 }
 
 async function deleteImage(image) {
