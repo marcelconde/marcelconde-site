@@ -96,17 +96,169 @@ async function saveStoredCover(env, path = "", publicId = "") {
   return cover;
 }
 
+function userIndexKey() {
+  return "admin_users_index";
+}
+
+function inviteIndexKey() {
+  return "admin_invites_index";
+}
+
+function auditLogKey() {
+  return "admin_audit_logs";
+}
+
+function normalizeRole(role = "") {
+  return role === "admin" ? "admin" : "editor";
+}
+
+function isSuperAdmin(user, env) {
+  return normalizeEmail(user?.email || "") === adminEmail(env) || user?.role === "admin";
+}
+
+function publicUser(user = {}) {
+  return {
+    email: normalizeEmail(user.email || ""),
+    name: user.name || user.email || "Usuário",
+    role: normalizeRole(user.role || "editor"),
+    createdAt: user.createdAt || null,
+    updatedAt: user.updatedAt || null,
+  };
+}
+
+async function readKvJson(env, key, fallback) {
+  if (!env.LIKES_KV) return fallback;
+  return (await env.LIKES_KV.get(key, "json")) || fallback;
+}
+
+async function writeKvJson(env, key, value, options) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  return env.LIKES_KV.put(key, JSON.stringify(value), options);
+}
+
+async function getUserEmails(env) {
+  const emails = await readKvJson(env, userIndexKey(), []);
+  const main = await getAdminUser(env, adminEmail(env));
+  if (main && !emails.includes(main.email)) return [...emails, main.email];
+  return emails;
+}
+
+async function saveUserEmails(env, emails) {
+  const unique = [...new Set(emails.map(normalizeEmail).filter(Boolean))].sort();
+  await writeKvJson(env, userIndexKey(), unique);
+  return unique;
+}
+
+async function getAdminUser(env, email) {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail || !env.LIKES_KV) return null;
+  return env.LIKES_KV.get(`admin_user:${cleanEmail}`, "json");
+}
+
+async function saveAdminUser(env, user) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const cleanEmail = normalizeEmail(user.email || "");
+  if (!cleanEmail) throw new Error("Missing user email");
+
+  const now = new Date().toISOString();
+  const existing = await getAdminUser(env, cleanEmail);
+  const saved = {
+    ...existing,
+    ...user,
+    email: cleanEmail,
+    role: normalizeRole(user.role || existing?.role || (cleanEmail === adminEmail(env) ? "admin" : "editor")),
+    name: user.name || existing?.name || cleanEmail,
+    active: user.active !== false,
+    createdAt: existing?.createdAt || user.createdAt || now,
+    updatedAt: now,
+  };
+
+  await writeKvJson(env, `admin_user:${cleanEmail}`, saved);
+  await saveUserEmails(env, [...await getUserEmails(env), cleanEmail]);
+  return saved;
+}
+
+async function listAdminUsers(env) {
+  const emails = await getUserEmails(env);
+  const users = await Promise.all(emails.map((email) => getAdminUser(env, email)));
+  return users.filter(Boolean).map(publicUser);
+}
+
+async function saveUserPassword(env, email, password, extra = {}) {
+  const cleanEmail = normalizeEmail(email);
+  const passwordHash = await hashPassword(password, "", authPepper(env));
+  return saveAdminUser(env, {
+    ...extra,
+    email: cleanEmail,
+    passwordHash,
+    active: true,
+  });
+}
+
+async function getCurrentAdmin(request, env) {
+  const token = getAdminToken(request);
+  if (!token) return null;
+
+  if (env.ADMIN_KEY && token === env.ADMIN_KEY) {
+    return {
+      email: adminEmail(env),
+      name: env.ADMIN_NAME || "Marcel Conde",
+      role: "admin",
+      legacy: true,
+    };
+  }
+
+  const session = await getSession(env, token);
+  if (!session) return null;
+  return {
+    email: normalizeEmail(session.email || ""),
+    name: session.name || session.email || "Usuário",
+    role: normalizeRole(session.role || "editor"),
+  };
+}
+
 // Valida sessão do admin. ADMIN_KEY continua como fallback para links antigos.
 async function checkAdmin(request, env) {
-  const token = getAdminToken(request);
-  if (!token) return false;
-  if (env.ADMIN_KEY && token === env.ADMIN_KEY) return true;
-  return !!(await getSession(env, token));
+  return !!(await getCurrentAdmin(request, env));
 }
 
 async function requireAdmin(request, env) {
   if (await checkAdmin(request, env)) return null;
   return errorJson("Unauthorized", 401);
+}
+
+async function requireAdminUser(request, env) {
+  const user = await getCurrentAdmin(request, env);
+  if (!user) return { error: errorJson("Unauthorized", 401), user: null };
+  return { error: null, user };
+}
+
+async function requireSuperAdmin(request, env) {
+  const { error, user } = await requireAdminUser(request, env);
+  if (error) return { error, user: null };
+  if (!isSuperAdmin(user, env)) return { error: errorJson("Acesso negado", 403), user: null };
+  return { error: null, user };
+}
+
+async function appendAuditLog(env, request, user, action, entity, details = {}) {
+  try {
+    const logs = await readKvJson(env, auditLogKey(), []);
+    logs.unshift({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: new Date().toISOString(),
+      userEmail: user?.email || null,
+      userName: user?.name || null,
+      userRole: user?.role || null,
+      action,
+      entity,
+      details,
+      ip: request.headers.get("CF-Connecting-IP") || "",
+      userAgent: request.headers.get("User-Agent") || "",
+    });
+    await writeKvJson(env, auditLogKey(), logs.slice(0, 200));
+  } catch (err) {
+    console.error("Audit log failed:", err);
+  }
 }
 
 function isAllowedAssetPath(path) {
@@ -154,6 +306,144 @@ async function signCloudinaryParams(params, apiSecret) {
     .join("&");
 
   return sha1Hex(`${serialized}${apiSecret}`);
+}
+
+async function listCloudinaryFolders(cloudName, auth, path) {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const res = await fetchWithTimeout(
+    `https://api.cloudinary.com/v1_1/${cloudName}/folders/${encodedPath}`,
+    { headers: { Authorization: `Basic ${auth}` } },
+    12000
+  );
+
+  if (res.status === 404) return [];
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Cloudinary folders ${res.status}: ${text}`);
+
+  const data = JSON.parse(text);
+  return data.folders || [];
+}
+
+async function searchCloudinaryImages(cloudName, auth, path) {
+  const resources = [];
+  let nextCursor = "";
+
+  do {
+    const body = {
+      expression: `asset_folder="${path}" AND resource_type:image`,
+      sort_by: [{ public_id: "asc" }],
+      max_results: 500,
+    };
+    if (nextCursor) body.next_cursor = nextCursor;
+
+    const res = await fetchWithTimeout(
+      `https://api.cloudinary.com/v1_1/${cloudName}/resources/search`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      },
+      15000
+    );
+
+    const text = await res.text();
+    if (!res.ok) throw new Error(`Cloudinary search ${res.status}: ${text}`);
+
+    const data = JSON.parse(text);
+    resources.push(...(data.resources || []));
+    nextCursor = data.next_cursor || "";
+  } while (nextCursor);
+
+  return resources;
+}
+
+async function destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId) {
+  const timestamp = Math.round(Date.now() / 1000);
+  const params = {
+    public_id: sanitizePublicId(publicId),
+    invalidate: "true",
+    timestamp,
+  };
+  const signature = await signCloudinaryParams(params, apiSecret);
+  const body = new URLSearchParams({
+    ...params,
+    api_key: apiKey,
+    signature,
+  });
+
+  const res = await fetchWithTimeout(
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    },
+    15000
+  );
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Cloudinary destroy ${res.status}: ${text}`);
+  return text;
+}
+
+async function deleteCloudinaryFolder(cloudName, auth, path) {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const res = await fetchWithTimeout(
+    `https://api.cloudinary.com/v1_1/${cloudName}/folders/${encodedPath}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Basic ${auth}` },
+    },
+    12000
+  );
+
+  const text = await res.text();
+  if (res.status === 404) return { deleted: false, missing: true };
+  if (!res.ok) throw new Error(`Cloudinary delete folder ${res.status}: ${text}`);
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+async function deleteAlbumRecursive(env, request, path, stats = { folders: 0, images: 0 }) {
+  const cloudName = env.CLOUDINARY_CLOUD_NAME;
+  const apiKey    = env.CLOUDINARY_API_KEY;
+  const apiSecret = env.CLOUDINARY_API_SECRET;
+  if (!cloudName || !apiKey || !apiSecret) throw new Error("Missing Cloudinary env vars");
+
+  const auth = btoa(`${apiKey}:${apiSecret}`);
+  const children = await listCloudinaryFolders(cloudName, auth, path);
+
+  for (const child of children) {
+    await deleteAlbumRecursive(env, request, child.path, stats);
+  }
+
+  const images = await searchCloudinaryImages(cloudName, auth, path);
+  for (const image of images) {
+    await destroyCloudinaryImage(cloudName, apiKey, apiSecret, image.public_id);
+    stats.images += 1;
+  }
+
+  await deleteCloudinaryFolder(cloudName, auth, path);
+  stats.folders += 1;
+
+  if (env.LIKES_KV) {
+    const slug = getAlbumSlugFromPath(path);
+    await Promise.allSettled([
+      env.LIKES_KV.delete(albumCoverKey(path)),
+      env.LIKES_KV.delete(`likes:${slug}`),
+      env.LIKES_KV.delete(`asset_likes:${slug}`),
+    ]);
+  }
+
+  await clearWorkerCache(caches.default, request, path);
+  return stats;
 }
 
 async function clearWorkerCache(cache, request, path = "") {
@@ -240,41 +530,31 @@ function adminEmail(env) {
 }
 
 async function getStoredAdmin(env) {
-  if (!env.LIKES_KV) return null;
-  return env.LIKES_KV.get(`admin_user:${adminEmail(env)}`, "json");
+  return getAdminUser(env, adminEmail(env));
 }
 
 async function saveAdminPassword(env, password) {
-  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
-  const passwordHash = await hashPassword(password, "", authPepper(env));
-  const user = {
-    email: adminEmail(env),
+  return saveUserPassword(env, adminEmail(env), password, {
     name: env.ADMIN_NAME || "Marcel Conde",
-    passwordHash,
-    updatedAt: new Date().toISOString(),
-  };
-  await env.LIKES_KV.put(`admin_user:${user.email}`, JSON.stringify(user));
-  return user;
+    role: "admin",
+  });
 }
 
 async function validateAdminLogin(env, email, password) {
-  const expectedEmail = adminEmail(env);
-  if (normalizeEmail(email) !== expectedEmail) return null;
-
-  const stored = await getStoredAdmin(env);
+  const cleanEmail = normalizeEmail(email);
+  const stored = await getAdminUser(env, cleanEmail);
+  if (stored && stored.active === false) return null;
   if (stored?.passwordHash && await verifyPassword(password, stored.passwordHash, env)) {
-    return {
-      email: expectedEmail,
-      name: stored.name || env.ADMIN_NAME || "Marcel Conde",
-    };
+    return publicUser(stored);
   }
 
   const initialPassword = env.ADMIN_PASSWORD || env.ADMIN_KEY || "";
-  if (!stored && initialPassword && password === initialPassword) {
-    return {
-      email: expectedEmail,
+  if (!stored && cleanEmail === adminEmail(env) && initialPassword && password === initialPassword) {
+    const user = await saveUserPassword(env, cleanEmail, password, {
       name: env.ADMIN_NAME || "Marcel Conde",
-    };
+      role: "admin",
+    });
+    return publicUser(user);
   }
 
   return null;
@@ -287,13 +567,14 @@ async function createSession(env, user) {
   const session = {
     email: user.email,
     name: user.name,
+    role: normalizeRole(user.role || "editor"),
     createdAt: new Date(now).toISOString(),
     expiresAt: now + 1000 * 60 * 60 * 12,
   };
   await env.LIKES_KV.put(`admin_session:${token}`, JSON.stringify(session), {
     expirationTtl: 60 * 60 * 12,
   });
-  return { token, user: { email: user.email, name: user.name } };
+  return { token, user: publicUser(user) };
 }
 
 async function getSession(env, token) {
@@ -338,6 +619,41 @@ async function sendResetEmail(env, request, email, token) {
   }
 }
 
+async function sendInviteEmail(env, email, token, inviterName = "Marcel Conde") {
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY não configurada no Worker.");
+  }
+
+  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+  const inviteUrl = `${origin}/admin/?invite=${encodeURIComponent(token)}`;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      to: [email],
+      subject: "Convite para o admin — Marcel Conde",
+      html: `<p><strong>${inviterName}</strong> convidou você para acessar o painel administrativo Marcel Conde.</p>
+             <p><a href="${inviteUrl}">Clique aqui para criar sua senha e aceitar o convite</a></p>
+             <p>Este link expira em 48 horas.</p>`,
+    }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -360,23 +676,26 @@ export default {
       if (!user) return errorJson("Credenciais inválidas.", 401);
 
       const session = await createSession(env, user);
+      await appendAuditLog(env, request, user, "login", "auth", { email: user.email });
       return json(session);
     }
 
     if (url.pathname === "/auth/me" && request.method === "GET") {
       const token = getAdminToken(request);
       if (env.ADMIN_KEY && token === env.ADMIN_KEY) {
-        return json({ user: { email: adminEmail(env), name: env.ADMIN_NAME || "Marcel Conde" } });
+        return json({ user: { email: adminEmail(env), name: env.ADMIN_NAME || "Marcel Conde", role: "admin" } });
       }
 
       const session = await getSession(env, token);
       if (!session) return errorJson("Unauthorized", 401);
 
-      return json({ user: { email: session.email, name: session.name || "Marcel Conde" } });
+      return json({ user: publicUser(session) });
     }
 
     if (url.pathname === "/auth/logout" && request.method === "POST") {
       const token = getAdminToken(request);
+      const user = await getCurrentAdmin(request, env);
+      if (user) await appendAuditLog(env, request, user, "logout", "auth", { email: user.email });
       if (token && env.LIKES_KV) await env.LIKES_KV.delete(`admin_session:${token}`);
       return json({ ok: true });
     }
@@ -384,10 +703,10 @@ export default {
     if (url.pathname === "/auth/forgot" && request.method === "POST") {
       const body = await readJson(request);
       const email = normalizeEmail(body.email || "");
-      const expectedEmail = adminEmail(env);
+      const user = await getAdminUser(env, email);
 
       // Resposta neutra para não revelar se o e-mail existe.
-      if (email && email === expectedEmail && env.LIKES_KV) {
+      if (email && (user || email === adminEmail(env)) && env.LIKES_KV) {
         const token = randomToken(36);
         await env.LIKES_KV.put(
           `admin_reset:${token}`,
@@ -401,6 +720,7 @@ export default {
 
         try {
           const resend = await sendResetEmail(env, request, email, token);
+          await appendAuditLog(env, request, user || { email, name: email, role: "admin" }, "solicitar_reset", "auth", { email });
           return json({ ok: true, emailQueued: true, resendId: resend?.id || null });
         } catch (err) {
           console.error("Reset email error:", err);
@@ -423,12 +743,17 @@ export default {
         if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
 
         const reset = await env.LIKES_KV.get(`admin_reset:${token}`, "json");
-        if (!reset || reset.email !== adminEmail(env) || Number(reset.expiresAt || 0) < Date.now()) {
+        if (!reset || !reset.email || Number(reset.expiresAt || 0) < Date.now()) {
           return errorJson("Token inválido ou expirado.", 400);
         }
 
-        await saveAdminPassword(env, password);
+        const existing = await getAdminUser(env, reset.email);
+        const user = await saveUserPassword(env, reset.email, password, {
+          name: existing?.name || (reset.email === adminEmail(env) ? env.ADMIN_NAME || "Marcel Conde" : reset.email),
+          role: existing?.role || (reset.email === adminEmail(env) ? "admin" : "editor"),
+        });
         await env.LIKES_KV.delete(`admin_reset:${token}`);
+        await appendAuditLog(env, request, user, "redefinir_senha", "auth", { email: user.email });
         return json({ ok: true });
       } catch (err) {
         console.error("Reset password error:", err);
@@ -438,22 +763,167 @@ export default {
       }
     }
 
+    if (url.pathname === "/auth/invite" && request.method === "GET") {
+      const token = String(url.searchParams.get("token") || "").trim();
+      if (!token || !env.LIKES_KV) return errorJson("Convite inválido.", 400);
+
+      const invite = await env.LIKES_KV.get(`admin_invite:${token}`, "json");
+      if (!invite || invite.usedAt || Number(invite.expiresAt || 0) < Date.now()) {
+        return errorJson("Convite inválido ou expirado.", 400);
+      }
+
+      return json({
+        email: invite.email,
+        role: normalizeRole(invite.role),
+      });
+    }
+
+    if (url.pathname === "/auth/invite/accept" && request.method === "POST") {
+      const body = await readJson(request);
+      const token = String(body.token || "").trim();
+      const password = String(body.password || "");
+      const name = cleanDisplayName(body.name || "");
+
+      if (!token || password.length < 6) return errorJson("Token ou senha inválidos.", 400);
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const invite = await env.LIKES_KV.get(`admin_invite:${token}`, "json");
+      if (!invite || invite.usedAt || Number(invite.expiresAt || 0) < Date.now()) {
+        return errorJson("Convite inválido ou expirado.", 400);
+      }
+
+      const existing = await getAdminUser(env, invite.email);
+      if (existing?.passwordHash) return errorJson("Este e-mail já possui acesso.", 409);
+
+      const user = await saveUserPassword(env, invite.email, password, {
+        name: name || invite.email,
+        role: normalizeRole(invite.role),
+      });
+
+      invite.usedAt = new Date().toISOString();
+      await writeKvJson(env, `admin_invite:${token}`, invite);
+      await appendAuditLog(env, request, user, "aceitar_convite", "users", { email: user.email });
+
+      return json({ ok: true, user: publicUser(user) }, 201);
+    }
+
     // ── ADMIN ───────────────────────────────────────────────────
 
     if (url.pathname === "/admin/me" && request.method === "GET") {
-      const denied = await requireAdmin(request, env);
-      if (denied) return denied;
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
 
       return json({
         ok: true,
         service: "marcel-admin",
+        user: publicUser(user),
         time: new Date().toISOString(),
       });
     }
 
+    if (url.pathname === "/auth/users" && request.method === "GET") {
+      const { error } = await requireSuperAdmin(request, env);
+      if (error) return error;
+
+      return json({ users: await listAdminUsers(env) });
+    }
+
+    if (url.pathname === "/auth/delete-user" && request.method === "POST") {
+      const { error, user } = await requireSuperAdmin(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      const email = normalizeEmail(body.email || "");
+      if (!email) return errorJson("Missing email", 400);
+      if (email === normalizeEmail(user.email)) return errorJson("Não é possível excluir sua própria conta.", 400);
+      if (email === adminEmail(env)) return errorJson("Não é possível excluir o admin principal.", 400);
+
+      if (env.LIKES_KV) {
+        await env.LIKES_KV.delete(`admin_user:${email}`);
+        await saveUserEmails(env, (await getUserEmails(env)).filter((item) => item !== email));
+      }
+
+      await appendAuditLog(env, request, user, "excluir_usuario", "users", { email });
+      return json({ ok: true });
+    }
+
+    if (url.pathname === "/auth/invite" && request.method === "POST") {
+      const { error, user } = await requireSuperAdmin(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      const email = normalizeEmail(body.email || "");
+      const role = normalizeRole(body.role || "editor");
+      if (!email) return errorJson("E-mail obrigatório.", 400);
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const existing = await getAdminUser(env, email);
+      if (existing?.passwordHash) return errorJson("Este e-mail já possui acesso.", 409);
+
+      const token = randomToken(36);
+      const invite = {
+        token,
+        email,
+        role,
+        invitedBy: user.email,
+        createdAt: new Date().toISOString(),
+        expiresAt: Date.now() + 1000 * 60 * 60 * 48,
+      };
+
+      await writeKvJson(env, `admin_invite:${token}`, invite, { expirationTtl: 60 * 60 * 48 });
+      const inviteIndex = await readKvJson(env, inviteIndexKey(), []);
+      inviteIndex.unshift(token);
+      await writeKvJson(env, inviteIndexKey(), [...new Set(inviteIndex)].slice(0, 100));
+
+      const resend = await sendInviteEmail(env, email, token, user.name || "Marcel Conde");
+      await appendAuditLog(env, request, user, "enviar_convite", "invites", { email, role });
+
+      return json({ ok: true, invite: { email, role, expiresAt: invite.expiresAt }, resendId: resend?.id || null }, 201);
+    }
+
+    if (url.pathname === "/auth/invites" && request.method === "GET") {
+      const { error } = await requireSuperAdmin(request, env);
+      if (error) return error;
+
+      const tokens = await readKvJson(env, inviteIndexKey(), []);
+      const invites = await Promise.all(tokens.map((token) => env.LIKES_KV?.get(`admin_invite:${token}`, "json")));
+      const now = Date.now();
+      return json({
+        invites: invites
+          .filter(Boolean)
+          .map((invite) => ({
+            token: invite.token,
+            email: invite.email,
+            role: normalizeRole(invite.role),
+            createdAt: invite.createdAt,
+            expiresAt: invite.expiresAt,
+            usedAt: invite.usedAt || null,
+            expired: !invite.usedAt && Number(invite.expiresAt || 0) < now,
+          })),
+      });
+    }
+
+    if (url.pathname === "/auth/audit-logs" && request.method === "GET") {
+      const { error } = await requireSuperAdmin(request, env);
+      if (error) return error;
+
+      const limit = Math.min(Number(url.searchParams.get("limit") || 100), 200);
+      const logs = await readKvJson(env, auditLogKey(), []);
+      return json({ logs: logs.slice(0, limit) });
+    }
+
+    if (url.pathname === "/auth/audit-logs" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      await appendAuditLog(env, request, user, body.action || "acao", body.entity || "admin", body.details || {});
+      return json({ ok: true }, 201);
+    }
+
     if (url.pathname === "/admin/upload-signature" && request.method === "POST") {
-      const denied = await requireAdmin(request, env);
-      if (denied) return denied;
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
 
       const cloudName = env.CLOUDINARY_CLOUD_NAME;
       const apiKey    = env.CLOUDINARY_API_KEY;
@@ -478,6 +948,7 @@ export default {
       };
 
       const signature = await signCloudinaryParams(params, apiSecret);
+      await appendAuditLog(env, request, user, "preparar_upload", "album", { folderPath, displayName });
 
       return json({
         cloudName,
@@ -489,8 +960,8 @@ export default {
     }
 
     if (url.pathname === "/admin/delete-image" && request.method === "POST") {
-      const denied = await requireAdmin(request, env);
-      if (denied) return denied;
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
 
       const cloudName = env.CLOUDINARY_CLOUD_NAME;
       const apiKey    = env.CLOUDINARY_API_KEY;
@@ -555,6 +1026,8 @@ export default {
         await clearWorkerCache(caches.default, request, albumPath);
       }
 
+      await appendAuditLog(env, request, user, "excluir_foto", "image", { public_id: publicId, albumPath });
+
       return new Response(text, {
         status: res.status,
         headers: {
@@ -565,8 +1038,8 @@ export default {
     }
 
     if (url.pathname === "/admin/update-image" && request.method === "POST") {
-      const denied = await requireAdmin(request, env);
-      if (denied) return denied;
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
 
       const cloudName = env.CLOUDINARY_CLOUD_NAME;
       const apiKey    = env.CLOUDINARY_API_KEY;
@@ -609,6 +1082,7 @@ export default {
 
       const text = await res.text();
       if (albumPath) await clearWorkerCache(caches.default, request, albumPath);
+      await appendAuditLog(env, request, user, "renomear_foto", "image", { public_id: publicId, displayName, albumPath });
 
       return new Response(text, {
         status: res.status,
@@ -620,8 +1094,8 @@ export default {
     }
 
     if (url.pathname === "/admin/set-cover" && request.method === "POST") {
-      const denied = await requireAdmin(request, env);
-      if (denied) return denied;
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
 
       const body = await readJson(request);
       const albumPath = String(body.albumPath || body.path || "").trim();
@@ -632,6 +1106,7 @@ export default {
 
       const cover = await saveStoredCover(env, albumPath, publicId);
       await clearWorkerCache(caches.default, request, albumPath);
+      await appendAuditLog(env, request, user, "definir_capa", "album", { albumPath, public_id: publicId });
 
       return json({
         ok: true,
@@ -641,15 +1116,34 @@ export default {
     }
 
     if (url.pathname === "/admin/clear-cache" && request.method === "POST") {
-      const denied = await requireAdmin(request, env);
-      if (denied) return denied;
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
 
       const body = await readJson(request);
       const path = String(body.path || "").trim();
       if (path && !isAllowedAssetPath(path)) return errorJson("Invalid path", 400);
 
       await clearWorkerCache(caches.default, request, path);
+      await appendAuditLog(env, request, user, "limpar_cache", "album", { path });
       return json({ ok: true, path });
+    }
+
+    if (url.pathname === "/admin/delete-album" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      const path = String(body.path || "").trim();
+      if (!path || path === "portfolio" || !path.startsWith("portfolio/")) {
+        return errorJson("Álbum inválido para exclusão.", 400);
+      }
+
+      const stats = await deleteAlbumRecursive(env, request, path);
+      const parentPath = path.split("/").slice(0, -1).join("/") || "portfolio";
+      await clearWorkerCache(caches.default, request, parentPath);
+      await appendAuditLog(env, request, user, "excluir_album", "album", { path, ...stats });
+
+      return json({ ok: true, path, ...stats });
     }
 
     // ── CURTIDAS ─────────────────────────────────────────────────
@@ -795,7 +1289,7 @@ export default {
           });
         }
         const data = JSON.parse(text);
-        const images = (data.resources || []).map((r) => ({
+        let images = (data.resources || []).map((r) => ({
           url: r.secure_url, public_id: r.public_id,
           display_name: r.display_name || "", filename: r.filename || "",
           width: r.width, height: r.height, format: r.format,
@@ -815,6 +1309,13 @@ export default {
 
         if (!cover) {
           cover = pickCover(images);
+        }
+
+        if (cover?.public_id) {
+          images = [
+            cover,
+            ...images.filter((image) => image.public_id !== cover.public_id),
+          ];
         }
 
         response = json(

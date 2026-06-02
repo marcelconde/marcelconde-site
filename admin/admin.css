@@ -31,7 +31,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -154,7 +155,8 @@ label {
   text-transform: uppercase;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 46px;
   margin-top: 8px;
@@ -167,6 +169,10 @@ input {
 }
 
 input:focus {
+  border-color: var(--line-strong);
+}
+
+select:focus {
   border-color: var(--line-strong);
 }
 
@@ -309,9 +315,19 @@ input:focus {
 
 .top-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
   justify-content: flex-end;
   min-width: 180px;
+}
+
+.user-pill {
+  max-width: 220px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tabs {
@@ -699,6 +715,108 @@ input:focus {
   flex-wrap: wrap;
 }
 
+.admin-card-panel {
+  margin-top: 22px;
+  border: 1px solid var(--line);
+  background: rgba(15, 15, 14, 0.78);
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.admin-card-panel h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  line-height: 1;
+}
+
+.admin-card-panel p {
+  margin: 0.55rem 0 1.2rem;
+  color: var(--muted);
+}
+
+.invite-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 170px auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.invite-row input,
+.invite-row select {
+  margin: 0;
+}
+
+.admin-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-row {
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.025);
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-row strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-row small,
+.admin-row code {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.role-badge,
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  border: 1px solid var(--line);
+  padding: 0 8px;
+  color: var(--gold);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-badge.used {
+  color: var(--green);
+}
+
+.status-badge.expired {
+  color: var(--danger);
+}
+
+.audit-list .admin-row {
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+
+.audit-action {
+  color: var(--gold);
+  font-weight: 800;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .toast {
   position: fixed;
   left: 50%;
@@ -779,6 +897,7 @@ input:focus {
 
   .top-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .top-actions .btn {
@@ -800,6 +919,12 @@ input:focus {
   }
 
   .liked-card {
+    grid-template-columns: 1fr;
+  }
+
+  .invite-row,
+  .admin-lists,
+  .audit-list .admin-row {
     grid-template-columns: 1fr;
   }
 }

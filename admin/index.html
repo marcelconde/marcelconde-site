@@ -19,7 +19,8 @@
       <p>Gerencie portfólios, fotos, capas e curtidas do site.</p>
 
       <form id="loginForm">
-        <input id="loginEmail" name="email" type="hidden">
+        <label for="loginEmail">E-mail</label>
+        <input id="loginEmail" name="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
 
         <label for="loginPassword">Senha</label>
         <div class="password-wrap">
@@ -33,8 +34,9 @@
       </form>
 
       <form class="hidden" id="forgotForm">
-        <p class="reset-copy">Você receberá um link de redefinição no e-mail administrativo cadastrado.</p>
-        <input id="forgotEmail" name="email" type="hidden">
+        <p class="reset-copy">Digite o e-mail cadastrado para receber o link de redefinição.</p>
+        <label for="forgotEmail">E-mail</label>
+        <input id="forgotEmail" name="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
 
         <button class="btn btn-primary" id="forgotBtn" type="submit">Enviar link</button>
         <span class="form-msg" id="forgotMsg"></span>
@@ -50,6 +52,22 @@
 
         <button class="btn btn-primary" id="resetBtn" type="submit">Salvar nova senha</button>
         <span class="form-msg" id="resetMsg"></span>
+      </form>
+
+      <form class="hidden" id="inviteAcceptForm">
+        <p class="reset-copy" id="inviteAcceptCopy">Crie sua senha para acessar o painel.</p>
+
+        <label for="inviteName">Nome</label>
+        <input id="inviteName" name="name" type="text" autocomplete="name" placeholder="Seu nome" required>
+
+        <label for="invitePassword">Senha</label>
+        <input id="invitePassword" name="password" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" required>
+
+        <label for="invitePasswordConfirm">Confirmar senha</label>
+        <input id="invitePasswordConfirm" name="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repita a senha" required>
+
+        <button class="btn btn-primary" id="inviteAcceptBtn" type="submit">Criar acesso</button>
+        <span class="form-msg" id="inviteAcceptMsg"></span>
       </form>
     </div>
   </section>
@@ -68,6 +86,7 @@
       </div>
 
       <div class="top-actions">
+        <span class="user-pill" id="currentUserLabel"></span>
         <a class="btn btn-ghost" href="/" target="_blank" rel="noopener">Ver site</a>
         <button class="btn btn-ghost" id="logoutBtn" type="button">Sair</button>
       </div>
@@ -76,6 +95,8 @@
     <nav class="tabs" aria-label="Seções do admin">
       <button class="tab active" data-view="albumsView" type="button">Portfólios</button>
       <button class="tab" data-view="likesView" type="button">Curtidas</button>
+      <button class="tab" data-view="usersView" type="button">Usuários</button>
+      <button class="tab" data-view="auditView" type="button">Auditoria</button>
     </nav>
 
     <main class="admin-main">
@@ -110,6 +131,7 @@
             <div class="content-actions">
               <a class="btn btn-ghost disabled" id="viewAlbumBtn" href="#" target="_blank" rel="noopener">Abrir álbum</a>
               <button class="btn btn-ghost" id="clearCacheBtn" type="button" disabled>Limpar cache</button>
+              <button class="btn btn-danger" id="deleteAlbumBtn" type="button" disabled>Apagar álbum</button>
             </div>
           </div>
 
@@ -158,11 +180,63 @@
 
         <div class="liked-grid" id="likedGrid"></div>
       </section>
+
+      <section class="view hidden" id="usersView">
+        <div class="content-head likes-head">
+          <div>
+            <span class="eyebrow">Acessos</span>
+            <h1>Usuários</h1>
+            <p>Convide pessoas para acessar o painel e acompanhe os convites pendentes.</p>
+          </div>
+          <button class="btn btn-primary" id="refreshUsersBtn" type="button">Atualizar usuários</button>
+        </div>
+
+        <section class="admin-card-panel">
+          <h2>Convidar pessoa</h2>
+          <p>Ela receberá um e-mail para criar a própria senha de acesso.</p>
+          <div class="invite-row">
+            <input id="inviteEmail" type="email" placeholder="email@exemplo.com">
+            <select id="inviteRole" aria-label="Tipo de acesso">
+              <option value="editor">Editor</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <button class="btn btn-primary" id="inviteBtn" type="button">Enviar convite</button>
+          </div>
+          <span class="form-msg" id="inviteMsg"></span>
+        </section>
+
+        <div class="admin-lists">
+          <section class="admin-card-panel">
+            <h2>Usuários ativos</h2>
+            <div class="admin-list" id="usersList"></div>
+          </section>
+
+          <section class="admin-card-panel">
+            <h2>Convites enviados</h2>
+            <div class="admin-list" id="invitesList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view hidden" id="auditView">
+        <div class="content-head likes-head">
+          <div>
+            <span class="eyebrow">Registro</span>
+            <h1>Auditoria</h1>
+            <p>Logs das atividades feitas por cada pessoa com acesso ao admin.</p>
+          </div>
+          <button class="btn btn-primary" id="refreshAuditBtn" type="button">Atualizar logs</button>
+        </div>
+
+        <div class="admin-card-panel">
+          <div class="admin-list audit-list" id="auditList"></div>
+        </div>
+      </section>
     </main>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/admin/admin.js?v=20260602-05"></script>
+  <script src="/admin/admin.js?v=20260602-06"></script>
 </body>
 </html>

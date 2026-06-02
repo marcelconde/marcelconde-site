@@ -12,6 +12,7 @@ const state = {
   likesByIndex: {},
   likesByAsset: {},
   coverPublicId: "",
+  currentUser: null,
   loading: false,
 };
 
@@ -36,6 +37,13 @@ const resetPassword = $("#resetPassword");
 const resetPasswordConfirm = $("#resetPasswordConfirm");
 const resetBtn = $("#resetBtn");
 const resetMsg = $("#resetMsg");
+const inviteAcceptForm = $("#inviteAcceptForm");
+const inviteAcceptCopy = $("#inviteAcceptCopy");
+const inviteName = $("#inviteName");
+const invitePassword = $("#invitePassword");
+const invitePasswordConfirm = $("#invitePasswordConfirm");
+const inviteAcceptBtn = $("#inviteAcceptBtn");
+const inviteAcceptMsg = $("#inviteAcceptMsg");
 const logoutBtn = $("#logoutBtn");
 const albumList = $("#albumList");
 const albumTitle = $("#albumTitle");
@@ -52,8 +60,17 @@ const singleDisplayName = $("#singleDisplayName");
 const newAlbumName = $("#newAlbumName");
 const viewAlbumBtn = $("#viewAlbumBtn");
 const clearCacheBtn = $("#clearCacheBtn");
+const deleteAlbumBtn = $("#deleteAlbumBtn");
 const toastEl = $("#toast");
 const likedGrid = $("#likedGrid");
+const currentUserLabel = $("#currentUserLabel");
+const inviteEmail = $("#inviteEmail");
+const inviteRole = $("#inviteRole");
+const inviteBtn = $("#inviteBtn");
+const inviteMsg = $("#inviteMsg");
+const usersList = $("#usersList");
+const invitesList = $("#invitesList");
+const auditList = $("#auditList");
 
 function getToken() {
   return sessionStorage.getItem(CONFIG.tokenKey) || "";
@@ -109,6 +126,19 @@ function safeAlbumName(value) {
     .replace(/\//g, "-")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function formatDate(value) {
+  if (!value) return "sem data";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "sem data";
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 async function workerFetch(path, options = {}) {
@@ -181,20 +211,24 @@ async function getJson(path, options = {}) {
 }
 
 function showLogin(message = "") {
+  state.currentUser = null;
+  currentUserLabel.textContent = "";
   adminShell.classList.add("hidden");
   loginScreen.classList.remove("hidden");
   loginForm.classList.remove("hidden");
   forgotForm.classList.add("hidden");
   resetForm.classList.add("hidden");
+  inviteAcceptForm.classList.add("hidden");
   loginMsg.textContent = message;
-  loginEmail.value = CONFIG.adminEmail;
+  loginEmail.value = localStorage.getItem("mc_admin_email") || "";
   loginPassword.value = "";
-  loginPassword.focus();
+  (loginEmail.value ? loginPassword : loginEmail).focus();
 }
 
 function showAdmin() {
   loginScreen.classList.add("hidden");
   adminShell.classList.remove("hidden");
+  currentUserLabel.textContent = state.currentUser?.email || "";
 }
 
 async function validateSession() {
@@ -203,6 +237,8 @@ async function validateSession() {
     clearToken();
     return false;
   }
+  const data = await res.json().catch(() => ({}));
+  state.currentUser = data.user || null;
   return true;
 }
 
@@ -224,6 +260,8 @@ loginForm.addEventListener("submit", async (event) => {
       loginPassword.focus();
       return;
     }
+    localStorage.setItem("mc_admin_email", email);
+    state.currentUser = data.user || null;
     setToken(data.token);
     showAdmin();
     await loadAlbums(true);
@@ -245,10 +283,11 @@ togglePassword.addEventListener("click", () => {
 forgotLink.addEventListener("click", () => {
   loginForm.classList.add("hidden");
   resetForm.classList.add("hidden");
+  inviteAcceptForm.classList.add("hidden");
   forgotForm.classList.remove("hidden");
-  forgotEmail.value = CONFIG.adminEmail;
+  forgotEmail.value = loginEmail.value || localStorage.getItem("mc_admin_email") || "";
   forgotMsg.textContent = "";
-  forgotBtn.focus();
+  (forgotEmail.value ? forgotBtn : forgotEmail).focus();
 });
 
 backToLogin.addEventListener("click", () => showLogin());
@@ -270,12 +309,9 @@ forgotForm.addEventListener("submit", async (event) => {
       forgotMsg.classList.remove("success");
       return;
     }
-    if (!data.emailQueued) {
-      forgotMsg.textContent = "Esse e-mail não é o e-mail admin configurado no Worker.";
-      forgotMsg.classList.remove("success");
-      return;
-    }
-    forgotMsg.textContent = "Link de redefinição enviado para o seu e-mail.";
+    forgotMsg.textContent = data.emailQueued
+      ? "Link de redefinição enviado para o seu e-mail."
+      : "Se esse e-mail existir no admin, você receberá o link em breve.";
     forgotMsg.classList.add("success");
   } catch (err) {
     forgotMsg.textContent = "Erro ao enviar. Tente novamente.";
@@ -338,6 +374,8 @@ document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.add("active");
     document.getElementById(tab.dataset.view).classList.remove("hidden");
     if (tab.dataset.view === "likesView") await loadLikesOverview();
+    if (tab.dataset.view === "usersView") await loadUsersView();
+    if (tab.dataset.view === "auditView") await loadAuditLogs();
   });
 });
 
@@ -407,6 +445,7 @@ async function selectAlbum(path) {
   emptyState.classList.add("hidden");
   uploadBtn.disabled = !fileInput.files.length;
   clearCacheBtn.disabled = false;
+  deleteAlbumBtn.disabled = !path || path === "portfolio";
   viewAlbumBtn.classList.remove("disabled");
   viewAlbumBtn.href = `/categoria.html?slug=${encodeURIComponent(state.selectedSlug)}`;
 
@@ -528,6 +567,45 @@ clearCacheBtn.addEventListener("click", async () => {
     clearCacheBtn.disabled = false;
   }
 });
+
+deleteAlbumBtn.addEventListener("click", deleteSelectedAlbum);
+
+async function deleteSelectedAlbum() {
+  if (!state.selectedPath || state.selectedPath === "portfolio") return;
+
+  const name = albumName(state.selectedPath);
+  const typed = prompt(
+    `Isso vai apagar definitivamente o álbum "${name}", todas as fotos dentro dele e subálbuns.\n\nDigite exatamente ${name} para confirmar:`
+  );
+  if (typed !== name) {
+    if (typed !== null) showToast("Nome diferente. Álbum não apagado.");
+    return;
+  }
+
+  deleteAlbumBtn.disabled = true;
+  deleteAlbumBtn.textContent = "Apagando...";
+
+  try {
+    const res = await workerFetch("/admin/delete-album", {
+      method: "POST",
+      body: JSON.stringify({ path: state.selectedPath }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Falha ao apagar álbum.");
+
+    showToast(`Álbum apagado. ${data.images || 0} foto(s) removida(s).`);
+    state.selectedPath = "";
+    state.selectedSlug = "";
+    state.images = [];
+    photoGrid.innerHTML = "";
+    await loadAlbums(true);
+  } catch (err) {
+    showToast(err.message || "Erro ao apagar álbum.");
+  } finally {
+    deleteAlbumBtn.disabled = !state.selectedPath;
+    deleteAlbumBtn.textContent = "Apagar álbum";
+  }
+}
 
 fileInput.addEventListener("change", () => {
   uploadBtn.disabled = !state.selectedPath || !fileInput.files.length;
@@ -662,6 +740,11 @@ async function setCoverByPublicId(publicId, silent = false) {
 
   const data = await res.json().catch(() => ({}));
   state.coverPublicId = data.cover_public_id || publicId;
+  state.images = [
+    ...state.images.filter((image) => image.public_id === state.coverPublicId),
+    ...state.images.filter((image) => image.public_id !== state.coverPublicId),
+  ];
+  renderPhotos();
   if (!silent) showToast("Capa atualizada.");
 }
 
@@ -776,15 +859,234 @@ async function loadLikesOverview() {
 
 $("#refreshLikesBtn").addEventListener("click", loadLikesOverview);
 
+async function loadUsersView() {
+  usersList.innerHTML = `<div class="admin-row"><div><strong>Carregando usuários...</strong></div></div>`;
+  invitesList.innerHTML = `<div class="admin-row"><div><strong>Carregando convites...</strong></div></div>`;
+
+  try {
+    const [usersData, invitesData] = await Promise.all([
+      getJson("/auth/users"),
+      getJson("/auth/invites"),
+    ]);
+
+    renderUsers(usersData.users || []);
+    renderInvites(invitesData.invites || []);
+  } catch (err) {
+    usersList.innerHTML = `<div class="admin-row"><div><strong>Erro ao carregar usuários.</strong><small>Verifique se o Worker atualizado está publicado.</small></div></div>`;
+    invitesList.innerHTML = "";
+  }
+}
+
+function renderUsers(users) {
+  if (!users.length) {
+    usersList.innerHTML = `<div class="admin-row"><div><strong>Nenhum usuário cadastrado.</strong></div></div>`;
+    return;
+  }
+
+  const currentEmail = state.currentUser?.email || "";
+  usersList.innerHTML = users.map((user) => {
+    const email = escapeHtml(user.email || "");
+    const isCurrent = user.email === currentEmail;
+    const isMain = user.email === CONFIG.adminEmail;
+    return `
+      <div class="admin-row">
+        <div>
+          <strong>${escapeHtml(user.name || user.email)}</strong>
+          <small>${email}</small>
+          <small>Criado em ${escapeHtml(formatDate(user.createdAt))}</small>
+        </div>
+        <div>
+          <span class="role-badge">${escapeHtml(user.role || "editor")}</span>
+          ${(!isCurrent && !isMain) ? `<button class="btn btn-danger btn-small" data-delete-user="${email}" type="button">Remover</button>` : ""}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  usersList.querySelectorAll("[data-delete-user]").forEach((btn) => {
+    btn.addEventListener("click", () => deleteUser(btn.dataset.deleteUser));
+  });
+}
+
+function renderInvites(invites) {
+  if (!invites.length) {
+    invitesList.innerHTML = `<div class="admin-row"><div><strong>Nenhum convite enviado.</strong></div></div>`;
+    return;
+  }
+
+  invitesList.innerHTML = invites.map((invite) => {
+    const status = invite.usedAt ? "Aceito" : invite.expired ? "Expirado" : "Pendente";
+    const statusClass = invite.usedAt ? "used" : invite.expired ? "expired" : "";
+    return `
+      <div class="admin-row">
+        <div>
+          <strong>${escapeHtml(invite.email)}</strong>
+          <small>${escapeHtml(invite.role || "editor")} · enviado em ${escapeHtml(formatDate(invite.createdAt))}</small>
+          <small>Expira em ${escapeHtml(formatDate(invite.expiresAt))}</small>
+        </div>
+        <span class="status-badge ${statusClass}">${status}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+inviteBtn?.addEventListener("click", async () => {
+  const email = inviteEmail.value.trim();
+  const role = inviteRole.value;
+  if (!email) {
+    inviteMsg.textContent = "Digite um e-mail.";
+    inviteMsg.classList.remove("success");
+    return;
+  }
+
+  inviteBtn.disabled = true;
+  inviteBtn.textContent = "Enviando...";
+  inviteMsg.textContent = "";
+  inviteMsg.classList.remove("success");
+
+  try {
+    const res = await workerFetch("/auth/invite", {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Falha ao enviar convite.");
+
+    inviteEmail.value = "";
+    inviteMsg.textContent = "Convite enviado por e-mail.";
+    inviteMsg.classList.add("success");
+    await loadUsersView();
+  } catch (err) {
+    inviteMsg.textContent = err.message || "Erro ao enviar convite.";
+    inviteMsg.classList.remove("success");
+  } finally {
+    inviteBtn.disabled = false;
+    inviteBtn.textContent = "Enviar convite";
+  }
+});
+
+async function deleteUser(email) {
+  if (!email) return;
+  const ok = confirm(`Remover o acesso de ${email}?`);
+  if (!ok) return;
+
+  try {
+    const res = await workerFetch("/auth/delete-user", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Falha ao remover usuário.");
+    showToast("Usuário removido.");
+    await loadUsersView();
+  } catch (err) {
+    showToast(err.message || "Erro ao remover usuário.");
+  }
+}
+
+async function loadAuditLogs() {
+  auditList.innerHTML = `<div class="admin-row"><div><strong>Carregando logs...</strong></div></div>`;
+
+  try {
+    const data = await getJson("/auth/audit-logs?limit=100");
+    const logs = data.logs || [];
+    if (!logs.length) {
+      auditList.innerHTML = `<div class="admin-row"><div><strong>Nenhum log registrado ainda.</strong></div></div>`;
+      return;
+    }
+
+    auditList.innerHTML = logs.map((log) => `
+      <div class="admin-row">
+        <div>
+          <span class="audit-action">${escapeHtml(log.action || "acao")}</span>
+          <small>${escapeHtml(formatDate(log.createdAt))}</small>
+        </div>
+        <div>
+          <strong>${escapeHtml(log.userName || log.userEmail || "Sistema")}</strong>
+          <small>${escapeHtml(log.userEmail || "")}</small>
+          <code>${escapeHtml(JSON.stringify(log.details || {}))}</code>
+        </div>
+      </div>
+    `).join("");
+  } catch (err) {
+    auditList.innerHTML = `<div class="admin-row"><div><strong>Erro ao carregar auditoria.</strong><small>Verifique se o Worker atualizado está publicado.</small></div></div>`;
+  }
+}
+
+$("#refreshUsersBtn")?.addEventListener("click", loadUsersView);
+$("#refreshAuditBtn")?.addEventListener("click", loadAuditLogs);
+
+async function showInviteAccept(token) {
+  adminShell.classList.add("hidden");
+  loginScreen.classList.remove("hidden");
+  loginForm.classList.add("hidden");
+  forgotForm.classList.add("hidden");
+  resetForm.classList.add("hidden");
+  inviteAcceptForm.classList.remove("hidden");
+  inviteAcceptMsg.textContent = "";
+
+  try {
+    const res = await fetch(`${CONFIG.workerUrl}/auth/invite?token=${encodeURIComponent(token)}`, { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Convite inválido.");
+    inviteAcceptCopy.textContent = `Convite para ${data.email}. Crie sua senha para acessar o painel.`;
+    inviteName.focus();
+  } catch (err) {
+    inviteAcceptCopy.textContent = "Convite inválido ou expirado.";
+    inviteAcceptMsg.textContent = err.message || "Solicite um novo convite.";
+  }
+}
+
+inviteAcceptForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("invite") || "";
+  const name = inviteName.value.trim();
+  const password = invitePassword.value;
+  const passwordConfirm = invitePasswordConfirm.value;
+
+  inviteAcceptMsg.classList.remove("success");
+  if (password !== passwordConfirm) {
+    inviteAcceptMsg.textContent = "As senhas não coincidem.";
+    return;
+  }
+  if (password.length < 6) {
+    inviteAcceptMsg.textContent = "A senha precisa ter pelo menos 6 caracteres.";
+    return;
+  }
+
+  inviteAcceptBtn.disabled = true;
+  inviteAcceptBtn.textContent = "Criando...";
+  inviteAcceptMsg.textContent = "";
+
+  try {
+    const { res, data } = await postJson("/auth/invite/accept", { token, name, password });
+    if (!res.ok) throw new Error(data.error || "Falha ao aceitar convite.");
+    inviteAcceptMsg.classList.add("success");
+    inviteAcceptMsg.textContent = "Acesso criado. Faça login para continuar.";
+    window.history.replaceState({}, "", "/admin/");
+    setTimeout(() => showLogin(), 1400);
+  } catch (err) {
+    inviteAcceptMsg.textContent = err.message || "Erro ao criar acesso.";
+  } finally {
+    inviteAcceptBtn.disabled = false;
+    inviteAcceptBtn.textContent = "Criar acesso";
+  }
+});
+
 (async function init() {
   const params = new URLSearchParams(window.location.search);
+  if (params.get("invite")) {
+    await showInviteAccept(params.get("invite"));
+    return;
+  }
+
   if (params.get("reset")) {
-    loginEmail.value = CONFIG.adminEmail;
-    forgotEmail.value = CONFIG.adminEmail;
     adminShell.classList.add("hidden");
     loginScreen.classList.remove("hidden");
     loginForm.classList.add("hidden");
     forgotForm.classList.add("hidden");
+    inviteAcceptForm.classList.add("hidden");
     resetForm.classList.remove("hidden");
     resetPassword.focus();
     return;
@@ -792,8 +1094,6 @@ $("#refreshLikesBtn").addEventListener("click", loadLikesOverview);
 
   const token = getToken();
   if (!token) {
-    loginEmail.value = CONFIG.adminEmail;
-    forgotEmail.value = CONFIG.adminEmail;
     showLogin();
     return;
   }
