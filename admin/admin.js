@@ -953,8 +953,10 @@ inviteBtn?.addEventListener("click", async () => {
     if (!res.ok) throw new Error(data.error || "Falha ao enviar convite.");
 
     inviteEmail.value = "";
-    inviteMsg.textContent = "Convite enviado por e-mail.";
-    inviteMsg.classList.add("success");
+    inviteMsg.textContent = data.emailQueued
+      ? "Convite enviado por e-mail."
+      : `Convite criado, mas o e-mail não saiu. Envie este link manualmente: ${data.inviteUrl || ""}`;
+    inviteMsg.classList.toggle("success", !!data.emailQueued);
     await loadUsersView();
   } catch (err) {
     inviteMsg.textContent = err.message || "Erro ao enviar convite.";

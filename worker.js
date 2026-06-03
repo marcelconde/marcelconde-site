@@ -624,8 +624,7 @@ async function sendInviteEmail(env, email, token, inviterName = "Marcel Conde") 
     throw new Error("RESEND_API_KEY não configurada no Worker.");
   }
 
-  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
-  const inviteUrl = `${origin}/admin/?invite=${encodeURIComponent(token)}`;
+  const inviteUrl = adminInviteUrl(env, token);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -652,6 +651,11 @@ async function sendInviteEmail(env, email, token, inviterName = "Marcel Conde") 
   } catch {
     return { raw: text };
   }
+}
+
+function adminInviteUrl(env, token) {
+  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+  return `${origin}/admin/?invite=${encodeURIComponent(token)}`;
 }
 
 export default {
@@ -848,37 +852,68 @@ export default {
     }
 
     if (url.pathname === "/auth/invite" && request.method === "POST") {
-      const { error, user } = await requireSuperAdmin(request, env);
-      if (error) return error;
+      try {
+        const { error, user } = await requireSuperAdmin(request, env);
+        if (error) return error;
 
-      const body = await readJson(request);
-      const email = normalizeEmail(body.email || "");
-      const role = normalizeRole(body.role || "editor");
-      if (!email) return errorJson("E-mail obrigatório.", 400);
-      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+        const body = await readJson(request);
+        const email = normalizeEmail(body.email || "");
+        const role = normalizeRole(body.role || "editor");
+        if (!email) return errorJson("E-mail obrigatório.", 400);
+        if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
 
-      const existing = await getAdminUser(env, email);
-      if (existing?.passwordHash) return errorJson("Este e-mail já possui acesso.", 409);
+        const existing = await getAdminUser(env, email);
+        if (existing?.passwordHash) return errorJson("Este e-mail já possui acesso.", 409);
 
-      const token = randomToken(36);
-      const invite = {
-        token,
-        email,
-        role,
-        invitedBy: user.email,
-        createdAt: new Date().toISOString(),
-        expiresAt: Date.now() + 1000 * 60 * 60 * 48,
-      };
+        const token = randomToken(36);
+        const invite = {
+          token,
+          email,
+          role,
+          invitedBy: user.email,
+          createdAt: new Date().toISOString(),
+          expiresAt: Date.now() + 1000 * 60 * 60 * 48,
+        };
 
-      await writeKvJson(env, `admin_invite:${token}`, invite, { expirationTtl: 60 * 60 * 48 });
-      const inviteIndex = await readKvJson(env, inviteIndexKey(), []);
-      inviteIndex.unshift(token);
-      await writeKvJson(env, inviteIndexKey(), [...new Set(inviteIndex)].slice(0, 100));
+        await writeKvJson(env, `admin_invite:${token}`, invite, { expirationTtl: 60 * 60 * 48 });
+        const inviteIndex = await readKvJson(env, inviteIndexKey(), []);
+        inviteIndex.unshift(token);
+        await writeKvJson(env, inviteIndexKey(), [...new Set(inviteIndex)].slice(0, 100));
 
-      const resend = await sendInviteEmail(env, email, token, user.name || "Marcel Conde");
-      await appendAuditLog(env, request, user, "enviar_convite", "invites", { email, role });
+        let resend = null;
+        let emailQueued = false;
+        let emailError = "";
 
-      return json({ ok: true, invite: { email, role, expiresAt: invite.expiresAt }, resendId: resend?.id || null }, 201);
+        try {
+          resend = await sendInviteEmail(env, email, token, user.name || "Marcel Conde");
+          emailQueued = true;
+        } catch (err) {
+          emailError = String(err?.message || err || "unknown");
+          console.error("Invite email error:", err);
+        }
+
+        const inviteUrl = adminInviteUrl(env, token);
+        await appendAuditLog(env, request, user, "enviar_convite", "invites", {
+          email,
+          role,
+          emailQueued,
+          emailError,
+        });
+
+        return json({
+          ok: true,
+          invite: { email, role, expiresAt: invite.expiresAt },
+          inviteUrl,
+          emailQueued,
+          emailError,
+          resendId: resend?.id || null,
+        }, emailQueued ? 201 : 202);
+      } catch (err) {
+        console.error("Invite route error:", err);
+        return errorJson("Falha ao criar convite.", 500, {
+          detail: String(err?.message || err || "unknown"),
+        });
+      }
     }
 
     if (url.pathname === "/auth/invites" && request.method === "GET") {
