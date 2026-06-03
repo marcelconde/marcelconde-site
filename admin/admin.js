@@ -668,6 +668,42 @@ function setQueueProgress(fileName, percent) {
   if (row) row.querySelector(".queue-bar span").style.width = `${percent}%`;
 }
 
+function uploadToCloudinary(signature, file, onProgress) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("api_key", signature.apiKey);
+  form.append("signature", signature.signature);
+  Object.entries(signature.params).forEach(([key, value]) => form.append(key, value));
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", signature.uploadUrl, true);
+    xhr.timeout = 180000;
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const percent = 35 + Math.round((event.loaded / event.total) * 57);
+      onProgress(Math.min(percent, 92));
+    };
+
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText || "{}"); } catch {}
+
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(data?.error?.message || `Upload falhou no Cloudinary (${xhr.status}).`));
+        return;
+      }
+
+      resolve(data);
+    };
+
+    xhr.onerror = () => reject(new Error("Falha de conexão ao enviar para o Cloudinary."));
+    xhr.ontimeout = () => reject(new Error("O upload demorou demais e foi interrompido. Tente uma foto menor ou uma conexão mais estável."));
+    xhr.send(form);
+  });
+}
+
 uploadBtn.addEventListener("click", async () => {
   const files = [...fileInput.files];
   if (!state.selectedPath || !files.length) return;
@@ -689,16 +725,10 @@ uploadBtn.addEventListener("click", async () => {
         }),
       });
 
-      const form = new FormData();
-      form.append("file", file);
-      form.append("api_key", signature.apiKey);
-      form.append("signature", signature.signature);
-      Object.entries(signature.params).forEach(([key, value]) => form.append(key, value));
-
       setQueueProgress(file.name, 35);
-      const uploadRes = await fetch(signature.uploadUrl, { method: "POST", body: form });
-      if (!uploadRes.ok) throw new Error(`Upload falhou: ${file.name}`);
-      const uploaded = await uploadRes.json().catch(() => ({}));
+      const uploaded = await uploadToCloudinary(signature, file, (percent) => {
+        setQueueProgress(file.name, percent);
+      });
 
       if (firstAsCover.checked && index === 0 && uploaded.public_id) {
         await setCoverByPublicId(uploaded.public_id, true);
