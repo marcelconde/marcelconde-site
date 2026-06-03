@@ -225,10 +225,28 @@ function showLogin(message = "") {
   (loginEmail.value ? loginPassword : loginEmail).focus();
 }
 
+function isAdminUser() {
+  const userEmail = String(state.currentUser?.email || "").toLowerCase();
+  return state.currentUser?.role === "admin" || userEmail === CONFIG.adminEmail.toLowerCase();
+}
+
+function applyRoleVisibility() {
+  const canManageAccess = isAdminUser();
+  document.querySelectorAll('[data-admin-only="true"]').forEach((element) => {
+    element.classList.toggle("hidden", !canManageAccess);
+  });
+
+  const activeRestrictedTab = document.querySelector('.tab.active[data-admin-only="true"]');
+  if (activeRestrictedTab && !canManageAccess) {
+    document.querySelector('.tab[data-view="albumsView"]')?.click();
+  }
+}
+
 function showAdmin() {
   loginScreen.classList.add("hidden");
   adminShell.classList.remove("hidden");
   currentUserLabel.textContent = state.currentUser?.email || "";
+  applyRoleVisibility();
 }
 
 async function validateSession() {
@@ -369,6 +387,8 @@ logoutBtn.addEventListener("click", async () => {
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", async () => {
+    if (tab.dataset.adminOnly === "true" && !isAdminUser()) return;
+
     document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
     document.querySelectorAll(".view").forEach((view) => view.classList.add("hidden"));
     tab.classList.add("active");

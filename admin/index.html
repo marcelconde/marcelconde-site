@@ -95,8 +95,8 @@
     <nav class="tabs" aria-label="Seções do admin">
       <button class="tab active" data-view="albumsView" type="button">Portfólios</button>
       <button class="tab" data-view="likesView" type="button">Curtidas</button>
-      <button class="tab" data-view="usersView" type="button">Usuários</button>
-      <button class="tab" data-view="auditView" type="button">Auditoria</button>
+      <button class="tab" data-view="usersView" data-admin-only="true" type="button">Usuários</button>
+      <button class="tab" data-view="auditView" data-admin-only="true" type="button">Auditoria</button>
     </nav>
 
     <main class="admin-main">
@@ -181,7 +181,7 @@
         <div class="liked-grid" id="likedGrid"></div>
       </section>
 
-      <section class="view hidden" id="usersView">
+      <section class="view hidden" id="usersView" data-admin-only="true">
         <div class="content-head likes-head">
           <div>
             <span class="eyebrow">Acessos</span>
@@ -218,7 +218,7 @@
         </div>
       </section>
 
-      <section class="view hidden" id="auditView">
+      <section class="view hidden" id="auditView" data-admin-only="true">
         <div class="content-head likes-head">
           <div>
             <span class="eyebrow">Registro</span>
@@ -237,6 +237,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/admin/admin.js?v=20260602-07"></script>
+  <script src="/admin/admin.js?v=20260602-08"></script>
 </body>
 </html>
