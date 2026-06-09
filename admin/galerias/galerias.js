@@ -1,6 +1,8 @@
 const CONFIG = {
   workerUrl: "https://api.marcelconde.com.br",
   tokenKey: "mc_admin_token",
+  cloudinaryUploadLimit: 10 * 1024 * 1024,
+  cloudinaryUploadTarget: 9.5 * 1024 * 1024,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -89,9 +91,105 @@ function fileBaseName(fileName) {
     .trim() || "foto";
 }
 
+function jpgFileName(fileName) {
+  return `${fileBaseName(fileName)}.jpg`;
+}
+
+function formatFileSize(bytes = 0) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 function cloudUrl(src, transform) {
   if (!src || !src.includes("/upload/")) return src;
   return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${transform}/`);
+}
+
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Não foi possível ler esta imagem para otimizar o upload."));
+    };
+    img.src = url;
+  });
+}
+
+function canvasToBlob(canvas, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error("Não foi possível gerar uma versão otimizada da imagem."));
+        return;
+      }
+      resolve(blob);
+    }, "image/jpeg", quality);
+  });
+}
+
+async function compressImageFile(file, maxEdge, quality) {
+  const img = await loadImageFile(file);
+  const longestSide = Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height);
+  const scale = Math.min(1, maxEdge / longestSide);
+  const width = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
+  const height = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvasToBlob(canvas, quality);
+}
+
+async function preparePhotoForCloudinary(file, onStatus = () => {}) {
+  if (file.size <= CONFIG.cloudinaryUploadTarget) return file;
+  if (!file.type.startsWith("image/")) {
+    throw new Error(`${file.name} tem ${formatFileSize(file.size)} e passa do limite de 10 MB do Cloudinary.`);
+  }
+
+  onStatus(`Arquivo com ${formatFileSize(file.size)}. Otimizando para caber no limite de 10 MB...`);
+
+  const attempts = [
+    { maxEdge: 4200, quality: 0.88 },
+    { maxEdge: 3600, quality: 0.86 },
+    { maxEdge: 3200, quality: 0.84 },
+    { maxEdge: 2800, quality: 0.82 },
+    { maxEdge: 2400, quality: 0.8 },
+    { maxEdge: 2100, quality: 0.78 },
+    { maxEdge: 1800, quality: 0.76 },
+  ];
+
+  let bestBlob = null;
+  for (const attempt of attempts) {
+    const blob = await compressImageFile(file, attempt.maxEdge, attempt.quality);
+    bestBlob = blob;
+    if (blob.size <= CONFIG.cloudinaryUploadTarget) {
+      onStatus(`Reduzida para ${formatFileSize(blob.size)} antes do envio.`);
+      return new File([blob], jpgFileName(file.name), {
+        type: "image/jpeg",
+        lastModified: file.lastModified,
+      });
+    }
+  }
+
+  if (bestBlob && bestBlob.size <= CONFIG.cloudinaryUploadLimit) {
+    onStatus(`Reduzida para ${formatFileSize(bestBlob.size)} antes do envio.`);
+    return new File([bestBlob], jpgFileName(file.name), {
+      type: "image/jpeg",
+      lastModified: file.lastModified,
+    });
+  }
+
+  throw new Error(`${file.name} continua acima de 10 MB mesmo após otimização. Exporte em JPG menor ou use um plano maior no Cloudinary.`);
 }
 
 function formatPercent(value) {
@@ -472,7 +570,10 @@ function renderQueue() {
   uploadBtn.disabled = !state.selectedGallery || !fileInput.files.length;
   uploadQueue.innerHTML = [...fileInput.files].map((file) => `
     <div class="queue-row" data-file="${escapeHtml(file.name)}">
-      <span>${escapeHtml(file.name)}</span>
+      <div>
+        <span>${escapeHtml(file.name)}</span>
+        <small>${escapeHtml(formatFileSize(file.size))}${file.size > CONFIG.cloudinaryUploadTarget ? " · será otimizada antes do envio" : ""}</small>
+      </div>
       <div class="queue-bar"><span></span></div>
     </div>
   `).join("");
@@ -482,6 +583,13 @@ function setQueueProgress(fileName, percent) {
   const row = [...uploadQueue.querySelectorAll(".queue-row")]
     .find((item) => item.dataset.file === fileName);
   if (row) row.querySelector(".queue-bar span").style.width = `${percent}%`;
+}
+
+function setQueueNote(fileName, message) {
+  const row = [...uploadQueue.querySelectorAll(".queue-row")]
+    .find((item) => item.dataset.file === fileName);
+  const note = row?.querySelector("small");
+  if (note) note.textContent = message;
 }
 
 function uploadToCloudinary(signature, file, onProgress) {
@@ -523,6 +631,8 @@ uploadBtn.addEventListener("click", async () => {
   try {
     for (const [index, file] of files.entries()) {
       setQueueProgress(file.name, 12);
+      const uploadFile = await preparePhotoForCloudinary(file, (message) => setQueueNote(file.name, message));
+      setQueueProgress(file.name, 20);
       const signature = await getJson("/private/gallery/upload-signature", {
         method: "POST",
         body: JSON.stringify({
@@ -532,7 +642,7 @@ uploadBtn.addEventListener("click", async () => {
         }),
       });
       setQueueProgress(file.name, 35);
-      const uploaded = await uploadToCloudinary(signature, file, (percent) => setQueueProgress(file.name, percent));
+      const uploaded = await uploadToCloudinary(signature, uploadFile, (percent) => setQueueProgress(file.name, percent));
       await getJson("/private/gallery/register-image", {
         method: "POST",
         body: JSON.stringify({
@@ -540,7 +650,7 @@ uploadBtn.addEventListener("click", async () => {
           public_id: uploaded.public_id,
           url: uploaded.secure_url,
           display_name: uploaded.display_name || fileBaseName(file.name),
-          original_filename: uploaded.original_filename || file.name,
+          original_filename: file.name,
           width: uploaded.width,
           height: uploaded.height,
           format: uploaded.format,

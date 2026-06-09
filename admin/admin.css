@@ -566,6 +566,19 @@ select:focus {
   font-size: 0.86rem;
 }
 
+.queue-row span,
+.queue-row small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.queue-row small {
+  margin-top: 3px;
+  color: rgba(240,236,227,0.48);
+  font-size: 0.75rem;
+}
+
 .queue-bar {
   height: 6px;
   background: rgba(255,255,255,0.08);
