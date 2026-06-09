@@ -385,7 +385,7 @@ logoutBtn.addEventListener("click", async () => {
   showLogin();
 });
 
-document.querySelectorAll(".tab").forEach((tab) => {
+document.querySelectorAll(".tab[data-view]").forEach((tab) => {
   tab.addEventListener("click", async () => {
     if (tab.dataset.adminOnly === "true" && !isAdminUser()) return;
 

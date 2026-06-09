@@ -108,6 +108,38 @@ function auditLogKey() {
   return "admin_audit_logs";
 }
 
+function privateClientsIndexKey() {
+  return "private_clients_index";
+}
+
+function privateClientKey(id) {
+  return `private_client:${id}`;
+}
+
+function privateGalleriesIndexKey() {
+  return "private_galleries_index";
+}
+
+function privateGalleryKey(id) {
+  return `private_gallery:${id}`;
+}
+
+function privateGalleryBySlugKey(slug) {
+  return `private_gallery_slug:${slug}`;
+}
+
+function privateGalleryImagesKey(id) {
+  return `private_gallery_images:${id}`;
+}
+
+function privateGallerySelectionKey(id) {
+  return `private_gallery_selection:${id}`;
+}
+
+function privateGalleryEventsKey(id) {
+  return `private_gallery_events:${id}`;
+}
+
 function normalizeRole(role = "") {
   return role === "admin" ? "admin" : "editor";
 }
@@ -276,6 +308,176 @@ function cleanDisplayName(name = "") {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 240);
+}
+
+function slugify(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || `galeria-${Date.now()}`;
+}
+
+function cleanGalleryText(value = "", max = 1000) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim()
+    .slice(0, max);
+}
+
+function normalizeWatermark(input = {}) {
+  return {
+    enabled: input.enabled === true,
+    logoUrl: String(input.logoUrl || "").trim(),
+    opacity: Math.min(Math.max(Number(input.opacity ?? 0.28), 0.05), 0.85),
+    size: Math.min(Math.max(Number(input.size ?? 180), 80), 520),
+    position: ["center", "top-left", "top-right", "bottom-left", "bottom-right"].includes(input.position)
+      ? input.position
+      : "center",
+  };
+}
+
+function publicPrivateGallery(gallery = {}, images = [], selection = []) {
+  const selected = new Set(selection);
+  return {
+    id: gallery.id,
+    slug: gallery.slug,
+    title: gallery.title,
+    subtitle: gallery.subtitle || "",
+    message: gallery.message || "",
+    coverUrl: gallery.coverUrl || images[0]?.url || null,
+    selectionLimit: Number(gallery.selectionLimit || 0),
+    status: gallery.status || "selection",
+    allowDownload: gallery.allowDownload === true,
+    watermark: normalizeWatermark(gallery.watermark || {}),
+    totalImages: images.length,
+    totalSelected: selection.length,
+    selectedPublicIds: [...selected],
+  };
+}
+
+function thumbnailImage(image = {}) {
+  return {
+    id: image.id || image.public_id,
+    public_id: image.public_id,
+    url: image.url,
+    display_name: image.display_name || image.filename || "",
+    filename: image.filename || image.display_name || "",
+    width: image.width || null,
+    height: image.height || null,
+    format: image.format || "",
+    phase: image.phase || "selection",
+    createdAt: image.createdAt || null,
+  };
+}
+
+function csvEscape(value = "") {
+  const text = String(value ?? "");
+  if (/[",\n;]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+async function appendPrivateGalleryEvent(env, request, galleryId, action, details = {}, actor = {}) {
+  try {
+    if (!env.LIKES_KV || !galleryId) return;
+    const events = await readKvJson(env, privateGalleryEventsKey(galleryId), []);
+    events.unshift({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      action,
+      details,
+      actorEmail: actor.email || null,
+      actorName: actor.name || null,
+      createdAt: new Date().toISOString(),
+      ip: request.headers.get("CF-Connecting-IP") || "",
+      userAgent: request.headers.get("User-Agent") || "",
+    });
+    await writeKvJson(env, privateGalleryEventsKey(galleryId), events.slice(0, 500));
+  } catch (err) {
+    console.error("Private gallery event failed:", err);
+  }
+}
+
+async function listPrivateClients(env) {
+  const ids = await readKvJson(env, privateClientsIndexKey(), []);
+  const clients = await Promise.all(ids.map((id) => readKvJson(env, privateClientKey(id), null)));
+  return clients.filter(Boolean).sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+}
+
+async function savePrivateClient(env, input = {}) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const now = new Date().toISOString();
+  const id = String(input.id || `cli_${randomToken(9)}`).replace(/[^a-zA-Z0-9_-]/g, "");
+  const existing = await readKvJson(env, privateClientKey(id), {});
+  const client = {
+    ...existing,
+    id,
+    name: cleanDisplayName(input.name || existing.name || "Cliente"),
+    email: normalizeEmail(input.email || existing.email || ""),
+    phone: cleanDisplayName(input.phone || existing.phone || ""),
+    notes: cleanGalleryText(input.notes || existing.notes || "", 600),
+    createdAt: existing.createdAt || now,
+    updatedAt: now,
+  };
+  await writeKvJson(env, privateClientKey(id), client);
+  const index = await readKvJson(env, privateClientsIndexKey(), []);
+  await writeKvJson(env, privateClientsIndexKey(), [...new Set([id, ...index])]);
+  return client;
+}
+
+async function listPrivateGalleries(env) {
+  const ids = await readKvJson(env, privateGalleriesIndexKey(), []);
+  const galleries = await Promise.all(ids.map((id) => readKvJson(env, privateGalleryKey(id), null)));
+  return galleries.filter(Boolean).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+}
+
+async function savePrivateGallery(env, input = {}) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const now = new Date().toISOString();
+  const id = String(input.id || `gal_${randomToken(9)}`).replace(/[^a-zA-Z0-9_-]/g, "");
+  const existing = await readKvJson(env, privateGalleryKey(id), {});
+  const title = cleanDisplayName(input.title || existing.title || "Galeria privada");
+  const requestedSlug = slugify(input.slug || existing.slug || title);
+  const previousSlug = existing.slug || "";
+  let slug = requestedSlug;
+  const slugOwner = await readKvJson(env, privateGalleryBySlugKey(slug), null);
+  if (slugOwner && slugOwner !== id) slug = `${slug}-${randomToken(3).toLowerCase()}`;
+
+  const gallery = {
+    ...existing,
+    id,
+    clientId: String(input.clientId || existing.clientId || ""),
+    slug,
+    title,
+    subtitle: cleanGalleryText(input.subtitle || existing.subtitle || "", 180),
+    message: cleanGalleryText(input.message || existing.message || "", 1200),
+    selectionLimit: Math.max(0, Math.min(Number(input.selectionLimit ?? existing.selectionLimit ?? 15), 2000)),
+    status: ["selection", "editing", "final"].includes(input.status || existing.status)
+      ? (input.status || existing.status)
+      : "selection",
+    allowDownload: input.allowDownload === true || existing.allowDownload === true,
+    coverUrl: String(input.coverUrl || existing.coverUrl || ""),
+    coverPublicId: sanitizePublicId(input.coverPublicId || existing.coverPublicId || ""),
+    watermark: normalizeWatermark(input.watermark || existing.watermark || {}),
+    createdAt: existing.createdAt || now,
+    updatedAt: now,
+  };
+
+  await writeKvJson(env, privateGalleryKey(id), gallery);
+  await writeKvJson(env, privateGalleryBySlugKey(slug), id);
+  if (previousSlug && previousSlug !== slug) await env.LIKES_KV.delete(privateGalleryBySlugKey(previousSlug));
+
+  const index = await readKvJson(env, privateGalleriesIndexKey(), []);
+  await writeKvJson(env, privateGalleriesIndexKey(), [...new Set([id, ...index])]);
+  return gallery;
+}
+
+async function getPrivateGalleryBySlug(env, slug = "") {
+  const id = await readKvJson(env, privateGalleryBySlugKey(slugify(slug)), "");
+  if (!id) return null;
+  return readKvJson(env, privateGalleryKey(id), null);
 }
 
 function getAlbumSlugFromPath(path = "") {
@@ -666,6 +868,91 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders() });
     }
 
+    // ── GALERIAS PRIVADAS: ACESSO DO CLIENTE ─────────────────────
+
+    if (url.pathname === "/client-gallery" && request.method === "GET") {
+      const slug = slugify(url.searchParams.get("slug") || "");
+      const cursor = Math.max(0, Number(url.searchParams.get("cursor") || 0));
+      const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 60), 1), 120);
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      const images = await readKvJson(env, privateGalleryImagesKey(gallery.id), []);
+      const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      const page = images.slice(cursor, cursor + limit).map(thumbnailImage);
+
+      if (cursor === 0) {
+        ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, "abrir_galeria", { slug }));
+      }
+
+      return json({
+        gallery: publicPrivateGallery(gallery, images, selection),
+        images: page,
+        paging: {
+          cursor,
+          limit,
+          total: images.length,
+          nextCursor: cursor + page.length < images.length ? cursor + page.length : null,
+        },
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-gallery/favorite" && request.method === "POST") {
+      const body = await readJson(request);
+      const slug = slugify(body.slug || "");
+      const publicId = sanitizePublicId(body.publicId || body.public_id || "");
+      const selected = body.selected !== false;
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      if (!publicId) return errorJson("Foto inválida.", 400);
+
+      const images = await readKvJson(env, privateGalleryImagesKey(gallery.id), []);
+      if (!images.some((image) => image.public_id === publicId)) {
+        return errorJson("Foto não pertence a esta galeria.", 400);
+      }
+
+      const limit = Number(gallery.selectionLimit || 0);
+      const current = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      let next = current.filter((item) => item !== publicId);
+
+      if (selected) {
+        if (limit > 0 && next.length >= limit) {
+          return errorJson(`Limite de ${limit} fotos atingido.`, 409, {
+            limit,
+            selectedPublicIds: current,
+          });
+        }
+        next.push(publicId);
+      }
+
+      await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
+      await appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", { publicId });
+
+      return json({
+        ok: true,
+        selectedPublicIds: next,
+        totalSelected: next.length,
+        limit,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-gallery/complete" && request.method === "POST") {
+      const body = await readJson(request);
+      const slug = slugify(body.slug || "");
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      await appendPrivateGalleryEvent(env, request, gallery.id, "concluir_selecao", {
+        totalSelected: selection.length,
+        selectedPublicIds: selection,
+      });
+
+      return json({ ok: true, totalSelected: selection.length }, 200, { "Cache-Control": "no-store" });
+    }
+
     // ── AUTH ────────────────────────────────────────────────────
 
     if (url.pathname === "/auth/login" && request.method === "POST") {
@@ -822,6 +1109,199 @@ export default {
         service: "marcel-admin",
         user: publicUser(user),
         time: new Date().toISOString(),
+      });
+    }
+
+    if (url.pathname === "/private/clients" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      return json({ clients: await listPrivateClients(env) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/clients" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      const client = await savePrivateClient(env, body);
+      await appendAuditLog(env, request, user, body.id ? "editar_cliente_privado" : "criar_cliente_privado", "private_clients", { clientId: client.id, email: client.email });
+      return json({ client }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/galleries" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      const galleries = await listPrivateGalleries(env);
+      const clients = await listPrivateClients(env);
+      return json({ galleries, clients }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/galleries" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      const gallery = await savePrivateGallery(env, body);
+      await appendAuditLog(env, request, user, body.id ? "editar_galeria_privada" : "criar_galeria_privada", "private_galleries", { galleryId: gallery.id, slug: gallery.slug });
+      return json({ gallery }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/gallery" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      const id = String(url.searchParams.get("id") || "").trim();
+      if (!id) return errorJson("Missing id", 400);
+
+      const gallery = await readKvJson(env, privateGalleryKey(id), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const images = await readKvJson(env, privateGalleryImagesKey(id), []);
+      const selection = await readKvJson(env, privateGallerySelectionKey(id), []);
+      const events = await readKvJson(env, privateGalleryEventsKey(id), []);
+      return json({ gallery, images, selection, events: events.slice(0, 120) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/gallery/upload-signature" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const galleryId = String(body.galleryId || "").trim();
+      const displayName = cleanDisplayName(body.displayName || "");
+      const phase = body.phase === "final" ? "final" : "selection";
+      const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      const timestamp = Math.round(Date.now() / 1000);
+      const params = {
+        asset_folder: `clientes/${gallery.slug || gallery.id}/${phase === "final" ? "finais" : "selecao"}`,
+        display_name: displayName || "foto",
+        timestamp,
+        unique_filename: "true",
+        overwrite: "false",
+      };
+      const signature = await signCloudinaryParams(params, apiSecret);
+      await appendAuditLog(env, request, user, "preparar_upload_galeria_privada", "private_galleries", { galleryId, phase, displayName });
+
+      return json({
+        cloudName,
+        apiKey,
+        uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        params,
+        signature,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/gallery/register-image" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      const galleryId = String(body.galleryId || "").trim();
+      const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      const publicId = sanitizePublicId(body.public_id || body.publicId || "");
+      const urlValue = String(body.url || body.secure_url || "").trim();
+      if (!publicId || !urlValue) return errorJson("Foto inválida.", 400);
+
+      const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
+      const image = {
+        id: publicId,
+        public_id: publicId,
+        url: urlValue,
+        display_name: cleanDisplayName(body.display_name || body.displayName || body.original_filename || "foto"),
+        filename: cleanDisplayName(body.original_filename || body.filename || body.display_name || ""),
+        width: body.width || null,
+        height: body.height || null,
+        format: body.format || "",
+        phase: body.phase === "final" ? "final" : "selection",
+        createdAt: new Date().toISOString(),
+      };
+
+      const next = [image, ...images.filter((item) => item.public_id !== publicId)];
+      await writeKvJson(env, privateGalleryImagesKey(galleryId), next);
+
+      if (body.useAsCover === true || !gallery.coverUrl) {
+        gallery.coverUrl = image.url;
+        gallery.coverPublicId = image.public_id;
+        gallery.updatedAt = new Date().toISOString();
+        await writeKvJson(env, privateGalleryKey(galleryId), gallery);
+      }
+
+      await appendAuditLog(env, request, user, "registrar_foto_galeria_privada", "private_galleries", { galleryId, publicId });
+      await appendPrivateGalleryEvent(env, request, galleryId, "admin_enviou_foto", { publicId }, user);
+
+      return json({ image, gallery }, 201, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/gallery/delete-image" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const galleryId = String(body.galleryId || "").trim();
+      const publicId = sanitizePublicId(body.publicId || body.public_id || "");
+      if (!galleryId || !publicId) return errorJson("Dados inválidos.", 400);
+
+      const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      await destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId);
+      const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
+      await writeKvJson(env, privateGalleryImagesKey(galleryId), images.filter((image) => image.public_id !== publicId));
+      const selection = await readKvJson(env, privateGallerySelectionKey(galleryId), []);
+      await writeKvJson(env, privateGallerySelectionKey(galleryId), selection.filter((item) => item !== publicId));
+
+      if (gallery.coverPublicId === publicId) {
+        const remaining = images.filter((image) => image.public_id !== publicId);
+        gallery.coverPublicId = remaining[0]?.public_id || "";
+        gallery.coverUrl = remaining[0]?.url || "";
+        gallery.updatedAt = new Date().toISOString();
+        await writeKvJson(env, privateGalleryKey(galleryId), gallery);
+      }
+
+      await appendAuditLog(env, request, user, "excluir_foto_galeria_privada", "private_galleries", { galleryId, publicId });
+      return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/gallery/export-selected" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const id = String(url.searchParams.get("id") || "").trim();
+      const gallery = await readKvJson(env, privateGalleryKey(id), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      const images = await readKvJson(env, privateGalleryImagesKey(id), []);
+      const selected = new Set(await readKvJson(env, privateGallerySelectionKey(id), []));
+      const rows = images
+        .filter((image) => selected.has(image.public_id))
+        .map((image) => [
+          image.filename || image.display_name || image.public_id,
+          image.display_name || "",
+          image.public_id,
+        ]);
+      const csv = [
+        ["arquivo", "nome_exibido", "public_id"],
+        ...rows,
+      ].map((row) => row.map(csvEscape).join(";")).join("\n");
+
+      return new Response(csv, {
+        status: 200,
+        headers: {
+          ...corsHeaders(),
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${gallery.slug || id}-selecionadas.csv"`,
+          "Cache-Control": "no-store",
+        },
       });
     }
 

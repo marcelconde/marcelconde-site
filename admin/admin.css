@@ -344,6 +344,9 @@ select:focus {
   color: var(--muted);
   min-height: 42px;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab.active {
