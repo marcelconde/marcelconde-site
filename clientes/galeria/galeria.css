@@ -187,8 +187,12 @@ h1 {
 }
 
 .watermark.top-left { background-position: 24px 24px; }
+.watermark.top { background-position: center 24px; }
 .watermark.top-right { background-position: calc(100% - 24px) 24px; }
+.watermark.left { background-position: 24px center; }
+.watermark.right { background-position: calc(100% - 24px) center; }
 .watermark.bottom-left { background-position: 24px calc(100% - 24px); }
+.watermark.bottom { background-position: center calc(100% - 24px); }
 .watermark.bottom-right { background-position: calc(100% - 24px) calc(100% - 24px); }
 
 .heart-btn {

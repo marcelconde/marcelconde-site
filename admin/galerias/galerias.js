@@ -34,9 +34,17 @@ const gallerySubtitle = $("#gallerySubtitle");
 const selectionLimit = $("#selectionLimit");
 const galleryMessage = $("#galleryMessage");
 const watermarkLogo = $("#watermarkLogo");
+const watermarkFile = $("#watermarkFile");
+const watermarkUploadBtn = $("#watermarkUploadBtn");
+const watermarkPreview = $("#watermarkPreview");
+const watermarkPreviewText = $("#watermarkPreviewText");
+const watermarkStatus = $("#watermarkStatus");
 const watermarkPosition = $("#watermarkPosition");
+const watermarkPositionGrid = $("#watermarkPositionGrid");
 const watermarkOpacity = $("#watermarkOpacity");
+const watermarkOpacityValue = $("#watermarkOpacityValue");
 const watermarkSize = $("#watermarkSize");
+const watermarkSizeValue = $("#watermarkSizeValue");
 const watermarkEnabled = $("#watermarkEnabled");
 const saveGalleryBtn = $("#saveGalleryBtn");
 const openGalleryBtn = $("#openGalleryBtn");
@@ -84,6 +92,37 @@ function fileBaseName(fileName) {
 function cloudUrl(src, transform) {
   if (!src || !src.includes("/upload/")) return src;
   return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${transform}/`);
+}
+
+function formatPercent(value) {
+  return `${Math.round(Number(value || 0) * 100)}%`;
+}
+
+function updateWatermarkValues() {
+  watermarkOpacityValue.textContent = formatPercent(watermarkOpacity.value || 0.28);
+  watermarkSizeValue.textContent = `${Number(watermarkSize.value || 180)}px`;
+}
+
+function updateWatermarkPosition(value = "center") {
+  watermarkPosition.value = value;
+  watermarkPositionGrid.querySelectorAll("[data-watermark-position]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.watermarkPosition === value);
+  });
+}
+
+function renderWatermarkPreview() {
+  const logoUrl = watermarkLogo.value.trim();
+  watermarkUploadBtn.classList.toggle("has-image", Boolean(logoUrl));
+  watermarkPreview.style.backgroundImage = logoUrl ? `url("${logoUrl}")` : "";
+  watermarkPreview.style.opacity = Number(watermarkOpacity.value || 0.28);
+  watermarkPreview.style.backgroundSize = `${Math.min(Number(watermarkSize.value || 180), 220)}px auto`;
+  watermarkPreview.className = `watermark-preview-img ${watermarkPosition.value || "center"}`;
+  watermarkPreviewText.textContent = logoUrl ? "Trocar marca d'água" : "Subir marca d'água";
+  if (!watermarkStatus.dataset.uploading) {
+    watermarkStatus.textContent = logoUrl
+      ? "Imagem salva na galeria. Ajuste posição, opacidade e tamanho ao lado."
+      : "PNG ou JPG, de preferência com fundo transparente.";
+  }
 }
 
 function formatDate(value) {
@@ -199,10 +238,12 @@ function renderSelectedGallery() {
   selectionLimit.value = gallery.selectionLimit || 15;
   galleryMessage.value = gallery.message || "";
   watermarkLogo.value = gallery.watermark?.logoUrl || "";
-  watermarkPosition.value = gallery.watermark?.position || "center";
   watermarkOpacity.value = gallery.watermark?.opacity ?? 0.28;
   watermarkSize.value = gallery.watermark?.size ?? 180;
   watermarkEnabled.checked = gallery.watermark?.enabled !== false;
+  updateWatermarkPosition(gallery.watermark?.position || "center");
+  updateWatermarkValues();
+  renderWatermarkPreview();
 
   const url = galleryUrl(gallery);
   openGalleryBtn.href = url;
@@ -319,6 +360,56 @@ quickCreateBtn.addEventListener("click", async () => {
   } finally {
     quickCreateBtn.disabled = false;
   }
+});
+
+watermarkUploadBtn.addEventListener("click", () => watermarkFile.click());
+
+watermarkFile.addEventListener("change", async () => {
+  const file = watermarkFile.files?.[0];
+  if (!file) return;
+
+  watermarkUploadBtn.disabled = true;
+  watermarkStatus.dataset.uploading = "1";
+  watermarkStatus.textContent = "Enviando marca d'água...";
+
+  try {
+    const signature = await getJson("/private/watermark/upload-signature", {
+      method: "POST",
+      body: JSON.stringify({ displayName: fileBaseName(file.name) }),
+    });
+    const uploaded = await uploadToCloudinary(signature, file, (percent) => {
+      watermarkStatus.textContent = `Enviando marca d'água... ${Math.round(percent)}%`;
+    });
+
+    watermarkLogo.value = uploaded.secure_url || uploaded.url || "";
+    watermarkEnabled.checked = true;
+    showToast("Marca d'água enviada. Salve a galeria para aplicar.");
+  } catch (err) {
+    showToast(err.message || "Erro ao enviar marca d'água.");
+  } finally {
+    watermarkUploadBtn.disabled = false;
+    watermarkFile.value = "";
+    delete watermarkStatus.dataset.uploading;
+    updateWatermarkValues();
+    renderWatermarkPreview();
+  }
+});
+
+watermarkPositionGrid.querySelectorAll("[data-watermark-position]").forEach((button) => {
+  button.addEventListener("click", () => {
+    updateWatermarkPosition(button.dataset.watermarkPosition);
+    renderWatermarkPreview();
+  });
+});
+
+watermarkOpacity.addEventListener("input", () => {
+  updateWatermarkValues();
+  renderWatermarkPreview();
+});
+
+watermarkSize.addEventListener("input", () => {
+  updateWatermarkValues();
+  renderWatermarkPreview();
 });
 
 galleryName.addEventListener("input", () => {

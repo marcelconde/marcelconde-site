@@ -329,12 +329,24 @@ function cleanGalleryText(value = "", max = 1000) {
 }
 
 function normalizeWatermark(input = {}) {
+  const allowedPositions = [
+    "center",
+    "top-left",
+    "top",
+    "top-right",
+    "left",
+    "right",
+    "bottom-left",
+    "bottom",
+    "bottom-right",
+  ];
+
   return {
     enabled: input.enabled === true,
     logoUrl: String(input.logoUrl || "").trim(),
     opacity: Math.min(Math.max(Number(input.opacity ?? 0.28), 0.05), 0.85),
     size: Math.min(Math.max(Number(input.size ?? 180), 80), 520),
-    position: ["center", "top-left", "top-right", "bottom-left", "bottom-right"].includes(input.position)
+    position: allowedPositions.includes(input.position)
       ? input.position
       : "center",
   };
@@ -1184,6 +1196,37 @@ export default {
       };
       const signature = await signCloudinaryParams(params, apiSecret);
       await appendAuditLog(env, request, user, "preparar_upload_galeria_privada", "private_galleries", { galleryId, phase, displayName });
+
+      return json({
+        cloudName,
+        apiKey,
+        uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        params,
+        signature,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/watermark/upload-signature" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const displayName = cleanDisplayName(body.displayName || body.display_name || "marca-dagua");
+      const timestamp = Math.round(Date.now() / 1000);
+      const params = {
+        asset_folder: "site/watermarks",
+        display_name: displayName || "marca-dagua",
+        timestamp,
+        unique_filename: "true",
+        overwrite: "false",
+      };
+      const signature = await signCloudinaryParams(params, apiSecret);
+      await appendAuditLog(env, request, user, "preparar_upload_marca_dagua", "private_galleries", { displayName });
 
       return json({
         cloudName,

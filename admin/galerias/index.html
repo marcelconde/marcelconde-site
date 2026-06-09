@@ -106,32 +106,58 @@
                 Mensagem personalizada
                 <textarea id="galleryMessage" placeholder="Olá Beatriz, selecione até 15 fotos para edição usando o coração exibido sobre cada imagem."></textarea>
               </label>
-              <label>
-                Logo da marca d'água no Cloudinary
-                <input id="watermarkLogo" type="url" placeholder="https://res.cloudinary.com/.../logo.png">
-              </label>
-              <label>
-                Posição da marca d'água
-                <select id="watermarkPosition">
-                  <option value="center">Centro</option>
-                  <option value="bottom-right">Inferior direita</option>
-                  <option value="bottom-left">Inferior esquerda</option>
-                  <option value="top-right">Superior direita</option>
-                  <option value="top-left">Superior esquerda</option>
-                </select>
-              </label>
-              <label>
-                Opacidade
-                <input id="watermarkOpacity" type="number" min="0.05" max="0.85" step="0.05" value="0.28">
-              </label>
-              <label>
-                Tamanho
-                <input id="watermarkSize" type="number" min="80" max="520" step="10" value="180">
-              </label>
-              <label class="check-field full">
-                <input id="watermarkEnabled" type="checkbox" checked>
-                <span>Exibir marca d'água durante a seleção</span>
-              </label>
+              <section class="watermark-panel full" aria-label="Configurações da marca d'água">
+                <div class="watermark-head">
+                  <div>
+                    <span class="eyebrow">Proteção</span>
+                    <h3>Marca d'água</h3>
+                  </div>
+                  <label class="watermark-toggle">
+                    <input id="watermarkEnabled" type="checkbox" checked>
+                    <span>Exibir durante a seleção</span>
+                  </label>
+                </div>
+
+                <div class="watermark-layout">
+                  <div class="watermark-uploader">
+                    <button class="watermark-preview" id="watermarkUploadBtn" type="button">
+                      <span id="watermarkPreview" class="watermark-preview-img"></span>
+                      <strong id="watermarkPreviewText">Subir marca d'água</strong>
+                      <small id="watermarkStatus">PNG ou JPG, de preferência com fundo transparente.</small>
+                    </button>
+                    <input id="watermarkFile" type="file" accept="image/png,image/jpeg,image/webp">
+                    <input id="watermarkLogo" type="hidden">
+                  </div>
+
+                  <div class="watermark-controls">
+                    <div class="control-block">
+                      <span class="control-label">Posição</span>
+                      <input id="watermarkPosition" type="hidden" value="center">
+                      <div class="position-grid" id="watermarkPositionGrid" aria-label="Posição da marca d'água">
+                        <button type="button" data-watermark-position="top-left" aria-label="Superior esquerda"></button>
+                        <button type="button" data-watermark-position="top" aria-label="Superior centro"></button>
+                        <button type="button" data-watermark-position="top-right" aria-label="Superior direita"></button>
+                        <button type="button" data-watermark-position="left" aria-label="Centro esquerda"></button>
+                        <button type="button" data-watermark-position="center" aria-label="Centro"></button>
+                        <button type="button" data-watermark-position="right" aria-label="Centro direita"></button>
+                        <button type="button" data-watermark-position="bottom-left" aria-label="Inferior esquerda"></button>
+                        <button type="button" data-watermark-position="bottom" aria-label="Inferior centro"></button>
+                        <button type="button" data-watermark-position="bottom-right" aria-label="Inferior direita"></button>
+                      </div>
+                    </div>
+
+                    <label class="range-field">
+                      <span>Opacidade <output id="watermarkOpacityValue">28%</output></span>
+                      <input id="watermarkOpacity" type="range" min="0.05" max="0.85" step="0.05" value="0.28">
+                    </label>
+
+                    <label class="range-field">
+                      <span>Tamanho <output id="watermarkSizeValue">180px</output></span>
+                      <input id="watermarkSize" type="range" min="80" max="520" step="10" value="180">
+                    </label>
+                  </div>
+                </div>
+              </section>
             </div>
             <div class="content-actions">
               <button class="btn btn-primary" id="saveGalleryBtn" type="submit">Salvar galeria</button>
@@ -166,6 +192,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/admin/galerias/galerias.js?v=20260608-01"></script>
+  <script src="/admin/galerias/galerias.js?v=20260609-01"></script>
 </body>
 </html>
