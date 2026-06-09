@@ -1734,6 +1734,78 @@ export default {
       return json({ ok: true }, 200, { "Cache-Control": "no-store" });
     }
 
+    if (url.pathname === "/private/gallery/delete-images" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const galleryId = String(body.galleryId || "").trim();
+      const publicIds = [...new Set((Array.isArray(body.publicIds) ? body.publicIds : [])
+        .map((publicId) => sanitizePublicId(publicId))
+        .filter(Boolean))];
+
+      if (!galleryId || !publicIds.length) return errorJson("Dados inválidos.", 400);
+
+      const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      const requested = new Set(publicIds);
+      const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
+      const toDelete = images.filter((image) => requested.has(image.public_id));
+      if (!toDelete.length) return errorJson("Nenhuma foto encontrada para excluir.", 404);
+
+      const deletedIds = new Set();
+      const failed = [];
+
+      for (const image of toDelete) {
+        try {
+          await destroyCloudinaryImage(cloudName, apiKey, apiSecret, image.public_id);
+          deletedIds.add(image.public_id);
+        } catch (err) {
+          failed.push({
+            public_id: image.public_id,
+            error: String(err?.message || err || "unknown"),
+          });
+        }
+      }
+
+      if (deletedIds.size) {
+        const kept = images.filter((image) => !deletedIds.has(image.public_id));
+        await writeKvJson(env, privateGalleryImagesKey(galleryId), kept);
+
+        const selection = await readKvJson(env, privateGallerySelectionKey(galleryId), []);
+        await writeKvJson(env, privateGallerySelectionKey(galleryId), selection.filter((item) => !deletedIds.has(item)));
+
+        if (gallery.coverPublicId && deletedIds.has(gallery.coverPublicId)) {
+          gallery.coverPublicId = kept[0]?.public_id || "";
+          gallery.coverUrl = kept[0]?.url || "";
+          gallery.updatedAt = new Date().toISOString();
+          await writeKvJson(env, privateGalleryKey(galleryId), gallery);
+        }
+      }
+
+      await appendAuditLog(env, request, user, "excluir_fotos_galeria_privada", "private_galleries", {
+        galleryId,
+        deleted: deletedIds.size,
+        failed: failed.length,
+      });
+      await appendPrivateGalleryEvent(env, request, galleryId, "admin_excluiu_fotos", {
+        deleted: deletedIds.size,
+        failed: failed.length,
+      }, user);
+
+      return json({
+        ok: true,
+        deleted: deletedIds.size,
+        failed,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/private/gallery/prune-unselected" && request.method === "POST") {
       const { error, user } = await requireAdminUser(request, env);
       if (error) return error;

@@ -140,11 +140,11 @@
   width: 100%;
   border: 1px dashed rgba(184,149,106,0.44);
   background:
-    linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(255,255,255,0.04) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.04) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.04) 75%),
-    #151515;
+    linear-gradient(45deg, rgba(0,0,0,0.09) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(0,0,0,0.09) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.09) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.09) 75%),
+    #d8d8d8;
   background-position: 0 0, 0 12px, 12px -12px, -12px 0;
   background-size: 24px 24px;
   color: var(--ink);
@@ -165,6 +165,16 @@
 .watermark-preview:disabled {
   cursor: wait;
   opacity: 0.78;
+}
+
+.watermark-preview::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 48%;
+  background: linear-gradient(to top, rgba(0,0,0,0.72), transparent);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .watermark-preview-img {
@@ -203,8 +213,14 @@
 }
 
 .watermark-preview small {
-  color: var(--muted);
+  color: rgba(255,255,255,0.78);
   line-height: 1.5;
+}
+
+.watermark-preview strong,
+.watermark-preview small {
+  max-width: 78%;
+  text-shadow: 0 1px 12px rgba(0,0,0,0.8);
 }
 
 .watermark-controls {
@@ -307,6 +323,29 @@
   word-break: break-all;
 }
 
+.photo-bulk-actions {
+  margin-top: 14px;
+  border: 1px solid rgba(184,149,106,0.28);
+  background: rgba(184,149,106,0.08);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--ink);
+}
+
+.photo-bulk-actions[hidden] {
+  display: none;
+}
+
+.photo-bulk-actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .private-upload {
   margin-top: 22px;
 }
@@ -321,6 +360,36 @@
 .gallery-photo-card {
   border: 1px solid var(--line);
   background: var(--panel);
+  position: relative;
+}
+
+.gallery-photo-card.marked {
+  border-color: rgba(184,149,106,0.78);
+  box-shadow: 0 0 0 1px rgba(184,149,106,0.18);
+}
+
+.photo-select {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(8,8,8,0.72);
+  border: 1px solid rgba(255,255,255,0.18);
+  padding: 7px 9px;
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.photo-select input {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--gold);
 }
 
 .gallery-photo-card img {

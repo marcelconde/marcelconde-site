@@ -186,6 +186,14 @@
           </section>
 
           <div class="private-copy" id="shareLink">Crie ou selecione uma galeria para gerar o link do cliente.</div>
+          <div class="photo-bulk-actions" id="photoBulkActions" hidden>
+            <span id="bulkCount">Selecione fotos para excluir em lote.</span>
+            <div>
+              <button class="btn btn-ghost btn-small" id="selectAllPhotosBtn" type="button">Selecionar todas</button>
+              <button class="btn btn-ghost btn-small" id="clearSelectedPhotosBtn" type="button" disabled>Limpar seleção</button>
+              <button class="btn btn-danger btn-small" id="deleteSelectedPhotosBtn" type="button" disabled>Excluir selecionadas</button>
+            </div>
+          </div>
           <div class="gallery-photo-grid" id="photoGrid"></div>
           <div class="event-list" id="eventList"></div>
         </section>
@@ -194,6 +202,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/admin/galerias/galerias.js?v=20260609-03"></script>
+  <script src="/admin/galerias/galerias.js?v=20260609-04"></script>
 </body>
 </html>
