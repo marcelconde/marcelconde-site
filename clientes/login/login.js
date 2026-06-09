@@ -19,6 +19,19 @@ const submitBtn = document.getElementById("submitBtn");
 const statusText = document.getElementById("statusText");
 const dashboardLink = document.getElementById("dashboardLink");
 
+function configureLoginMode() {
+  modeLabel.textContent = "Área do cliente";
+  pageTitle.textContent = "Acesse sua galeria";
+  pageCopy.textContent = "Entre com o e-mail e senha cadastrados para ver suas galerias privadas, acompanhar seleções e baixar fotos liberadas.";
+  passwordInput.autocomplete = "current-password";
+  passwordInput.placeholder = "Digite sua senha";
+  passwordConfirm.value = "";
+  passwordConfirm.required = false;
+  setupOnly.hidden = true;
+  submitBtn.textContent = "Entrar";
+  dashboardLink.hidden = false;
+}
+
 function setStatus(message, type = "") {
   statusText.textContent = message;
   statusText.className = `status ${type}`;
@@ -46,7 +59,10 @@ function redirectAfterLogin(data = {}) {
 }
 
 async function loadInvite() {
-  if (!inviteToken) return;
+  if (!inviteToken) {
+    configureLoginMode();
+    return;
+  }
 
   modeLabel.textContent = "Primeiro acesso";
   pageTitle.textContent = "Crie sua senha";
@@ -54,6 +70,7 @@ async function loadInvite() {
   passwordInput.autocomplete = "new-password";
   passwordInput.placeholder = "Crie uma senha";
   setupOnly.hidden = false;
+  passwordConfirm.required = true;
   submitBtn.textContent = "Criar senha e acessar";
   dashboardLink.hidden = true;
 
