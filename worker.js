@@ -914,14 +914,22 @@ function clientLoginUrl(env) {
   return `${origin}/clientes/login/`;
 }
 
+function emailHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 async function sendClientGalleryInviteEmail(env, email, token, gallery = {}, client = {}) {
   if (!env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY não configurada no Worker.");
   }
 
   const inviteUrl = clientGalleryInviteUrl(env, token);
-  const galleryTitle = gallery.title || "sua galeria";
-  const clientName = client.name || email;
+  const galleryTitle = emailHtml(gallery.title || "sua galeria");
+  const clientName = emailHtml(client.name || email);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -938,6 +946,45 @@ async function sendClientGalleryInviteEmail(env, email, token, gallery = {}, cli
              <p><a href="${inviteUrl}">Criar senha e acessar galeria</a></p>
              <p>Depois disso, você poderá voltar quando quiser pela Área do Cliente usando seu e-mail e senha.</p>
              <p>Este link de primeiro acesso expira em 7 dias.</p>`,
+    }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {}) {
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY não configurada no Worker.");
+  }
+
+  const galleryUrl = clientGalleryUrl(env, gallery.slug || "");
+  const loginUrl = clientLoginUrl(env);
+  const galleryTitle = emailHtml(gallery.title || "sua galeria");
+  const clientName = emailHtml(client.name || email);
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      to: [email],
+      subject: `Suas fotos estão prontas — ${gallery.title || "galeria"}`,
+      html: `<p>Olá ${clientName},</p>
+             <p>As fotos da galeria <strong>${galleryTitle}</strong> estão prontas para download.</p>
+             <p>Acesse pelo link abaixo e entre com seu e-mail e senha cadastrados:</p>
+             <p><a href="${galleryUrl}">Acessar galeria e baixar fotos</a></p>
+             <p>Você também pode voltar quando quiser pela <a href="${loginUrl}">Área do Cliente</a>.</p>`,
     }),
   });
 
@@ -1532,36 +1579,52 @@ export default {
       const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
 
+      if (["selection", "editing", "final"].includes(body.status) && body.status !== gallery.status) {
+        gallery.status = body.status;
+      }
+
       const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
       if (!client?.email) {
         return errorJson("Vincule um cliente com e-mail antes de publicar a galeria.", 400);
       }
 
-      const token = randomToken(36);
-      const invite = {
-        token,
-        email: normalizeEmail(client.email),
-        clientId: client.id,
-        galleryId: gallery.id,
-        gallerySlug: gallery.slug,
-        invitedBy: user.email,
-        createdAt: new Date().toISOString(),
-        expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7,
-      };
-
-      await writeKvJson(env, clientGalleryInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
-
+      const emailType = gallery.status === "final" || gallery.allowDownload === true
+        ? "final_delivery"
+        : "first_access";
+      let token = "";
       let resend = null;
       let emailError = "";
+
       try {
-        resend = await sendClientGalleryInviteEmail(env, client.email, token, gallery, client);
+        if (emailType === "final_delivery") {
+          resend = await sendClientFinalDeliveryEmail(env, client.email, gallery, client);
+        } else {
+          token = randomToken(36);
+          const invite = {
+            token,
+            email: normalizeEmail(client.email),
+            clientId: client.id,
+            galleryId: gallery.id,
+            gallerySlug: gallery.slug,
+            invitedBy: user.email,
+            createdAt: new Date().toISOString(),
+            expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7,
+          };
+
+          await writeKvJson(env, clientGalleryInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
+          resend = await sendClientGalleryInviteEmail(env, client.email, token, gallery, client);
+        }
       } catch (err) {
         emailError = String(err?.message || err || "unknown");
-        console.error("Client gallery invite email error:", err);
+        console.error("Client gallery email error:", err);
       }
 
       gallery.publishedAt = gallery.publishedAt || new Date().toISOString();
-      gallery.lastInviteAt = new Date().toISOString();
+      if (emailType === "final_delivery") {
+        gallery.lastDeliveryEmailAt = new Date().toISOString();
+      } else {
+        gallery.lastInviteAt = new Date().toISOString();
+      }
       gallery.updatedAt = new Date().toISOString();
       await writeKvJson(env, privateGalleryKey(gallery.id), gallery);
 
@@ -1569,11 +1632,13 @@ export default {
         galleryId: gallery.id,
         slug: gallery.slug,
         email: client.email,
+        emailType,
         emailQueued: Boolean(resend),
         emailError,
       });
       await appendPrivateGalleryEvent(env, request, gallery.id, "admin_publicou_galeria", {
         email: client.email,
+        emailType,
         emailQueued: Boolean(resend),
         emailError,
       }, user);
@@ -1581,7 +1646,8 @@ export default {
       return json({
         ok: true,
         gallery,
-        inviteUrl: clientGalleryInviteUrl(env, token),
+        emailType,
+        inviteUrl: token ? clientGalleryInviteUrl(env, token) : "",
         galleryUrl: clientGalleryUrl(env, gallery.slug),
         emailQueued: Boolean(resend),
         emailError,

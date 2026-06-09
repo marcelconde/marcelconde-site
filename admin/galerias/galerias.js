@@ -873,16 +873,23 @@ publishGalleryBtn.addEventListener("click", async () => {
   try {
     const data = await getJson("/private/gallery/publish", {
       method: "POST",
-      body: JSON.stringify({ galleryId: state.selectedGallery.id }),
+      body: JSON.stringify({
+        galleryId: state.selectedGallery.id,
+        status: galleryStatus.value,
+      }),
     });
 
     if (data.gallery) state.selectedGallery = data.gallery;
     await selectGallery(state.selectedGallery.id);
 
     if (data.emailQueued) {
-      showToast(`Galeria publicada. E-mail enviado para ${client.email}.`);
+      showToast(data.emailType === "final_delivery"
+        ? `Entrega final enviada para ${client.email}.`
+        : `Galeria publicada. E-mail enviado para ${client.email}.`);
     } else {
-      showToast(`Convite criado, mas o e-mail não foi enviado: ${data.emailError || "verifique o Resend"}`);
+      showToast(data.emailType === "final_delivery"
+        ? `Entrega final salva, mas o e-mail não foi enviado: ${data.emailError || "verifique o Resend"}`
+        : `Convite criado, mas o e-mail não foi enviado: ${data.emailError || "verifique o Resend"}`);
     }
   } catch (err) {
     showToast(err.message || "Erro ao publicar galeria.");
