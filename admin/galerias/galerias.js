@@ -52,6 +52,7 @@ const saveGalleryBtn = $("#saveGalleryBtn");
 const publishGalleryBtn = $("#publishGalleryBtn");
 const openGalleryBtn = $("#openGalleryBtn");
 const exportCsvBtn = $("#exportCsvBtn");
+const pruneUnselectedBtn = $("#pruneUnselectedBtn");
 const shareLink = $("#shareLink");
 const dropzone = $("#dropzone");
 const fileInput = $("#fileInput");
@@ -322,6 +323,8 @@ function renderSelectedGallery() {
     publishGalleryBtn.classList.add("disabled");
     publishGalleryBtn.disabled = true;
     exportCsvBtn.classList.add("disabled");
+    pruneUnselectedBtn.classList.add("disabled");
+    pruneUnselectedBtn.disabled = true;
     shareLink.textContent = "Crie ou selecione uma galeria para gerar o link do cliente.";
     return;
   }
@@ -353,6 +356,10 @@ function renderSelectedGallery() {
   publishGalleryBtn.disabled = false;
   exportCsvBtn.href = "#";
   exportCsvBtn.classList.toggle("disabled", !state.selection.length);
+  const removableCount = state.images.filter((image) => !state.selection.includes(image.public_id) && image.phase !== "final").length;
+  pruneUnselectedBtn.classList.toggle("disabled", !state.selection.length || !removableCount);
+  pruneUnselectedBtn.disabled = !state.selection.length || !removableCount;
+  pruneUnselectedBtn.textContent = removableCount ? `Remover ${removableCount} não selecionadas` : "Remover não selecionadas";
   shareLink.textContent = url;
 
   renderGalleries();
@@ -745,6 +752,42 @@ publishGalleryBtn.addEventListener("click", async () => {
   } finally {
     publishGalleryBtn.disabled = false;
     publishGalleryBtn.textContent = "Publicar e enviar";
+  }
+});
+
+pruneUnselectedBtn.addEventListener("click", async () => {
+  if (!state.selectedGallery) return;
+  const removableCount = state.images.filter((image) => !state.selection.includes(image.public_id) && image.phase !== "final").length;
+  if (!state.selection.length) {
+    showToast("Nenhuma foto foi selecionada pelo cliente.");
+    return;
+  }
+  if (!removableCount) {
+    showToast("Não há fotos não selecionadas para remover.");
+    return;
+  }
+
+  const confirmed = confirm(
+    `Apagar ${removableCount} fotos não selecionadas desta galeria e do Cloudinary?\n\n` +
+    `As ${state.selection.length} fotos selecionadas serão mantidas. Esta ação não pode ser desfeita.`
+  );
+  if (!confirmed) return;
+
+  pruneUnselectedBtn.disabled = true;
+  pruneUnselectedBtn.textContent = "Removendo...";
+
+  try {
+    const data = await getJson("/private/gallery/prune-unselected", {
+      method: "POST",
+      body: JSON.stringify({ galleryId: state.selectedGallery.id }),
+    });
+    await selectGallery(state.selectedGallery.id);
+    showToast(`${data.removed || removableCount} fotos não selecionadas foram removidas.`);
+  } catch (err) {
+    showToast(err.message || "Erro ao remover fotos não selecionadas.");
+  } finally {
+    pruneUnselectedBtn.disabled = false;
+    renderSelectedGallery();
   }
 });
 

@@ -1734,6 +1734,69 @@ export default {
       return json({ ok: true }, 200, { "Cache-Control": "no-store" });
     }
 
+    if (url.pathname === "/private/gallery/prune-unselected" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const galleryId = String(body.galleryId || "").trim();
+      if (!galleryId) return errorJson("Galeria inválida.", 400);
+
+      const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
+      const selection = await readKvJson(env, privateGallerySelectionKey(galleryId), []);
+      const selected = new Set(selection);
+
+      if (!selected.size) {
+        return errorJson("Nenhuma foto selecionada pelo cliente.", 400);
+      }
+
+      const kept = images.filter((image) => selected.has(image.public_id) || image.phase === "final");
+      const removed = images.filter((image) => !selected.has(image.public_id) && image.phase !== "final");
+
+      if (!removed.length) {
+        return json({ ok: true, removed: 0, kept: kept.length }, 200, { "Cache-Control": "no-store" });
+      }
+
+      for (const image of removed) {
+        await destroyCloudinaryImage(cloudName, apiKey, apiSecret, image.public_id);
+      }
+
+      await writeKvJson(env, privateGalleryImagesKey(galleryId), kept);
+      const nextSelection = selection.filter((publicId) => kept.some((image) => image.public_id === publicId));
+      await writeKvJson(env, privateGallerySelectionKey(galleryId), nextSelection);
+
+      if (gallery.coverPublicId && !kept.some((image) => image.public_id === gallery.coverPublicId)) {
+        gallery.coverPublicId = kept[0]?.public_id || "";
+        gallery.coverUrl = kept[0]?.url || "";
+      }
+      gallery.updatedAt = new Date().toISOString();
+      await writeKvJson(env, privateGalleryKey(galleryId), gallery);
+
+      await appendAuditLog(env, request, user, "remover_nao_selecionadas_galeria_privada", "private_galleries", {
+        galleryId,
+        removed: removed.length,
+        kept: kept.length,
+      });
+      await appendPrivateGalleryEvent(env, request, galleryId, "admin_removeu_nao_selecionadas", {
+        removed: removed.length,
+        kept: kept.length,
+      }, user);
+
+      return json({
+        ok: true,
+        removed: removed.length,
+        kept: kept.length,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/private/gallery/export-selected" && request.method === "GET") {
       const { error } = await requireAdminUser(request, env);
       if (error) return error;
