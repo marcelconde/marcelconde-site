@@ -1,10 +1,12 @@
 const CONFIG = {
   workerUrl: "https://api.marcelconde.com.br",
   batchSize: 60,
+  tokenKey: "mc_client_token",
 };
 
 const params = new URLSearchParams(location.search);
 const slug = params.get("slug") || "";
+const inviteToken = params.get("convite") || "";
 
 const state = {
   gallery: null,
@@ -24,6 +26,7 @@ const selectionCounter = document.getElementById("selectionCounter");
 const photoGrid = document.getElementById("photoGrid");
 const loadSentinel = document.getElementById("loadSentinel");
 const completeBtn = document.getElementById("completeBtn");
+const downloadAllBtn = document.getElementById("downloadAllBtn");
 const lightbox = document.getElementById("lightbox");
 const lightboxStage = document.getElementById("lightboxStage");
 const lightboxClose = document.getElementById("lightboxClose");
@@ -51,11 +54,30 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toastEl.classList.remove("show"), 3200);
 }
 
+function getToken() {
+  return localStorage.getItem(CONFIG.tokenKey) || "";
+}
+
+function loginRedirect() {
+  location.href = `/clientes/login/?next=${encodeURIComponent(location.pathname + location.search)}`;
+}
+
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
+  const token = getToken();
+  if (!token) {
+    loginRedirect();
+    throw new Error("Faça login para acessar esta galeria.");
+  }
+  headers.set("Authorization", `Bearer ${token}`);
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    localStorage.removeItem(CONFIG.tokenKey);
+    loginRedirect();
+    throw new Error("Faça login para acessar esta galeria.");
+  }
   if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
   return data;
 }
@@ -72,6 +94,11 @@ function watermarkStyle() {
 function updateCounters() {
   const total = state.selected.size;
   const limit = Number(state.gallery?.selectionLimit || 0);
+  if (state.gallery?.allowDownload) {
+    selectionCounter.textContent = "Downloads liberados";
+    galleryLimit.textContent = "Entrega final disponível para download.";
+    return;
+  }
   selectionCounter.textContent = limit ? `${total}/${limit} selecionadas` : `${total} selecionadas`;
   galleryLimit.textContent = limit ? `Selecione até ${limit} fotos.` : "Sem limite de seleção definido.";
 }
@@ -85,6 +112,8 @@ function renderHeader() {
   if (gallery.coverUrl) {
     galleryHeroBg.style.backgroundImage = `url('${cloudUrl(gallery.coverUrl, "w_1600,q_auto,f_auto")}')`;
   }
+  completeBtn.classList.toggle("hidden", Boolean(gallery.allowDownload));
+  downloadAllBtn.classList.toggle("hidden", !gallery.allowDownload);
   updateCounters();
 }
 
@@ -92,11 +121,14 @@ function renderImages(images) {
   const wm = watermarkStyle();
   const html = images.map((image) => {
     const selected = state.selected.has(image.public_id);
+    const action = state.gallery?.allowDownload
+      ? `<button class="download-btn" type="button" aria-label="Baixar foto">Baixar</button>`
+      : `<button class="heart-btn ${selected ? "selected" : ""}" type="button" aria-label="Selecionar foto">${selected ? "♥" : "♡"}</button>`;
     return `
       <article class="photo-card" data-public-id="${escapeHtml(image.public_id)}">
         <img src="${escapeHtml(cloudUrl(image.url, "w_400,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" loading="lazy">
         ${wm}
-        <button class="heart-btn ${selected ? "selected" : ""}" type="button" aria-label="Selecionar foto">${selected ? "♥" : "♡"}</button>
+        ${action}
         <span class="photo-name">${escapeHtml(image.filename || image.display_name || "")}</span>
       </article>
     `;
@@ -130,6 +162,15 @@ async function loadBatch() {
 }
 
 function updatePhotoButtons() {
+  if (state.gallery?.allowDownload) {
+    if (state.currentImage) {
+      lightboxHeart.classList.add("download-mode");
+      lightboxHeart.textContent = "Baixar";
+    }
+    updateCounters();
+    return;
+  }
+
   document.querySelectorAll(".photo-card").forEach((card) => {
     const publicId = card.dataset.publicId;
     const button = card.querySelector(".heart-btn");
@@ -147,6 +188,7 @@ function updatePhotoButtons() {
 }
 
 async function toggleFavorite(publicId, shouldSelect) {
+  if (state.gallery?.allowDownload) return;
   try {
     const data = await api("/client-gallery/favorite", {
       method: "POST",
@@ -159,12 +201,40 @@ async function toggleFavorite(publicId, shouldSelect) {
   }
 }
 
+function triggerDownload(url, fileName = "foto.jpg") {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function downloadImage(image) {
+  if (!image?.downloadUrl) return showToast("Download ainda não liberado para esta foto.");
+  triggerDownload(image.downloadUrl, image.filename || image.display_name || "foto.jpg");
+  try {
+    await api("/client-gallery/download-event", {
+      method: "POST",
+      body: JSON.stringify({ slug, publicId: image.public_id }),
+    });
+  } catch {
+    // O download já foi iniciado; falha de log não deve bloquear o cliente.
+  }
+}
+
 photoGrid.addEventListener("click", (event) => {
   const card = event.target.closest(".photo-card");
   if (!card) return;
   const publicId = card.dataset.publicId;
   const image = state.images.find((item) => item.public_id === publicId);
   if (!image) return;
+
+  if (event.target.closest(".download-btn")) {
+    downloadImage(image);
+    return;
+  }
 
   if (event.target.closest(".heart-btn")) {
     toggleFavorite(publicId, !state.selected.has(publicId));
@@ -196,6 +266,10 @@ lightbox.addEventListener("click", (event) => {
 });
 lightboxHeart.addEventListener("click", () => {
   if (!state.currentImage) return;
+  if (state.gallery?.allowDownload) {
+    downloadImage(state.currentImage);
+    return;
+  }
   toggleFavorite(state.currentImage.public_id, !state.selected.has(state.currentImage.public_id));
 });
 
@@ -216,6 +290,31 @@ completeBtn.addEventListener("click", async () => {
   }
 });
 
+downloadAllBtn.addEventListener("click", async () => {
+  if (!state.gallery?.allowDownload) return;
+  downloadAllBtn.disabled = true;
+  downloadAllBtn.textContent = "Preparando...";
+
+  try {
+    const data = await api(`/client-gallery/download-list?slug=${encodeURIComponent(slug)}`);
+    const images = data.images || [];
+    if (!images.length) {
+      showToast("Nenhuma foto liberada para download.");
+      return;
+    }
+
+    images.forEach((image, index) => {
+      setTimeout(() => triggerDownload(image.downloadUrl, image.filename || `foto-${index + 1}.jpg`), index * 300);
+    });
+    showToast(`Iniciando download de ${images.length} fotos.`);
+  } catch (err) {
+    showToast(err.message || "Não foi possível baixar as fotos.");
+  } finally {
+    downloadAllBtn.disabled = false;
+    downloadAllBtn.textContent = "Baixar todas";
+  }
+});
+
 loadSentinel.addEventListener("click", loadBatch);
 
 const observer = new IntersectionObserver((entries) => {
@@ -224,10 +323,14 @@ const observer = new IntersectionObserver((entries) => {
 
 observer.observe(loadSentinel);
 
-if (!slug) {
+if (inviteToken) {
+  location.href = `/clientes/login/?convite=${encodeURIComponent(inviteToken)}`;
+} else if (!slug) {
   galleryTitle.textContent = "Link inválido";
   galleryMessage.textContent = "Abra a galeria usando o link enviado pelo fotógrafo.";
   loadSentinel.textContent = "";
+} else if (!getToken()) {
+  loginRedirect();
 } else {
   loadBatch();
 }

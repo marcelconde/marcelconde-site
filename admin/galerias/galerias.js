@@ -49,6 +49,7 @@ const watermarkSize = $("#watermarkSize");
 const watermarkSizeValue = $("#watermarkSizeValue");
 const watermarkEnabled = $("#watermarkEnabled");
 const saveGalleryBtn = $("#saveGalleryBtn");
+const publishGalleryBtn = $("#publishGalleryBtn");
 const openGalleryBtn = $("#openGalleryBtn");
 const exportCsvBtn = $("#exportCsvBtn");
 const shareLink = $("#shareLink");
@@ -318,6 +319,8 @@ function renderSelectedGallery() {
     galleryTitle.textContent = "Selecione uma galeria";
     galleryMeta.textContent = "Crie ou escolha uma galeria privada para enviar fotos e acompanhar a seleção.";
     openGalleryBtn.classList.add("disabled");
+    publishGalleryBtn.classList.add("disabled");
+    publishGalleryBtn.disabled = true;
     exportCsvBtn.classList.add("disabled");
     shareLink.textContent = "Crie ou selecione uma galeria para gerar o link do cliente.";
     return;
@@ -346,6 +349,8 @@ function renderSelectedGallery() {
   const url = galleryUrl(gallery);
   openGalleryBtn.href = url;
   openGalleryBtn.classList.remove("disabled");
+  publishGalleryBtn.classList.remove("disabled");
+  publishGalleryBtn.disabled = false;
   exportCsvBtn.href = "#";
   exportCsvBtn.classList.toggle("disabled", !state.selection.length);
   shareLink.textContent = url;
@@ -707,6 +712,39 @@ exportCsvBtn.addEventListener("click", async (event) => {
     URL.revokeObjectURL(url);
   } catch (err) {
     showToast(err.message || "Erro ao exportar CSV.");
+  }
+});
+
+publishGalleryBtn.addEventListener("click", async () => {
+  if (!state.selectedGallery) return;
+  const client = state.clients.find((item) => item.id === state.selectedGallery.clientId);
+  if (!client?.email) {
+    showToast("Vincule um cliente com e-mail antes de publicar.");
+    return;
+  }
+
+  publishGalleryBtn.disabled = true;
+  publishGalleryBtn.textContent = "Enviando...";
+
+  try {
+    const data = await getJson("/private/gallery/publish", {
+      method: "POST",
+      body: JSON.stringify({ galleryId: state.selectedGallery.id }),
+    });
+
+    if (data.gallery) state.selectedGallery = data.gallery;
+    await selectGallery(state.selectedGallery.id);
+
+    if (data.emailQueued) {
+      showToast(`Galeria publicada. E-mail enviado para ${client.email}.`);
+    } else {
+      showToast(`Convite criado, mas o e-mail não foi enviado: ${data.emailError || "verifique o Resend"}`);
+    }
+  } catch (err) {
+    showToast(err.message || "Erro ao publicar galeria.");
+  } finally {
+    publishGalleryBtn.disabled = false;
+    publishGalleryBtn.textContent = "Publicar e enviar";
   }
 });
 

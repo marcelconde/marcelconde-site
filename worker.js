@@ -140,6 +140,18 @@ function privateGalleryEventsKey(id) {
   return `private_gallery_events:${id}`;
 }
 
+function clientUserKey(email) {
+  return `client_user:${normalizeEmail(email)}`;
+}
+
+function clientSessionKey(token) {
+  return `client_session:${token}`;
+}
+
+function clientGalleryInviteKey(token) {
+  return `client_gallery_invite:${token}`;
+}
+
 function normalizeRole(role = "") {
   return role === "admin" ? "admin" : "editor";
 }
@@ -153,6 +165,15 @@ function publicUser(user = {}) {
     email: normalizeEmail(user.email || ""),
     name: user.name || user.email || "Usuário",
     role: normalizeRole(user.role || "editor"),
+    createdAt: user.createdAt || null,
+    updatedAt: user.updatedAt || null,
+  };
+}
+
+function publicClientUser(user = {}) {
+  return {
+    email: normalizeEmail(user.email || ""),
+    name: user.name || user.email || "Cliente",
     createdAt: user.createdAt || null,
     updatedAt: user.updatedAt || null,
   };
@@ -363,7 +384,7 @@ function publicPrivateGallery(gallery = {}, images = [], selection = []) {
     coverUrl: gallery.coverUrl || images[0]?.url || null,
     selectionLimit: Number(gallery.selectionLimit || 0),
     status: gallery.status || "selection",
-    allowDownload: gallery.allowDownload === true,
+    allowDownload: gallery.allowDownload === true || gallery.status === "final",
     watermark: normalizeWatermark(gallery.watermark || {}),
     totalImages: images.length,
     totalSelected: selection.length,
@@ -798,6 +819,153 @@ async function getSession(env, token) {
   return session;
 }
 
+async function getClientUser(env, email) {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail || !env.LIKES_KV) return null;
+  return env.LIKES_KV.get(clientUserKey(cleanEmail), "json");
+}
+
+async function saveClientPassword(env, email, password, profile = {}) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail || password.length < 6) throw new Error("Dados de cliente inválidos");
+
+  const existing = await getClientUser(env, cleanEmail);
+  const now = new Date().toISOString();
+  const user = {
+    ...existing,
+    email: cleanEmail,
+    name: cleanDisplayName(profile.name || existing?.name || cleanEmail),
+    passwordHash: await hashPassword(password, "", authPepper(env)),
+    active: true,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
+
+  await writeKvJson(env, clientUserKey(cleanEmail), user);
+  return publicClientUser(user);
+}
+
+async function validateClientLogin(env, email, password) {
+  const cleanEmail = normalizeEmail(email);
+  const stored = await getClientUser(env, cleanEmail);
+  if (stored && stored.active === false) return null;
+  if (stored?.passwordHash && await verifyPassword(password, stored.passwordHash, env)) {
+    return publicClientUser(stored);
+  }
+  return null;
+}
+
+async function createClientSession(env, user) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const token = randomToken(36);
+  const now = Date.now();
+  const session = {
+    email: normalizeEmail(user.email || ""),
+    name: user.name || user.email || "Cliente",
+    createdAt: new Date(now).toISOString(),
+    expiresAt: now + 1000 * 60 * 60 * 24 * 30,
+  };
+  await writeKvJson(env, clientSessionKey(token), session, {
+    expirationTtl: 60 * 60 * 24 * 30,
+  });
+  return { token, user: publicClientUser(session) };
+}
+
+async function getClientSession(env, token) {
+  if (!token || !env.LIKES_KV) return null;
+  const session = await env.LIKES_KV.get(clientSessionKey(token), "json");
+  if (!session || Number(session.expiresAt || 0) < Date.now()) return null;
+  return session;
+}
+
+async function getCurrentClient(request, env) {
+  return getClientSession(env, getBearerToken(request));
+}
+
+async function requireClientGalleryAccess(request, env, gallery) {
+  const session = await getCurrentClient(request, env);
+  if (!session) return { error: errorJson("Faça login para acessar esta galeria.", 401) };
+
+  const linkedClient = gallery?.clientId
+    ? await readKvJson(env, privateClientKey(gallery.clientId), null)
+    : null;
+  const allowedEmail = normalizeEmail(linkedClient?.email || gallery?.clientEmail || "");
+
+  if (!allowedEmail || normalizeEmail(session.email) !== allowedEmail) {
+    return { error: errorJson("Esta galeria pertence a outro cliente.", 403) };
+  }
+
+  return { client: publicClientUser(session), linkedClient };
+}
+
+function clientGalleryInviteUrl(env, token) {
+  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+  return `${origin}/clientes/login/?convite=${encodeURIComponent(token)}`;
+}
+
+function clientGalleryUrl(env, slug) {
+  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+  return `${origin}/clientes/galeria/?slug=${encodeURIComponent(slug)}`;
+}
+
+function clientLoginUrl(env) {
+  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+  return `${origin}/clientes/login/`;
+}
+
+async function sendClientGalleryInviteEmail(env, email, token, gallery = {}, client = {}) {
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY não configurada no Worker.");
+  }
+
+  const inviteUrl = clientGalleryInviteUrl(env, token);
+  const galleryTitle = gallery.title || "sua galeria";
+  const clientName = client.name || email;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      to: [email],
+      subject: `Sua galeria está disponível — ${galleryTitle}`,
+      html: `<p>Olá ${clientName},</p>
+             <p>Sua galeria <strong>${galleryTitle}</strong> está disponível na área do cliente Marcel Conde.</p>
+             <p>Para o primeiro acesso, crie sua senha pelo botão abaixo:</p>
+             <p><a href="${inviteUrl}">Criar senha e acessar galeria</a></p>
+             <p>Depois disso, você poderá voltar quando quiser pela Área do Cliente usando seu e-mail e senha.</p>
+             <p>Este link de primeiro acesso expira em 7 dias.</p>`,
+    }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+function visibleGalleryImages(gallery = {}, images = []) {
+  if (gallery.status === "final") {
+    const finalImages = images.filter((image) => image.phase === "final");
+    return finalImages.length ? finalImages : images;
+  }
+  return images.filter((image) => image.phase !== "final");
+}
+
+function cloudinaryAttachmentUrl(src = "") {
+  if (!src || !src.includes("/upload/")) return src;
+  return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, "/upload/fl_attachment/");
+}
+
 async function sendResetEmail(env, request, email, token) {
   if (!env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY não configurada no Worker.");
@@ -882,6 +1050,117 @@ export default {
 
     // ── GALERIAS PRIVADAS: ACESSO DO CLIENTE ─────────────────────
 
+    if (url.pathname === "/client-auth/invite" && request.method === "GET") {
+      const token = String(url.searchParams.get("token") || "").trim();
+      if (!token || !env.LIKES_KV) return errorJson("Convite inválido.", 400);
+
+      const invite = await readKvJson(env, clientGalleryInviteKey(token), null);
+      if (!invite || Number(invite.expiresAt || 0) < Date.now()) {
+        return errorJson("Convite inválido ou expirado.", 400);
+      }
+
+      const gallery = await readKvJson(env, privateGalleryKey(invite.galleryId), null);
+      const client = await readKvJson(env, privateClientKey(invite.clientId), null);
+      if (!gallery || !client) return errorJson("Galeria indisponível.", 404);
+
+      const existingUser = await getClientUser(env, client.email);
+      return json({
+        email: client.email,
+        clientName: client.name || client.email,
+        galleryTitle: gallery.title || "Galeria privada",
+        gallerySlug: gallery.slug,
+        hasPassword: Boolean(existingUser?.passwordHash),
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-auth/setup" && request.method === "POST") {
+      const body = await readJson(request);
+      const token = String(body.token || "").trim();
+      const password = String(body.password || "");
+
+      if (!token || password.length < 6) return errorJson("Token ou senha inválidos.", 400);
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const invite = await readKvJson(env, clientGalleryInviteKey(token), null);
+      if (!invite || Number(invite.expiresAt || 0) < Date.now()) {
+        return errorJson("Convite inválido ou expirado.", 400);
+      }
+
+      const gallery = await readKvJson(env, privateGalleryKey(invite.galleryId), null);
+      const client = await readKvJson(env, privateClientKey(invite.clientId), null);
+      if (!gallery || !client?.email) return errorJson("Galeria indisponível.", 404);
+
+      const user = await saveClientPassword(env, client.email, password, {
+        name: client.name || client.email,
+      });
+      invite.usedAt = new Date().toISOString();
+      await writeKvJson(env, clientGalleryInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
+      const session = await createClientSession(env, user);
+      await appendPrivateGalleryEvent(env, request, gallery.id, "cliente_criou_senha", {}, user);
+
+      return json({
+        ok: true,
+        ...session,
+        gallery: {
+          slug: gallery.slug,
+          url: clientGalleryUrl(env, gallery.slug),
+        },
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-auth/login" && request.method === "POST") {
+      const body = await readJson(request);
+      const email = normalizeEmail(body.email || "");
+      const password = String(body.password || "");
+      if (!email || !password) return errorJson("E-mail e senha são obrigatórios.", 400);
+
+      const user = await validateClientLogin(env, email, password);
+      if (!user) return errorJson("E-mail ou senha inválidos.", 401);
+
+      const session = await createClientSession(env, user);
+      return json(session, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-auth/me" && request.method === "GET") {
+      const session = await getCurrentClient(request, env);
+      if (!session) return errorJson("Unauthorized", 401);
+      return json({ user: publicClientUser(session) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-auth/logout" && request.method === "POST") {
+      const token = getBearerToken(request);
+      if (token && env.LIKES_KV) await env.LIKES_KV.delete(clientSessionKey(token));
+      return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-galleries" && request.method === "GET") {
+      const session = await getCurrentClient(request, env);
+      if (!session) return errorJson("Faça login para acessar suas galerias.", 401);
+
+      const galleries = await listPrivateGalleries(env);
+      const items = [];
+      for (const gallery of galleries) {
+        const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+        if (normalizeEmail(client?.email || "") !== normalizeEmail(session.email)) continue;
+        const images = await readKvJson(env, privateGalleryImagesKey(gallery.id), []);
+        const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+        items.push({
+          id: gallery.id,
+          slug: gallery.slug,
+          title: gallery.title,
+          subtitle: gallery.subtitle || "",
+          status: gallery.status || "selection",
+          coverUrl: gallery.coverUrl || images[0]?.url || null,
+          totalImages: visibleGalleryImages(gallery, images).length,
+          totalSelected: selection.length,
+          url: clientGalleryUrl(env, gallery.slug),
+          updatedAt: gallery.updatedAt || null,
+        });
+      }
+
+      return json({ galleries: items }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/client-gallery" && request.method === "GET") {
       const slug = slugify(url.searchParams.get("slug") || "");
       const cursor = Math.max(0, Number(url.searchParams.get("cursor") || 0));
@@ -889,13 +1168,20 @@ export default {
       const gallery = await getPrivateGalleryBySlug(env, slug);
 
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
 
-      const images = await readKvJson(env, privateGalleryImagesKey(gallery.id), []);
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
-      const page = images.slice(cursor, cursor + limit).map(thumbnailImage);
+      const canDownload = gallery.status === "final" || gallery.allowDownload === true;
+      const page = images.slice(cursor, cursor + limit).map((image) => {
+        const item = thumbnailImage(image);
+        if (canDownload) item.downloadUrl = cloudinaryAttachmentUrl(image.url);
+        return item;
+      });
 
       if (cursor === 0) {
-        ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, "abrir_galeria", { slug }));
+        ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, "cliente_abriu_galeria", { slug }, access.client));
       }
 
       return json({
@@ -918,9 +1204,12 @@ export default {
       const gallery = await getPrivateGalleryBySlug(env, slug);
 
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
       if (!publicId) return errorJson("Foto inválida.", 400);
 
-      const images = await readKvJson(env, privateGalleryImagesKey(gallery.id), []);
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       if (!images.some((image) => image.public_id === publicId)) {
         return errorJson("Foto não pertence a esta galeria.", 400);
       }
@@ -940,7 +1229,7 @@ export default {
       }
 
       await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
-      await appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", { publicId });
+      await appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", { publicId }, access.client);
 
       return json({
         ok: true,
@@ -955,14 +1244,75 @@ export default {
       const slug = slugify(body.slug || "");
       const gallery = await getPrivateGalleryBySlug(env, slug);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
 
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
       await appendPrivateGalleryEvent(env, request, gallery.id, "concluir_selecao", {
         totalSelected: selection.length,
         selectedPublicIds: selection,
-      });
+      }, access.client);
 
       return json({ ok: true, totalSelected: selection.length }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-gallery/download" && request.method === "GET") {
+      const slug = slugify(url.searchParams.get("slug") || "");
+      const publicId = sanitizePublicId(url.searchParams.get("publicId") || "");
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (gallery.status !== "final" && gallery.allowDownload !== true) {
+        return errorJson("Download ainda não liberado.", 403);
+      }
+
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      const image = images.find((item) => item.public_id === publicId);
+      if (!image) return errorJson("Foto não encontrada.", 404);
+      ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, "cliente_baixou_foto", { publicId }, access.client));
+
+      return Response.redirect(cloudinaryAttachmentUrl(image.url), 302);
+    }
+
+    if (url.pathname === "/client-gallery/download-list" && request.method === "GET") {
+      const slug = slugify(url.searchParams.get("slug") || "");
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (gallery.status !== "final" && gallery.allowDownload !== true) {
+        return errorJson("Download ainda não liberado.", 403);
+      }
+
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      await appendPrivateGalleryEvent(env, request, gallery.id, "cliente_baixou_todas", {
+        totalImages: images.length,
+      }, access.client);
+
+      return json({
+        images: images.map((image) => ({
+          public_id: image.public_id,
+          filename: image.filename || image.display_name || image.public_id,
+          downloadUrl: cloudinaryAttachmentUrl(image.url),
+        })),
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-gallery/download-event" && request.method === "POST") {
+      const body = await readJson(request);
+      const slug = slugify(body.slug || "");
+      const publicId = sanitizePublicId(body.publicId || body.public_id || "");
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (gallery.status !== "final" && gallery.allowDownload !== true) {
+        return errorJson("Download ainda não liberado.", 403);
+      }
+      await appendPrivateGalleryEvent(env, request, gallery.id, "cliente_baixou_foto", { publicId }, access.client);
+      return json({ ok: true }, 200, { "Cache-Control": "no-store" });
     }
 
     // ── AUTH ────────────────────────────────────────────────────
@@ -1168,6 +1518,75 @@ export default {
       const selection = await readKvJson(env, privateGallerySelectionKey(id), []);
       const events = await readKvJson(env, privateGalleryEventsKey(id), []);
       return json({ gallery, images, selection, events: events.slice(0, 120) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/gallery/publish" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      const galleryId = String(body.galleryId || "").trim();
+      if (!galleryId) return errorJson("Galeria inválida.", 400);
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+
+      const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+      if (!client?.email) {
+        return errorJson("Vincule um cliente com e-mail antes de publicar a galeria.", 400);
+      }
+
+      const token = randomToken(36);
+      const invite = {
+        token,
+        email: normalizeEmail(client.email),
+        clientId: client.id,
+        galleryId: gallery.id,
+        gallerySlug: gallery.slug,
+        invitedBy: user.email,
+        createdAt: new Date().toISOString(),
+        expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7,
+      };
+
+      await writeKvJson(env, clientGalleryInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
+
+      let resend = null;
+      let emailError = "";
+      try {
+        resend = await sendClientGalleryInviteEmail(env, client.email, token, gallery, client);
+      } catch (err) {
+        emailError = String(err?.message || err || "unknown");
+        console.error("Client gallery invite email error:", err);
+      }
+
+      gallery.publishedAt = gallery.publishedAt || new Date().toISOString();
+      gallery.lastInviteAt = new Date().toISOString();
+      gallery.updatedAt = new Date().toISOString();
+      await writeKvJson(env, privateGalleryKey(gallery.id), gallery);
+
+      await appendAuditLog(env, request, user, "publicar_galeria_cliente", "private_galleries", {
+        galleryId: gallery.id,
+        slug: gallery.slug,
+        email: client.email,
+        emailQueued: Boolean(resend),
+        emailError,
+      });
+      await appendPrivateGalleryEvent(env, request, gallery.id, "admin_publicou_galeria", {
+        email: client.email,
+        emailQueued: Boolean(resend),
+        emailError,
+      }, user);
+
+      return json({
+        ok: true,
+        gallery,
+        inviteUrl: clientGalleryInviteUrl(env, token),
+        galleryUrl: clientGalleryUrl(env, gallery.slug),
+        emailQueued: Boolean(resend),
+        emailError,
+        resendId: resend?.id || null,
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/private/gallery/upload-signature" && request.method === "POST") {
