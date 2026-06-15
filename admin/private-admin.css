@@ -76,6 +76,10 @@
   grid-column: 1 / -1;
 }
 
+.private-form [hidden] {
+  display: none !important;
+}
+
 .watermark-panel {
   border: 1px solid var(--line);
   background:

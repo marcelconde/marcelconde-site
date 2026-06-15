@@ -548,6 +548,26 @@ async function saveGallery(payload) {
   return data.gallery;
 }
 
+function currentGalleryPayload() {
+  return {
+    id: state.selectedGallery?.id,
+    clientId: galleryClient.value,
+    status: galleryStatus.value,
+    title: galleryName.value.trim(),
+    slug: gallerySlug.value.trim(),
+    subtitle: gallerySubtitle.value.trim(),
+    message: galleryMessage.value.trim(),
+    selectionLimit: Number(selectionLimit.value || 0),
+    watermark: {
+      enabled: watermarkEnabled.checked,
+      logoUrl: watermarkLogo.value.trim(),
+      position: watermarkPosition.value,
+      opacity: Number(watermarkOpacity.value || 0.28),
+      size: Number(watermarkSize.value || 180),
+    },
+  };
+}
+
 quickCreateBtn.addEventListener("click", async () => {
   const title = quickTitle.value.trim();
   if (!title) return showToast("Digite um título para a galeria.");
@@ -630,23 +650,7 @@ galleryForm.addEventListener("submit", async (event) => {
   saveGalleryBtn.disabled = true;
   saveGalleryBtn.textContent = "Salvando...";
   try {
-    await saveGallery({
-      id: state.selectedGallery?.id,
-      clientId: galleryClient.value,
-      status: galleryStatus.value,
-      title: galleryName.value.trim(),
-      slug: gallerySlug.value.trim(),
-      subtitle: gallerySubtitle.value.trim(),
-      message: galleryMessage.value.trim(),
-      selectionLimit: Number(selectionLimit.value || 0),
-      watermark: {
-        enabled: watermarkEnabled.checked,
-        logoUrl: watermarkLogo.value.trim(),
-        position: watermarkPosition.value,
-        opacity: Number(watermarkOpacity.value || 0.28),
-        size: Number(watermarkSize.value || 180),
-      },
-    });
+    await saveGallery(currentGalleryPayload());
     showToast("Galeria salva.");
   } catch (err) {
     showToast(err.message || "Erro ao salvar galeria.");
@@ -874,21 +878,26 @@ exportCsvBtn.addEventListener("click", async (event) => {
 
 publishGalleryBtn.addEventListener("click", async () => {
   if (!state.selectedGallery) return;
-  const client = state.clients.find((item) => item.id === state.selectedGallery.clientId);
+  let client = state.clients.find((item) => item.id === galleryClient.value);
   if (!client?.email) {
     showToast("Vincule um cliente com e-mail antes de publicar.");
     return;
   }
 
   publishGalleryBtn.disabled = true;
-  publishGalleryBtn.textContent = "Enviando...";
+  publishGalleryBtn.textContent = "Salvando...";
 
   try {
+    const savedGallery = await saveGallery(currentGalleryPayload());
+    client = state.clients.find((item) => item.id === savedGallery.clientId) || client;
+    publishGalleryBtn.disabled = true;
+    publishGalleryBtn.textContent = "Enviando...";
+
     const data = await getJson("/private/gallery/publish", {
       method: "POST",
       body: JSON.stringify({
-        galleryId: state.selectedGallery.id,
-        status: galleryStatus.value,
+        galleryId: savedGallery.id,
+        status: savedGallery.status || galleryStatus.value,
       }),
     });
 

@@ -211,6 +211,14 @@ function triggerDownload(url, fileName = "foto.jpg") {
   link.remove();
 }
 
+function safeFileName(value = "galeria") {
+  return String(value || "galeria")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/^-+|-+$/g, "") || "galeria";
+}
+
 async function downloadImage(image) {
   if (!image?.downloadUrl) return showToast("Download ainda não liberado para esta foto.");
   triggerDownload(image.downloadUrl, image.filename || image.display_name || "foto.jpg");
@@ -296,17 +304,31 @@ downloadAllBtn.addEventListener("click", async () => {
   downloadAllBtn.textContent = "Preparando...";
 
   try {
-    const data = await api(`/client-gallery/download-list?slug=${encodeURIComponent(slug)}`);
-    const images = data.images || [];
-    if (!images.length) {
-      showToast("Nenhuma foto liberada para download.");
-      return;
+    const headers = new Headers();
+    headers.set("Authorization", `Bearer ${getToken()}`);
+    const res = await fetch(`${CONFIG.workerUrl}/client-gallery/download-all?slug=${encodeURIComponent(slug)}`, {
+      headers,
+      cache: "no-store",
+    });
+
+    if (res.status === 401) {
+      localStorage.removeItem(CONFIG.tokenKey);
+      loginRedirect();
+      throw new Error("Faça login para acessar esta galeria.");
     }
 
-    images.forEach((image, index) => {
-      setTimeout(() => triggerDownload(image.downloadUrl, image.filename || `foto-${index + 1}.jpg`), index * 300);
-    });
-    showToast(`Iniciando download de ${images.length} fotos.`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Erro ${res.status}`);
+    }
+
+    downloadAllBtn.textContent = "Baixando...";
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const fileName = `${safeFileName(state.gallery.slug || state.gallery.title || slug)}-fotos.zip`;
+    triggerDownload(objectUrl, fileName);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+    showToast("Download das fotos iniciado.");
   } catch (err) {
     showToast(err.message || "Não foi possível baixar as fotos.");
   } finally {

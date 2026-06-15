@@ -624,6 +624,42 @@ async function destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId) {
   return text;
 }
 
+async function generateCloudinaryArchive(cloudName, apiKey, apiSecret, publicIds = [], archiveName = "galeria-fotos") {
+  const timestamp = Math.round(Date.now() / 1000);
+  const cleanPublicIds = publicIds.map((publicId) => sanitizePublicId(publicId)).filter(Boolean);
+  const params = {
+    flatten_folders: "true",
+    mode: "download",
+    public_ids: cleanPublicIds.join(","),
+    target_format: "zip",
+    target_public_id: archiveName,
+    use_original_filename: "true",
+    timestamp,
+  };
+  const signature = await signCloudinaryParams(params, apiSecret);
+  const body = new URLSearchParams({
+    flatten_folders: params.flatten_folders,
+    mode: params.mode,
+    target_format: params.target_format,
+    target_public_id: params.target_public_id,
+    use_original_filename: params.use_original_filename,
+    timestamp: String(params.timestamp),
+    api_key: apiKey,
+    signature,
+  });
+  cleanPublicIds.forEach((publicId) => body.append("public_ids[]", publicId));
+
+  return fetchWithTimeout(
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/generate_archive`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    },
+    60000
+  );
+}
+
 async function deleteCloudinaryFolder(cloudName, auth, path) {
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   const res = await fetchWithTimeout(
@@ -701,6 +737,14 @@ async function clearWorkerCache(cache, request, path = "") {
 
 function sanitizePublicId(publicId = "") {
   return String(publicId).trim().replace(/\.(jpg|jpeg|png|webp|gif|heic|avif)$/i, "");
+}
+
+function sanitizeDownloadName(value = "galeria") {
+  return String(value || "galeria")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9._-]+/gi, "-")
+    .replace(/^-+|-+$/g, "") || "galeria";
 }
 
 function getBearerToken(request) {
@@ -1321,6 +1365,49 @@ export default {
       ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, "cliente_baixou_foto", { publicId }, access.client));
 
       return Response.redirect(cloudinaryAttachmentUrl(image.url), 302);
+    }
+
+    if (url.pathname === "/client-gallery/download-all" && request.method === "GET") {
+      const slug = slugify(url.searchParams.get("slug") || "");
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (gallery.status !== "final" && gallery.allowDownload !== true) {
+        return errorJson("Download ainda não liberado.", 403);
+      }
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      const publicIds = images.map((image) => image.public_id).filter(Boolean);
+      if (!publicIds.length) return errorJson("Nenhuma foto liberada para download.", 404);
+
+      const archiveName = sanitizeDownloadName(`${gallery.slug || gallery.title || "galeria"}-fotos`);
+      const archiveRes = await generateCloudinaryArchive(cloudName, apiKey, apiSecret, publicIds, archiveName);
+      if (!archiveRes.ok) {
+        const text = await archiveRes.text();
+        return errorJson("Não foi possível gerar o ZIP das fotos.", 502, {
+          detail: text,
+        });
+      }
+
+      ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, "cliente_baixou_todas", {
+        totalImages: publicIds.length,
+      }, access.client));
+
+      return new Response(archiveRes.body, {
+        status: 200,
+        headers: {
+          ...corsHeaders(),
+          "Content-Type": archiveRes.headers.get("Content-Type") || "application/zip",
+          "Content-Disposition": `attachment; filename="${archiveName}.zip"`,
+          "Cache-Control": "no-store",
+        },
+      });
     }
 
     if (url.pathname === "/client-gallery/download-list" && request.method === "GET") {
