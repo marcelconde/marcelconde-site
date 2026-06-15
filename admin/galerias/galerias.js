@@ -35,6 +35,7 @@ const galleryStatus = $("#galleryStatus");
 const galleryName = $("#galleryName");
 const gallerySlug = $("#gallerySlug");
 const gallerySubtitle = $("#gallerySubtitle");
+const selectionLimitField = $("#selectionLimitField");
 const selectionLimit = $("#selectionLimit");
 const galleryMessage = $("#galleryMessage");
 const watermarkLogo = $("#watermarkLogo");
@@ -326,6 +327,14 @@ function renderStats() {
   statSelected.textContent = state.selection.length;
 }
 
+function updateGalleryStatusUi() {
+  const isSelection = galleryStatus.value === "selection";
+  selectionLimitField.hidden = !isSelection;
+  publishGalleryBtn.textContent = galleryStatus.value === "final"
+    ? "Enviar entrega final"
+    : "Publicar e enviar";
+}
+
 function renderGalleries() {
   renderStats();
   if (!state.galleries.length) {
@@ -358,6 +367,7 @@ function renderSelectedGallery() {
   if (!gallery) {
     galleryTitle.textContent = "Selecione uma galeria";
     galleryMeta.textContent = "Crie ou escolha uma galeria privada para enviar fotos e acompanhar a seleção.";
+    selectionLimitField.hidden = false;
     openGalleryBtn.classList.add("disabled");
     publishGalleryBtn.classList.add("disabled");
     publishGalleryBtn.disabled = true;
@@ -383,6 +393,7 @@ function renderSelectedGallery() {
   gallerySubtitle.value = gallery.subtitle || "";
   selectionLimit.value = gallery.selectionLimit || 15;
   galleryMessage.value = gallery.message || "";
+  updateGalleryStatusUi();
   watermarkLogo.value = gallery.watermark?.logoUrl || "";
   watermarkOpacity.value = gallery.watermark?.opacity ?? 0.28;
   watermarkSize.value = gallery.watermark?.size ?? 180;
@@ -611,6 +622,8 @@ watermarkSize.addEventListener("input", () => {
 galleryName.addEventListener("input", () => {
   if (!state.selectedGallery?.id || !gallerySlug.value.trim()) gallerySlug.value = slugify(galleryName.value);
 });
+
+galleryStatus.addEventListener("change", updateGalleryStatusUi);
 
 galleryForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -895,7 +908,7 @@ publishGalleryBtn.addEventListener("click", async () => {
     showToast(err.message || "Erro ao publicar galeria.");
   } finally {
     publishGalleryBtn.disabled = false;
-    publishGalleryBtn.textContent = "Publicar e enviar";
+    updateGalleryStatusUi();
   }
 });
 
