@@ -286,6 +286,15 @@ function renderPhotoBulkActions() {
   deleteSelectedPhotosBtn.disabled = !count;
 }
 
+function syncDeletionSelectionToDom() {
+  photoGrid.querySelectorAll("[data-select-image]").forEach((input) => {
+    const checked = state.selectedForDeletion.has(input.dataset.selectImage);
+    input.checked = checked;
+    input.closest(".gallery-photo-card")?.classList.toggle("marked", checked);
+  });
+  renderPhotoBulkActions();
+}
+
 async function workerFetch(path, options = {}) {
   const headers = new Headers(options.headers || {});
   const token = getToken();
@@ -444,12 +453,12 @@ function renderPhotos() {
   const selected = new Set(state.selection);
   const deleting = state.selectedForDeletion;
   photoGrid.innerHTML = state.images.map((image) => `
-    <article class="gallery-photo-card${deleting.has(image.public_id) ? " marked" : ""}">
+    <article class="gallery-photo-card${deleting.has(image.public_id) ? " marked" : ""}" data-public-id="${escapeHtml(image.public_id || "")}">
       <label class="photo-select" title="Selecionar foto">
         <input type="checkbox" data-select-image="${escapeHtml(image.public_id)}" aria-label="Selecionar foto" ${deleting.has(image.public_id) ? "checked" : ""}>
         <span>Selecionar</span>
       </label>
-      <img src="${escapeHtml(cloudUrl(image.url, "w_400,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" loading="lazy">
+      <img src="${escapeHtml(cloudUrl(image.url, "w_400,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" loading="lazy" decoding="async">
       <div class="gallery-photo-body">
         <strong>${selected.has(image.public_id) ? "♥ " : ""}${escapeHtml(image.filename || image.display_name || "foto")}</strong>
         <small>${escapeHtml(image.public_id || "")}</small>
@@ -457,19 +466,6 @@ function renderPhotos() {
       </div>
     </article>
   `).join("");
-
-  photoGrid.querySelectorAll("[data-delete-image]").forEach((button) => {
-    button.addEventListener("click", () => deleteImage(button.dataset.deleteImage));
-  });
-
-  photoGrid.querySelectorAll("[data-select-image]").forEach((input) => {
-    input.addEventListener("change", () => {
-      const publicId = input.dataset.selectImage;
-      if (input.checked) state.selectedForDeletion.add(publicId);
-      else state.selectedForDeletion.delete(publicId);
-      renderPhotos();
-    });
-  });
 
   renderPhotoBulkActions();
 }
@@ -849,15 +845,31 @@ selectAllPhotosBtn.addEventListener("click", () => {
       if (image.public_id) state.selectedForDeletion.add(image.public_id);
     });
   }
-  renderPhotos();
+  syncDeletionSelectionToDom();
 });
 
 clearSelectedPhotosBtn.addEventListener("click", () => {
   state.selectedForDeletion.clear();
-  renderPhotos();
+  syncDeletionSelectionToDom();
 });
 
 deleteSelectedPhotosBtn.addEventListener("click", deleteSelectedImages);
+
+photoGrid.addEventListener("click", (event) => {
+  const deleteButton = event.target.closest("[data-delete-image]");
+  if (!deleteButton) return;
+  deleteImage(deleteButton.dataset.deleteImage);
+});
+
+photoGrid.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-select-image]");
+  if (!input) return;
+  const publicId = input.dataset.selectImage;
+  if (input.checked) state.selectedForDeletion.add(publicId);
+  else state.selectedForDeletion.delete(publicId);
+  input.closest(".gallery-photo-card")?.classList.toggle("marked", input.checked);
+  renderPhotoBulkActions();
+});
 
 deleteGalleryBtn.addEventListener("click", async () => {
   if (!state.selectedGallery) return;

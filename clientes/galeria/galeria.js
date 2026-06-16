@@ -42,6 +42,10 @@ function escapeHtml(value = "") {
     .replace(/'/g, "&#039;");
 }
 
+function escapeSelector(value = "") {
+  return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/["\\]/g, "\\$&");
+}
+
 function cloudUrl(src, transform) {
   if (!src || !src.includes("/upload/")) return src;
   return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${transform}/`);
@@ -126,7 +130,7 @@ function renderImages(images) {
       : `<button class="heart-btn ${selected ? "selected" : ""}" type="button" aria-label="Selecionar foto">${selected ? "♥" : "♡"}</button>`;
     return `
       <article class="photo-card" data-public-id="${escapeHtml(image.public_id)}">
-        <img src="${escapeHtml(cloudUrl(image.url, "w_400,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" loading="lazy">
+        <img src="${escapeHtml(cloudUrl(image.url, "w_400,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" loading="lazy" decoding="async">
         ${wm}
         ${action}
         <span class="photo-name">${escapeHtml(image.filename || image.display_name || "")}</span>
@@ -150,7 +154,7 @@ async function loadBatch() {
 
     if (state.images.length === data.images.length) renderHeader();
     renderImages(data.images || []);
-    updatePhotoButtons();
+    updateCounters();
     loadSentinel.textContent = state.nextCursor === null ? "Todas as fotos foram carregadas." : "Carregar mais fotos";
   } catch (err) {
     galleryTitle.textContent = "Galeria indisponível";
@@ -161,7 +165,7 @@ async function loadBatch() {
   }
 }
 
-function updatePhotoButtons() {
+function updatePhotoButtons(publicIdFilter = "") {
   if (state.gallery?.allowDownload) {
     if (state.currentImage) {
       lightboxHeart.classList.add("download-mode");
@@ -171,9 +175,14 @@ function updatePhotoButtons() {
     return;
   }
 
-  document.querySelectorAll(".photo-card").forEach((card) => {
+  const cards = publicIdFilter
+    ? photoGrid.querySelectorAll(`.photo-card[data-public-id="${escapeSelector(publicIdFilter)}"]`)
+    : photoGrid.querySelectorAll(".photo-card");
+
+  cards.forEach((card) => {
     const publicId = card.dataset.publicId;
     const button = card.querySelector(".heart-btn");
+    if (!button) return;
     const selected = state.selected.has(publicId);
     button.classList.toggle("selected", selected);
     button.textContent = selected ? "♥" : "♡";
@@ -195,7 +204,7 @@ async function toggleFavorite(publicId, shouldSelect) {
       body: JSON.stringify({ slug, publicId, selected: shouldSelect }),
     });
     state.selected = new Set(data.selectedPublicIds || []);
-    updatePhotoButtons();
+    updatePhotoButtons(publicId);
   } catch (err) {
     showToast(err.message || "Não foi possível selecionar esta foto.");
   }
@@ -255,7 +264,7 @@ photoGrid.addEventListener("click", (event) => {
 function openLightbox(image) {
   state.currentImage = image;
   lightboxStage.innerHTML = `
-    <img src="${escapeHtml(cloudUrl(image.url, "w_1600,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}">
+    <img src="${escapeHtml(cloudUrl(image.url, "w_1600,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" decoding="async">
     ${watermarkStyle()}
   `;
   lightbox.classList.remove("hidden");

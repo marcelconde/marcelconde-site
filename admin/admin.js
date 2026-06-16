@@ -128,6 +128,19 @@ function safeAlbumName(value) {
     .trim();
 }
 
+async function mapLimit(items, limit, mapper) {
+  const output = new Array(items.length);
+  let index = 0;
+  const workers = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    while (index < items.length) {
+      const current = index++;
+      output[current] = await mapper(items[current], current);
+    }
+  });
+  await Promise.all(workers);
+  return output;
+}
+
 function formatDate(value) {
   if (!value) return "sem data";
   const date = new Date(value);
@@ -847,25 +860,29 @@ async function loadLikesOverview() {
   if (!state.albums.length) await loadAlbums(false);
 
   const rows = [];
-  await Promise.allSettled(state.albums.map(async (album) => {
-    const slug = albumSlug(album.path);
-    const [albumData, likesData] = await Promise.all([
-      fetch(`${CONFIG.workerUrl}/album?path=${encodeURIComponent(album.path)}&refresh=1`).then((r) => r.ok ? r.json() : { images: [] }),
-      getJson(`/likes?album=${encodeURIComponent(slug)}`),
-    ]);
+  await mapLimit(state.albums, 4, async (album) => {
+    try {
+      const slug = albumSlug(album.path);
+      const [albumData, likesData] = await Promise.all([
+        fetch(`${CONFIG.workerUrl}/album?path=${encodeURIComponent(album.path)}&refresh=1`).then((r) => r.ok ? r.json() : { images: [] }),
+        getJson(`/likes?album=${encodeURIComponent(slug)}`),
+      ]);
 
-    if (!likesData._authorized) return;
-    const byAsset = likesData._byAsset || {};
-    const { _authorized, _byAsset, ...byIndex } = likesData;
+      if (!likesData._authorized) return;
+      const byAsset = likesData._byAsset || {};
+      const { _authorized, _byAsset, ...byIndex } = likesData;
 
-    (albumData.images || []).forEach((image, index) => {
-      const count = Math.max(
-        Number(image.public_id ? byAsset[image.public_id] || 0 : 0),
-        Number(byIndex[String(index)] || 0)
-      );
-      if (count > 0) rows.push({ album, image, index, count });
-    });
-  }));
+      (albumData.images || []).forEach((image, index) => {
+        const count = Math.max(
+          Number(image.public_id ? byAsset[image.public_id] || 0 : 0),
+          Number(byIndex[String(index)] || 0)
+        );
+        if (count > 0) rows.push({ album, image, index, count });
+      });
+    } catch {
+      // Mantém o painel responsivo mesmo se um álbum falhar na API.
+    }
+  });
 
   rows.sort((a, b) => b.count - a.count);
   $("#statLikes").textContent = rows.reduce((sum, row) => sum + row.count, 0);
