@@ -1439,7 +1439,32 @@
 
       .hero-inner { grid-column: 1; }
 
-      .hero-photo-reel { display: none; }
+      .hero-photo-reel {
+        display: block;
+        z-index: 0;
+      }
+
+      .hero-photo-reel::before {
+        background:
+          linear-gradient(to bottom, rgba(8,8,8,0.55) 0%, rgba(8,8,8,0.28) 35%, rgba(8,8,8,0.78) 100%),
+          linear-gradient(to right, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.58) 58%, rgba(8,8,8,0.82) 100%);
+      }
+
+      .hero-photo-reel::after {
+        background:
+          radial-gradient(circle at 74% 28%, rgba(184,149,106,0.12) 0%, transparent 42%),
+          linear-gradient(to top, var(--bg) 0%, transparent 24%);
+      }
+
+      .hero-reel-img {
+        object-position: center center;
+        filter: brightness(0.58) saturate(0.76) contrast(0.98) blur(1px);
+        transform: scale(1.04);
+      }
+
+      .hero-reel-img.active {
+        opacity: 0.52;
+      }
 
       nav {
         padding: 1.4rem 5%;
