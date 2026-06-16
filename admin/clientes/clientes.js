@@ -22,6 +22,7 @@ const clientEmail = $("#clientEmail");
 const clientPhone = $("#clientPhone");
 const clientNotes = $("#clientNotes");
 const newClientBtn = $("#newClientBtn");
+const deleteClientBtn = $("#deleteClientBtn");
 const refreshBtn = $("#refreshBtn");
 const saveClientBtn = $("#saveClientBtn");
 const toastEl = $("#toast");
@@ -75,6 +76,7 @@ function clearForm() {
   clientEmail.value = "";
   clientPhone.value = "";
   clientNotes.value = "";
+  deleteClientBtn.disabled = true;
   clientName.focus();
   renderClients();
 }
@@ -87,6 +89,7 @@ function selectClient(id) {
   clientEmail.value = state.selectedClient.email || "";
   clientPhone.value = state.selectedClient.phone || "";
   clientNotes.value = state.selectedClient.notes || "";
+  deleteClientBtn.disabled = false;
   renderClients();
 }
 
@@ -145,6 +148,7 @@ clientForm.addEventListener("submit", async (event) => {
     if (existingIndex >= 0) state.clients[existingIndex] = data.client;
     else state.clients.unshift(data.client);
     state.selectedClient = data.client;
+    deleteClientBtn.disabled = false;
     showToast("Cliente salvo.");
     renderClients();
   } catch (err) {
@@ -156,6 +160,45 @@ clientForm.addEventListener("submit", async (event) => {
 });
 
 newClientBtn.addEventListener("click", clearForm);
+
+deleteClientBtn.addEventListener("click", async () => {
+  if (!state.selectedClient) return;
+  const client = state.selectedClient;
+  const linkedGalleries = state.galleries.filter((gallery) => gallery.clientId === client.id).length;
+  const linkedMessage = linkedGalleries
+    ? `\n\nEste cliente tem ${linkedGalleries} galeria${linkedGalleries === 1 ? "" : "s"} vinculada${linkedGalleries === 1 ? "" : "s"}. Apague ou troque essas galerias antes.`
+    : "";
+  if (linkedGalleries) {
+    showToast("Cliente com galeria vinculada não pode ser apagado.");
+    alert(`Não é possível apagar "${client.name || client.email}" agora.${linkedMessage}`);
+    return;
+  }
+
+  const confirmed = confirm(
+    `Apagar definitivamente o cliente "${client.name || client.email}"?\n\n` +
+    "O acesso dele à área do cliente também será removido. Esta ação não pode ser desfeita."
+  );
+  if (!confirmed) return;
+
+  deleteClientBtn.disabled = true;
+  deleteClientBtn.textContent = "Apagando...";
+
+  try {
+    await getJson("/private/client/delete", {
+      method: "POST",
+      body: JSON.stringify({ clientId: client.id }),
+    });
+    state.clients = state.clients.filter((item) => item.id !== client.id);
+    clearForm();
+    showToast("Cliente apagado.");
+  } catch (err) {
+    showToast(err.message || "Erro ao apagar cliente.");
+  } finally {
+    deleteClientBtn.textContent = "Apagar cliente";
+    deleteClientBtn.disabled = !state.selectedClient;
+  }
+});
+
 refreshBtn.addEventListener("click", loadData);
 
 loadData().catch((err) => {

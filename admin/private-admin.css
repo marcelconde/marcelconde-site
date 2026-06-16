@@ -374,26 +374,36 @@
 
 .photo-select {
   position: absolute;
-  top: 9px;
-  left: 9px;
+  top: 8px;
+  left: 8px;
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(8,8,8,0.72);
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: rgba(8,8,8,0.62);
   border: 1px solid rgba(255,255,255,0.18);
-  padding: 7px 9px;
+  padding: 0;
   color: var(--ink);
-  font-size: 0.72rem;
-  font-weight: 800;
   cursor: pointer;
   backdrop-filter: blur(8px);
 }
 
 .photo-select input {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
   accent-color: var(--gold);
+}
+
+.photo-select span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .gallery-photo-card img {

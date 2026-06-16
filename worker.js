@@ -507,6 +507,101 @@ async function savePrivateGallery(env, input = {}) {
   return gallery;
 }
 
+async function deletePrivateClient(env, clientId) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const id = String(clientId || "").trim();
+  if (!id) throw new Error("Cliente inválido.");
+
+  const client = await readKvJson(env, privateClientKey(id), null);
+  if (!client) return null;
+
+  const galleries = await listPrivateGalleries(env);
+  const linkedGalleries = galleries.filter((gallery) => gallery.clientId === id);
+  if (linkedGalleries.length) {
+    const err = new Error("Este cliente possui galerias vinculadas. Apague ou troque essas galerias antes.");
+    err.status = 409;
+    err.linkedGalleries = linkedGalleries.length;
+    throw err;
+  }
+
+  const index = await readKvJson(env, privateClientsIndexKey(), []);
+  const clientEmail = normalizeEmail(client.email || "");
+  const otherClients = (await listPrivateClients(env)).filter((item) => item.id !== id);
+  const emailStillUsed = clientEmail && otherClients.some((item) => normalizeEmail(item.email || "") === clientEmail);
+  const deleteOps = [
+    env.LIKES_KV.delete(privateClientKey(id)),
+    writeKvJson(env, privateClientsIndexKey(), index.filter((item) => item !== id)),
+  ];
+  if (clientEmail && !emailStillUsed) deleteOps.push(env.LIKES_KV.delete(clientUserKey(clientEmail)));
+  await Promise.allSettled(deleteOps);
+
+  return client;
+}
+
+async function deletePrivateGallery(env, galleryId) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const id = String(galleryId || "").trim();
+  if (!id) throw new Error("Galeria inválida.");
+
+  const gallery = await readKvJson(env, privateGalleryKey(id), null);
+  if (!gallery) return null;
+
+  const images = await readKvJson(env, privateGalleryImagesKey(id), []);
+  const deletedIds = new Set();
+  const failed = [];
+
+  const cloudName = env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = env.CLOUDINARY_API_KEY;
+  const apiSecret = env.CLOUDINARY_API_SECRET;
+
+  if (images.length && (!cloudName || !apiKey || !apiSecret)) {
+    const err = new Error("Missing Cloudinary env vars");
+    err.status = 500;
+    throw err;
+  }
+
+  for (const image of images) {
+    const publicId = sanitizePublicId(image.public_id || "");
+    if (!publicId) continue;
+    try {
+      await destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId);
+      deletedIds.add(publicId);
+    } catch (err) {
+      failed.push({
+        public_id: publicId,
+        error: String(err?.message || err || "unknown"),
+      });
+    }
+  }
+
+  const index = await readKvJson(env, privateGalleriesIndexKey(), []);
+  const deleteOps = [
+    env.LIKES_KV.delete(privateGalleryKey(id)),
+    env.LIKES_KV.delete(privateGalleryImagesKey(id)),
+    env.LIKES_KV.delete(privateGallerySelectionKey(id)),
+    env.LIKES_KV.delete(privateGalleryEventsKey(id)),
+    env.LIKES_KV.delete(privateGalleryBySlugKey(gallery.slug || "")),
+    writeKvJson(env, privateGalleriesIndexKey(), index.filter((item) => item !== id)),
+  ];
+
+  await Promise.allSettled(deleteOps);
+
+  if (cloudName && apiKey && apiSecret && gallery.slug) {
+    const auth = btoa(`${apiKey}:${apiSecret}`);
+    await Promise.allSettled([
+      deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}/selecao`),
+      deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}/finais`),
+      deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}`),
+    ]);
+  }
+
+  return {
+    gallery,
+    deleted: deletedIds.size,
+    failed,
+  };
+}
+
 async function getPrivateGalleryBySlug(env, slug = "") {
   const id = await readKvJson(env, privateGalleryBySlugKey(slugify(slug)), "");
   if (!id) return null;
@@ -1623,6 +1718,28 @@ export default {
       return json({ client }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
     }
 
+    if (url.pathname === "/private/client/delete" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      try {
+        const client = await deletePrivateClient(env, body.id || body.clientId);
+        if (!client) return errorJson("Cliente não encontrado.", 404);
+
+        await appendAuditLog(env, request, user, "excluir_cliente_privado", "private_clients", {
+          clientId: client.id,
+          email: client.email,
+        });
+
+        return json({ ok: true, clientId: client.id }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        return errorJson(err.message || "Erro ao apagar cliente.", err.status || 500, {
+          linkedGalleries: err.linkedGalleries || undefined,
+        });
+      }
+    }
+
     if (url.pathname === "/private/galleries" && request.method === "GET") {
       const { error } = await requireAdminUser(request, env);
       if (error) return error;
@@ -1652,6 +1769,33 @@ export default {
       const selection = await readKvJson(env, privateGallerySelectionKey(id), []);
       const events = await readKvJson(env, privateGalleryEventsKey(id), []);
       return json({ gallery, images, selection, events: events.slice(0, 120) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/gallery/delete" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      try {
+        const result = await deletePrivateGallery(env, body.id || body.galleryId);
+        if (!result) return errorJson("Galeria não encontrada.", 404);
+
+        await appendAuditLog(env, request, user, "excluir_galeria_privada", "private_galleries", {
+          galleryId: result.gallery.id,
+          slug: result.gallery.slug,
+          deletedImages: result.deleted,
+          failedImages: result.failed.length,
+        });
+
+        return json({
+          ok: true,
+          galleryId: result.gallery.id,
+          deletedImages: result.deleted,
+          failedImages: result.failed,
+        }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        return errorJson(err.message || "Erro ao apagar galeria.", err.status || 500);
+      }
     }
 
     if (url.pathname === "/private/gallery/publish" && request.method === "POST") {

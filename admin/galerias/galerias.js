@@ -56,6 +56,7 @@ const publishGalleryBtn = $("#publishGalleryBtn");
 const openGalleryBtn = $("#openGalleryBtn");
 const exportCsvBtn = $("#exportCsvBtn");
 const pruneUnselectedBtn = $("#pruneUnselectedBtn");
+const deleteGalleryBtn = $("#deleteGalleryBtn");
 const shareLink = $("#shareLink");
 const photoBulkActions = $("#photoBulkActions");
 const bulkCount = $("#bulkCount");
@@ -374,6 +375,8 @@ function renderSelectedGallery() {
     exportCsvBtn.classList.add("disabled");
     pruneUnselectedBtn.classList.add("disabled");
     pruneUnselectedBtn.disabled = true;
+    deleteGalleryBtn.classList.add("disabled");
+    deleteGalleryBtn.disabled = true;
     shareLink.textContent = "Crie ou selecione uma galeria para gerar o link do cliente.";
     photoGrid.innerHTML = "";
     eventList.innerHTML = "";
@@ -413,6 +416,8 @@ function renderSelectedGallery() {
   pruneUnselectedBtn.classList.toggle("disabled", !state.selection.length || !removableCount);
   pruneUnselectedBtn.disabled = !state.selection.length || !removableCount;
   pruneUnselectedBtn.textContent = removableCount ? `Remover ${removableCount} não selecionadas` : "Remover não selecionadas";
+  deleteGalleryBtn.classList.remove("disabled");
+  deleteGalleryBtn.disabled = false;
   shareLink.textContent = url;
 
   renderGalleries();
@@ -440,8 +445,8 @@ function renderPhotos() {
   const deleting = state.selectedForDeletion;
   photoGrid.innerHTML = state.images.map((image) => `
     <article class="gallery-photo-card${deleting.has(image.public_id) ? " marked" : ""}">
-      <label class="photo-select">
-        <input type="checkbox" data-select-image="${escapeHtml(image.public_id)}" ${deleting.has(image.public_id) ? "checked" : ""}>
+      <label class="photo-select" title="Selecionar foto">
+        <input type="checkbox" data-select-image="${escapeHtml(image.public_id)}" aria-label="Selecionar foto" ${deleting.has(image.public_id) ? "checked" : ""}>
         <span>Selecionar</span>
       </label>
       <img src="${escapeHtml(cloudUrl(image.url, "w_400,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" loading="lazy">
@@ -853,6 +858,42 @@ clearSelectedPhotosBtn.addEventListener("click", () => {
 });
 
 deleteSelectedPhotosBtn.addEventListener("click", deleteSelectedImages);
+
+deleteGalleryBtn.addEventListener("click", async () => {
+  if (!state.selectedGallery) return;
+  const title = state.selectedGallery.title || "galeria";
+  const confirmed = confirm(
+    `Apagar definitivamente a galeria "${title}"?\n\n` +
+    "As fotos vinculadas também serão removidas do Cloudinary. Esta ação não pode ser desfeita."
+  );
+  if (!confirmed) return;
+
+  deleteGalleryBtn.disabled = true;
+  deleteGalleryBtn.textContent = "Apagando...";
+
+  try {
+    const deletedId = state.selectedGallery.id;
+    const data = await getJson("/private/gallery/delete", {
+      method: "POST",
+      body: JSON.stringify({ galleryId: deletedId }),
+    });
+
+    state.galleries = state.galleries.filter((gallery) => gallery.id !== deletedId);
+    state.selectedGallery = null;
+    clearGalleryMediaState();
+    await loadData();
+
+    const failed = Array.isArray(data.failedImages) ? data.failedImages.length : 0;
+    showToast(failed
+      ? `Galeria apagada. ${failed} foto${failed === 1 ? "" : "s"} não foi removida${failed === 1 ? "" : "s"} do Cloudinary.`
+      : "Galeria apagada.");
+  } catch (err) {
+    showToast(err.message || "Erro ao apagar galeria.");
+  } finally {
+    deleteGalleryBtn.textContent = "Apagar galeria";
+    renderSelectedGallery();
+  }
+});
 
 refreshBtn.addEventListener("click", loadData);
 
