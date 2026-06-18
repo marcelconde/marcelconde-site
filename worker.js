@@ -140,6 +140,18 @@ function privateGalleryEventsKey(id) {
   return `private_gallery_events:${id}`;
 }
 
+function privateGalleryPaymentKey(id) {
+  return `private_gallery_payment:${id}`;
+}
+
+function privateGalleryLatestPaymentKey(id) {
+  return `private_gallery_latest_payment:${id}`;
+}
+
+function mercadoPagoPaymentKey(providerPaymentId) {
+  return `mercadopago_payment:${providerPaymentId}`;
+}
+
 function clientUserKey(email) {
   return `client_user:${normalizeEmail(email)}`;
 }
@@ -373,8 +385,98 @@ function normalizeWatermark(input = {}) {
   };
 }
 
+function clampNumber(value, min, max, fallback = 0) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.min(Math.max(num, min), max);
+}
+
+function normalizePercent(value = 0) {
+  return Math.round(clampNumber(value, 0, 95, 0) * 100) / 100;
+}
+
+function normalizeMoneyCents(value = 0) {
+  if (typeof value === "string") {
+    const normalized = value
+      .replace(/[^\d,.-]/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+    const parsed = Number(normalized);
+    return Math.max(0, Math.min(Math.round((Number.isFinite(parsed) ? parsed : 0) * 100), 5000000));
+  }
+  return Math.max(0, Math.min(Math.round(Number(value || 0)), 5000000));
+}
+
+function normalizeGalleryCommerce(input = {}, existing = {}) {
+  const quantityEnabled = input.quantityDiscountEnabled === undefined
+    ? existing.quantityDiscountEnabled === true
+    : input.quantityDiscountEnabled === true || input.quantityDiscountEnabled === "true";
+
+  return {
+    extraPhotoPriceCents: normalizeMoneyCents(input.extraPhotoPriceCents ?? existing.extraPhotoPriceCents ?? 0),
+    allPhotosDiscountPercent: normalizePercent(input.allPhotosDiscountPercent ?? existing.allPhotosDiscountPercent ?? 0),
+    quantityDiscountEnabled: quantityEnabled,
+    quantityDiscountMinPhotos: Math.max(0, Math.min(Math.round(Number(input.quantityDiscountMinPhotos ?? existing.quantityDiscountMinPhotos ?? 0)), 2000)),
+    quantityDiscountPercent: normalizePercent(input.quantityDiscountPercent ?? existing.quantityDiscountPercent ?? 0),
+  };
+}
+
+function calculateSelectionPricing(gallery = {}, images = [], selection = []) {
+  const selectedPublicIds = [...new Set((selection || []).filter(Boolean))];
+  const selectedTotal = selectedPublicIds.length;
+  const totalImages = images.length;
+  const includedPhotos = Math.max(0, Math.round(Number(gallery.selectionLimit || 0)));
+  const extraCount = Math.max(0, selectedTotal - includedPhotos);
+  const unitPriceCents = normalizeMoneyCents(gallery.extraPhotoPriceCents || 0);
+  const subtotalCents = extraCount * unitPriceCents;
+  const selectedAll = totalImages > 0 && selectedTotal >= totalImages;
+
+  let discountType = "none";
+  let discountLabel = "";
+  let discountPercent = 0;
+
+  if (subtotalCents > 0) {
+    if (selectedAll && normalizePercent(gallery.allPhotosDiscountPercent || 0) > 0) {
+      discountType = "all_photos";
+      discountLabel = "Desconto por todas as fotos";
+      discountPercent = normalizePercent(gallery.allPhotosDiscountPercent || 0);
+    } else if (
+      gallery.quantityDiscountEnabled === true &&
+      Number(gallery.quantityDiscountMinPhotos || 0) > 0 &&
+      selectedTotal >= Number(gallery.quantityDiscountMinPhotos || 0) &&
+      normalizePercent(gallery.quantityDiscountPercent || 0) > 0
+    ) {
+      discountType = "quantity";
+      discountLabel = `Desconto a partir de ${Number(gallery.quantityDiscountMinPhotos || 0)} fotos`;
+      discountPercent = normalizePercent(gallery.quantityDiscountPercent || 0);
+    }
+  }
+
+  const discountCents = Math.round(subtotalCents * (discountPercent / 100));
+  const totalCents = Math.max(0, subtotalCents - discountCents);
+
+  return {
+    includedPhotos,
+    selectedTotal,
+    totalImages,
+    extraCount,
+    unitPriceCents,
+    subtotalCents,
+    discountType,
+    discountLabel,
+    discountPercent,
+    discountCents,
+    totalCents,
+    selectedAll,
+    requiresPayment: totalCents > 0,
+    canCompleteWithoutPayment: selectedTotal >= includedPhotos && totalCents === 0,
+    needsMoreIncludedPhotos: includedPhotos > 0 && selectedTotal < includedPhotos,
+  };
+}
+
 function publicPrivateGallery(gallery = {}, images = [], selection = []) {
   const selected = new Set(selection);
+  const pricing = calculateSelectionPricing(gallery, images, selection);
   return {
     id: gallery.id,
     slug: gallery.slug,
@@ -383,12 +485,20 @@ function publicPrivateGallery(gallery = {}, images = [], selection = []) {
     message: gallery.message || "",
     coverUrl: gallery.coverUrl || images[0]?.url || null,
     selectionLimit: Number(gallery.selectionLimit || 0),
+    extraPhotoPriceCents: normalizeMoneyCents(gallery.extraPhotoPriceCents || 0),
+    allPhotosDiscountPercent: normalizePercent(gallery.allPhotosDiscountPercent || 0),
+    quantityDiscountEnabled: gallery.quantityDiscountEnabled === true,
+    quantityDiscountMinPhotos: Math.max(0, Number(gallery.quantityDiscountMinPhotos || 0)),
+    quantityDiscountPercent: normalizePercent(gallery.quantityDiscountPercent || 0),
     status: gallery.status || "selection",
     allowDownload: gallery.allowDownload === true || gallery.status === "final",
     watermark: normalizeWatermark(gallery.watermark || {}),
     totalImages: images.length,
     totalSelected: selection.length,
     selectedPublicIds: [...selected],
+    selectionCompletedAt: gallery.selectionCompletedAt || null,
+    selectionPaymentId: gallery.selectionPaymentId || null,
+    pricing,
   };
 }
 
@@ -477,6 +587,7 @@ async function savePrivateGallery(env, input = {}) {
   let slug = requestedSlug;
   const slugOwner = await readKvJson(env, privateGalleryBySlugKey(slug), null);
   if (slugOwner && slugOwner !== id) slug = `${slug}-${randomToken(3).toLowerCase()}`;
+  const commerce = normalizeGalleryCommerce(input, existing);
 
   const gallery = {
     ...existing,
@@ -487,6 +598,7 @@ async function savePrivateGallery(env, input = {}) {
     subtitle: cleanGalleryText(input.subtitle || existing.subtitle || "", 180),
     message: cleanGalleryText(input.message || existing.message || "", 1200),
     selectionLimit: Math.max(0, Math.min(Number(input.selectionLimit ?? existing.selectionLimit ?? 15), 2000)),
+    ...commerce,
     status: ["selection", "editing", "final"].includes(input.status || existing.status)
       ? (input.status || existing.status)
       : "selection",
@@ -580,6 +692,7 @@ async function deletePrivateGallery(env, galleryId) {
     env.LIKES_KV.delete(privateGalleryImagesKey(id)),
     env.LIKES_KV.delete(privateGallerySelectionKey(id)),
     env.LIKES_KV.delete(privateGalleryEventsKey(id)),
+    env.LIKES_KV.delete(privateGalleryLatestPaymentKey(id)),
     env.LIKES_KV.delete(privateGalleryBySlugKey(gallery.slug || "")),
     writeKvJson(env, privateGalleriesIndexKey(), index.filter((item) => item !== id)),
   ];
@@ -1139,6 +1252,278 @@ async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {
   }
 }
 
+function formatCurrencyFromCents(cents = 0) {
+  return `R$ ${(Number(cents || 0) / 100).toFixed(2).replace(".", ",")}`;
+}
+
+function selectedImagesFromPublicIds(images = [], publicIds = []) {
+  const wanted = new Set(publicIds);
+  return images.filter((image) => wanted.has(image.public_id));
+}
+
+async function sendSelectionCompletedEmail(env, gallery = {}, client = {}, selectedImages = [], pricing = {}, payment = null) {
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY não configurada no Worker.");
+  }
+
+  const to = adminEmail(env) || "contato@marcelconde.com.br";
+  const galleryTitle = emailHtml(gallery.title || "galeria");
+  const clientName = emailHtml(client.name || client.email || "Cliente");
+  const clientEmail = emailHtml(client.email || "");
+  const fileList = selectedImages
+    .map((image) => image.filename || image.display_name || String(image.public_id || "").split("/").pop())
+    .filter(Boolean)
+    .map((name) => `<li>${emailHtml(name)}</li>`)
+    .join("");
+  const paymentHtml = payment
+    ? `<p><strong>Pagamento:</strong> ${formatCurrencyFromCents(payment.amountCents)} (${emailHtml(payment.providerPaymentId || payment.id || "")})</p>`
+    : "<p><strong>Pagamento:</strong> não houve fotos extras.</p>";
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      to: [to],
+      subject: `Seleção concluída — ${gallery.title || "galeria"}`,
+      html: `<p>Seleção concluída na galeria <strong>${galleryTitle}</strong>.</p>
+             <p><strong>Cliente:</strong> ${clientName} (${clientEmail})</p>
+             <p><strong>Total selecionado:</strong> ${Number(pricing.selectedTotal || selectedImages.length)} foto(s)</p>
+             <p><strong>Fotos inclusas:</strong> ${Number(pricing.includedPhotos || 0)} · <strong>Extras:</strong> ${Number(pricing.extraCount || 0)}</p>
+             <p><strong>Desconto:</strong> ${Number(pricing.discountPercent || 0)}% (${emailHtml(pricing.discountLabel || "sem desconto")})</p>
+             <p><strong>Total bruto extras:</strong> ${formatCurrencyFromCents(pricing.subtotalCents || 0)} · <strong>Total final:</strong> ${formatCurrencyFromCents(pricing.totalCents || 0)}</p>
+             ${paymentHtml}
+             <p><strong>Arquivos selecionados:</strong></p>
+             <ol>${fileList || "<li>Nenhum arquivo encontrado.</li>"}</ol>`,
+    }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${text}`);
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+async function completePrivateGallerySelection(env, request, gallery, client, images, selectedPublicIds, payment = null) {
+  const now = new Date().toISOString();
+  const cleanSelection = [...new Set((selectedPublicIds || []).filter(Boolean))];
+  const pricing = payment?.pricing || calculateSelectionPricing(gallery, images, cleanSelection);
+
+  await writeKvJson(env, privateGallerySelectionKey(gallery.id), cleanSelection);
+
+  const nextGallery = {
+    ...gallery,
+    selectionCompletedAt: gallery.selectionCompletedAt || now,
+    selectionPaymentId: payment?.id || gallery.selectionPaymentId || null,
+    updatedAt: now,
+  };
+  await writeKvJson(env, privateGalleryKey(gallery.id), nextGallery);
+
+  let emailQueued = false;
+  let emailError = "";
+  try {
+    await sendSelectionCompletedEmail(
+      env,
+      nextGallery,
+      client,
+      selectedImagesFromPublicIds(images, cleanSelection),
+      pricing,
+      payment
+    );
+    emailQueued = true;
+  } catch (err) {
+    emailError = String(err?.message || err || "unknown");
+    console.error("Selection completed email error:", err);
+  }
+
+  await appendPrivateGalleryEvent(env, request, gallery.id, "concluir_selecao", {
+    totalSelected: cleanSelection.length,
+    selectedPublicIds: cleanSelection,
+    pricing,
+    paymentId: payment?.id || null,
+    providerPaymentId: payment?.providerPaymentId || null,
+    emailQueued,
+    emailError,
+  }, client);
+
+  return {
+    gallery: nextGallery,
+    pricing,
+    emailQueued,
+    emailError,
+  };
+}
+
+function publicPayment(payment = {}) {
+  return {
+    id: payment.id,
+    status: payment.status,
+    amountCents: payment.amountCents || 0,
+    providerPaymentId: payment.providerPaymentId || "",
+    qrCode: payment.qrCode || "",
+    qrCodeBase64: payment.qrCodeBase64 || "",
+    ticketUrl: payment.ticketUrl || "",
+    approvedAt: payment.approvedAt || null,
+    expiresAt: payment.expiresAt || null,
+    selectionCompletedAt: payment.selectionCompletedAt || null,
+  };
+}
+
+async function createMercadoPagoPixPayment(env, request, payment, gallery, client) {
+  if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
+    throw new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado no Worker.");
+  }
+
+  const apiUrl = "https://api.mercadopago.com/v1/payments";
+  const amount = Number((payment.amountCents / 100).toFixed(2));
+  const notificationUrl = `${new URL(request.url).origin}/payments/mercadopago/webhook`;
+  const body = {
+    transaction_amount: amount,
+    description: `Fotos extras — ${gallery.title || gallery.slug || "galeria"}`,
+    payment_method_id: "pix",
+    external_reference: payment.id,
+    notification_url: notificationUrl,
+    payer: {
+      email: normalizeEmail(client.email || ""),
+      first_name: cleanDisplayName(client.name || "Cliente"),
+    },
+    date_of_expiration: payment.expiresAt,
+  };
+
+  const res = await fetchWithTimeout(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}`,
+      "X-Idempotency-Key": payment.id,
+    },
+    body: JSON.stringify(body),
+  }, 15000);
+
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) {
+    throw new Error(`Mercado Pago ${res.status}: ${text}`);
+  }
+
+  const tx = data.point_of_interaction?.transaction_data || {};
+  return {
+    providerPaymentId: String(data.id || ""),
+    providerStatus: data.status || "",
+    qrCode: tx.qr_code || "",
+    qrCodeBase64: tx.qr_code_base64 || "",
+    ticketUrl: tx.ticket_url || "",
+    rawStatus: data.status_detail || "",
+  };
+}
+
+async function getMercadoPagoPayment(env, providerPaymentId) {
+  if (!env.MERCADO_PAGO_ACCESS_TOKEN) throw new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado no Worker.");
+  const res = await fetchWithTimeout(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(providerPaymentId)}`, {
+    headers: {
+      Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}`,
+    },
+  }, 12000);
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(`Mercado Pago ${res.status}: ${text}`);
+  return data;
+}
+
+function timingSafeEqualString(a = "", b = "") {
+  const left = new TextEncoder().encode(String(a));
+  const right = new TextEncoder().encode(String(b));
+  if (left.length !== right.length) return false;
+  let result = 0;
+  for (let i = 0; i < left.length; i++) result |= left[i] ^ right[i];
+  return result === 0;
+}
+
+async function verifyMercadoPagoWebhookSignature(request, env, providerPaymentId = "") {
+  if (!env.MERCADO_PAGO_WEBHOOK_SECRET) return true;
+
+  const signatureHeader = request.headers.get("x-signature") || "";
+  const requestId = request.headers.get("x-request-id") || "";
+  const parts = Object.fromEntries(signatureHeader.split(",").map((part) => {
+    const [key, value] = part.split("=").map((item) => String(item || "").trim());
+    return [key, value];
+  }));
+  const ts = parts.ts || "";
+  const signature = parts.v1 || "";
+  if (!providerPaymentId || !requestId || !ts || !signature) return false;
+
+  const manifest = `id:${String(providerPaymentId).toLowerCase()};request-id:${requestId};ts:${ts};`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.MERCADO_PAGO_WEBHOOK_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const signed = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(manifest));
+  const expected = [...new Uint8Array(signed)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return timingSafeEqualString(expected, signature);
+}
+
+async function approveMercadoPagoPayment(env, request, providerPaymentId) {
+  if (!providerPaymentId || !env.LIKES_KV) return { ok: false, reason: "missing_payment_id" };
+
+  const paymentId = await env.LIKES_KV.get(mercadoPagoPaymentKey(providerPaymentId));
+  if (!paymentId) return { ok: false, reason: "payment_not_found" };
+
+  const payment = await readKvJson(env, privateGalleryPaymentKey(paymentId), null);
+  if (!payment) return { ok: false, reason: "payment_record_not_found" };
+
+  const mpPayment = await getMercadoPagoPayment(env, providerPaymentId);
+  const now = new Date().toISOString();
+  const nextPayment = {
+    ...payment,
+    providerStatus: mpPayment.status || payment.providerStatus || "",
+    providerStatusDetail: mpPayment.status_detail || payment.providerStatusDetail || "",
+    updatedAt: now,
+  };
+
+  if (mpPayment.status !== "approved") {
+    nextPayment.status = mpPayment.status === "rejected" || mpPayment.status === "cancelled" ? "rejected" : "pending";
+    await writeKvJson(env, privateGalleryPaymentKey(payment.id), nextPayment);
+    return { ok: true, approved: false, payment: nextPayment };
+  }
+
+  if (payment.status === "approved" && payment.selectionCompletedAt) {
+    return { ok: true, approved: true, payment };
+  }
+
+  const gallery = await readKvJson(env, privateGalleryKey(payment.galleryId), null);
+  if (!gallery) return { ok: false, reason: "gallery_not_found", payment: nextPayment };
+  const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+  const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+  const completed = await completePrivateGallerySelection(
+    env,
+    request,
+    gallery,
+    client || { email: payment.clientEmail || "", name: payment.clientName || "Cliente" },
+    images,
+    payment.selectedPublicIds || [],
+    { ...payment, ...nextPayment, status: "approved", approvedAt: now }
+  );
+
+  nextPayment.status = "approved";
+  nextPayment.approvedAt = now;
+  nextPayment.selectionCompletedAt = completed.gallery.selectionCompletedAt;
+  await writeKvJson(env, privateGalleryPaymentKey(payment.id), nextPayment);
+
+  return { ok: true, approved: true, payment: nextPayment };
+}
+
 function visibleGalleryImages(gallery = {}, images = []) {
   if (gallery.status === "final") {
     const finalImages = images.filter((image) => image.phase === "final");
@@ -1232,6 +1617,34 @@ export default {
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders() });
+    }
+
+    if (url.pathname === "/payments/mercadopago/webhook" && ["GET", "POST"].includes(request.method)) {
+      let body = {};
+      if (request.method === "POST") body = await readJson(request);
+
+      const providerPaymentId = String(
+        url.searchParams.get("data.id") ||
+        url.searchParams.get("id") ||
+        body?.data?.id ||
+        body?.id ||
+        ""
+      ).trim();
+
+      if (!providerPaymentId) return errorJson("Missing Mercado Pago payment id", 400);
+
+      const validSignature = await verifyMercadoPagoWebhookSignature(request, env, providerPaymentId);
+      if (!validSignature) return errorJson("Invalid Mercado Pago webhook signature", 401);
+
+      try {
+        const result = await approveMercadoPagoPayment(env, request, providerPaymentId);
+        return json({ ok: true, ...result }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        console.error("Mercado Pago webhook error:", err);
+        return errorJson("Erro ao processar webhook do Mercado Pago.", 500, {
+          detail: String(err?.message || err || "unknown"),
+        });
+      }
     }
 
     // ── GALERIAS PRIVADAS: ACESSO DO CLIENTE ─────────────────────
@@ -1393,6 +1806,7 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
+      if (gallery.selectionCompletedAt) return errorJson("A seleção desta galeria já foi concluída.", 409);
       if (!publicId) return errorJson("Foto inválida.", 400);
 
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
@@ -1405,23 +1819,46 @@ export default {
       let next = current.filter((item) => item !== publicId);
 
       if (selected) {
-        if (limit > 0 && next.length >= limit) {
-          return errorJson(`Limite de ${limit} fotos atingido.`, 409, {
-            limit,
-            selectedPublicIds: current,
-          });
-        }
         next.push(publicId);
       }
 
       await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
       await appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", { publicId }, access.client);
+      const pricing = calculateSelectionPricing(gallery, images, next);
 
       return json({
         ok: true,
         selectedPublicIds: next,
         totalSelected: next.length,
         limit,
+        pricing,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-gallery/select-all" && request.method === "POST") {
+      const body = await readJson(request);
+      const slug = slugify(body.slug || "");
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
+      if (gallery.selectionCompletedAt) return errorJson("A seleção desta galeria já foi concluída.", 409);
+
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      const next = images.map((image) => image.public_id).filter(Boolean);
+      await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
+      await appendPrivateGalleryEvent(env, request, gallery.id, "selecionar_todas", {
+        totalSelected: next.length,
+      }, access.client);
+
+      return json({
+        ok: true,
+        selectedPublicIds: next,
+        totalSelected: next.length,
+        limit: Number(gallery.selectionLimit || 0),
+        pricing: calculateSelectionPricing(gallery, images, next),
       }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -1433,14 +1870,135 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
+      if (gallery.selectionCompletedAt) {
+        const existingSelection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+        return json({ ok: true, alreadyCompleted: true, totalSelected: existingSelection.length }, 200, { "Cache-Control": "no-store" });
+      }
 
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
-      await appendPrivateGalleryEvent(env, request, gallery.id, "concluir_selecao", {
-        totalSelected: selection.length,
-        selectedPublicIds: selection,
-      }, access.client);
+      const pricing = calculateSelectionPricing(gallery, images, selection);
 
-      return json({ ok: true, totalSelected: selection.length }, 200, { "Cache-Control": "no-store" });
+      if (pricing.needsMoreIncludedPhotos) {
+        return errorJson(`Selecione pelo menos ${pricing.includedPhotos} fotos para concluir.`, 409, { pricing });
+      }
+
+      if (pricing.requiresPayment) {
+        return errorJson("Pagamento necessário para concluir fotos extras.", 402, { pricing, paymentRequired: true });
+      }
+
+      const completed = await completePrivateGallerySelection(env, request, gallery, access.linkedClient || access.client, images, selection, null);
+
+      return json({
+        ok: true,
+        totalSelected: selection.length,
+        pricing: completed.pricing,
+        emailQueued: completed.emailQueued,
+        emailError: completed.emailError,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-gallery/payment/create" && request.method === "POST") {
+      const body = await readJson(request);
+      const slug = slugify(body.slug || "");
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
+      if (gallery.selectionCompletedAt) return errorJson("A seleção desta galeria já foi concluída.", 409);
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      const pricing = calculateSelectionPricing(gallery, images, selection);
+
+      if (pricing.needsMoreIncludedPhotos) {
+        return errorJson(`Selecione pelo menos ${pricing.includedPhotos} fotos para concluir.`, 409, { pricing });
+      }
+      if (!pricing.requiresPayment) {
+        return json({ ok: true, paymentRequired: false, pricing }, 200, { "Cache-Control": "no-store" });
+      }
+
+      const now = Date.now();
+      const payment = {
+        id: `pay_${randomToken(12)}`,
+        provider: "mercadopago",
+        status: "pending",
+        galleryId: gallery.id,
+        gallerySlug: gallery.slug,
+        clientEmail: normalizeEmail(access.linkedClient?.email || access.client?.email || ""),
+        clientName: access.linkedClient?.name || access.client?.name || "Cliente",
+        selectedPublicIds: [...new Set(selection)],
+        pricing,
+        amountCents: pricing.totalCents,
+        createdAt: new Date(now).toISOString(),
+        updatedAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 1000 * 60 * 30).toISOString(),
+      };
+
+      try {
+        const mp = await createMercadoPagoPixPayment(env, request, payment, gallery, access.linkedClient || access.client);
+        const savedPayment = {
+          ...payment,
+          providerPaymentId: mp.providerPaymentId,
+          providerStatus: mp.providerStatus,
+          providerStatusDetail: mp.rawStatus,
+          qrCode: mp.qrCode,
+          qrCodeBase64: mp.qrCodeBase64,
+          ticketUrl: mp.ticketUrl,
+        };
+        await writeKvJson(env, privateGalleryPaymentKey(savedPayment.id), savedPayment, { expirationTtl: 60 * 60 * 24 * 7 });
+        if (savedPayment.providerPaymentId) {
+          await env.LIKES_KV.put(mercadoPagoPaymentKey(savedPayment.providerPaymentId), savedPayment.id, { expirationTtl: 60 * 60 * 24 * 7 });
+        }
+        await env.LIKES_KV.put(privateGalleryLatestPaymentKey(gallery.id), savedPayment.id, { expirationTtl: 60 * 60 * 24 * 7 });
+        await appendPrivateGalleryEvent(env, request, gallery.id, "pix_criado", {
+          paymentId: savedPayment.id,
+          providerPaymentId: savedPayment.providerPaymentId,
+          pricing,
+        }, access.client);
+
+        return json({
+          ok: true,
+          paymentRequired: true,
+          pricing,
+          payment: publicPayment(savedPayment),
+        }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        console.error("Mercado Pago create payment error:", err);
+        return errorJson("Não foi possível gerar o Pix agora.", 502, {
+          detail: String(err?.message || err || "unknown"),
+        });
+      }
+    }
+
+    if (url.pathname === "/client-gallery/payment/status" && request.method === "GET") {
+      const paymentId = String(url.searchParams.get("id") || "").trim();
+      if (!paymentId) return errorJson("Pagamento inválido.", 400);
+      const payment = await readKvJson(env, privateGalleryPaymentKey(paymentId), null);
+      if (!payment) return errorJson("Pagamento não encontrado.", 404);
+
+      const gallery = await readKvJson(env, privateGalleryKey(payment.galleryId), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+
+      let currentPayment = payment;
+      if (payment.providerPaymentId && payment.status === "pending") {
+        try {
+          const result = await approveMercadoPagoPayment(env, request, payment.providerPaymentId);
+          if (result.payment) currentPayment = result.payment;
+        } catch (err) {
+          console.error("Mercado Pago payment status check failed:", err);
+        }
+      }
+
+      return json({
+        ok: true,
+        payment: publicPayment(currentPayment),
+        completed: currentPayment.status === "approved" && Boolean(currentPayment.selectionCompletedAt),
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/client-gallery/download" && request.method === "GET") {

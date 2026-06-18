@@ -15,6 +15,8 @@ const state = {
   nextCursor: 0,
   loading: false,
   currentImage: null,
+  payment: null,
+  paymentPoll: null,
 };
 
 const galleryHeroBg = document.getElementById("galleryHeroBg");
@@ -23,14 +25,23 @@ const gallerySubtitle = document.getElementById("gallerySubtitle");
 const galleryMessage = document.getElementById("galleryMessage");
 const galleryLimit = document.getElementById("galleryLimit");
 const selectionCounter = document.getElementById("selectionCounter");
+const pricingSummary = document.getElementById("pricingSummary");
 const photoGrid = document.getElementById("photoGrid");
 const loadSentinel = document.getElementById("loadSentinel");
 const completeBtn = document.getElementById("completeBtn");
+const selectAllBtn = document.getElementById("selectAllBtn");
 const downloadAllBtn = document.getElementById("downloadAllBtn");
 const lightbox = document.getElementById("lightbox");
 const lightboxStage = document.getElementById("lightboxStage");
 const lightboxClose = document.getElementById("lightboxClose");
 const lightboxHeart = document.getElementById("lightboxHeart");
+const paymentModal = document.getElementById("paymentModal");
+const paymentClose = document.getElementById("paymentClose");
+const paymentDescription = document.getElementById("paymentDescription");
+const paymentQr = document.getElementById("paymentQr");
+const paymentCode = document.getElementById("paymentCode");
+const copyPaymentCode = document.getElementById("copyPaymentCode");
+const paymentStatus = document.getElementById("paymentStatus");
 const toastEl = document.getElementById("toast");
 
 function escapeHtml(value = "") {
@@ -49,6 +60,13 @@ function escapeSelector(value = "") {
 function cloudUrl(src, transform) {
   if (!src || !src.includes("/upload/")) return src;
   return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${transform}/`);
+}
+
+function formatCurrency(cents = 0) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(cents || 0) / 100);
 }
 
 function showToast(message) {
@@ -98,13 +116,47 @@ function watermarkStyle() {
 function updateCounters() {
   const total = state.selected.size;
   const limit = Number(state.gallery?.selectionLimit || 0);
+  const pricing = state.gallery?.pricing || {};
   if (state.gallery?.allowDownload) {
     selectionCounter.textContent = "Downloads liberados";
     galleryLimit.textContent = "Entrega final disponível para download.";
+    pricingSummary.hidden = true;
     return;
   }
-  selectionCounter.textContent = limit ? `${total}/${limit} selecionadas` : `${total} selecionadas`;
-  galleryLimit.textContent = limit ? `Selecione até ${limit} fotos.` : "Sem limite de seleção definido.";
+  selectionCounter.textContent = limit ? `${total}/${limit} inclusas` : `${total} selecionadas`;
+  if (pricing.needsMoreIncludedPhotos) {
+    galleryLimit.textContent = `Selecione pelo menos ${limit} fotos para concluir.`;
+  } else if (pricing.extraCount > 0) {
+    galleryLimit.textContent = `${pricing.extraCount} foto${pricing.extraCount > 1 ? "s" : ""} extra${pricing.extraCount > 1 ? "s" : ""} adicionada${pricing.extraCount > 1 ? "s" : ""}.`;
+  } else {
+    galleryLimit.textContent = limit ? `Pacote com ${limit} fotos inclusas.` : "Sem limite de seleção definido.";
+  }
+  renderPricingSummary();
+}
+
+function renderPricingSummary() {
+  const pricing = state.gallery?.pricing;
+  if (!pricing || state.gallery?.allowDownload) {
+    pricingSummary.hidden = true;
+    return;
+  }
+
+  const showMoney = Number(pricing.unitPriceCents || 0) > 0 || Number(pricing.extraCount || 0) > 0;
+  pricingSummary.hidden = !showMoney;
+  if (!showMoney) return;
+
+  const discountLine = pricing.discountCents > 0
+    ? `<div class="pricing-line"><span>${escapeHtml(pricing.discountLabel || "Desconto")}</span><strong>-${formatCurrency(pricing.discountCents)}</strong></div>`
+    : "";
+
+  pricingSummary.innerHTML = `
+    <div class="pricing-line"><span>Fotos inclusas</span><strong>${Number(pricing.includedPhotos || 0)}</strong></div>
+    <div class="pricing-line"><span>Selecionadas</span><strong>${Number(pricing.selectedTotal || 0)}</strong></div>
+    <div class="pricing-line"><span>Fotos extras</span><strong>${Number(pricing.extraCount || 0)} × ${formatCurrency(pricing.unitPriceCents || 0)}</strong></div>
+    <div class="pricing-line"><span>Subtotal extras</span><strong>${formatCurrency(pricing.subtotalCents || 0)}</strong></div>
+    ${discountLine}
+    <div class="pricing-line total"><span>Total a pagar</span><strong>${formatCurrency(pricing.totalCents || 0)}</strong></div>
+  `;
 }
 
 function renderHeader() {
@@ -117,6 +169,7 @@ function renderHeader() {
     galleryHeroBg.style.backgroundImage = `url('${cloudUrl(gallery.coverUrl, "w_1600,q_auto,f_auto")}')`;
   }
   completeBtn.classList.toggle("hidden", Boolean(gallery.allowDownload));
+  selectAllBtn.classList.toggle("hidden", Boolean(gallery.allowDownload));
   downloadAllBtn.classList.toggle("hidden", !gallery.allowDownload);
   updateCounters();
 }
@@ -204,6 +257,7 @@ async function toggleFavorite(publicId, shouldSelect) {
       body: JSON.stringify({ slug, publicId, selected: shouldSelect }),
     });
     state.selected = new Set(data.selectedPublicIds || []);
+    if (data.pricing) state.gallery.pricing = data.pricing;
     updatePhotoButtons(publicId);
   } catch (err) {
     showToast(err.message || "Não foi possível selecionar esta foto.");
@@ -296,6 +350,15 @@ completeBtn.addEventListener("click", async () => {
     showToast("Selecione pelo menos uma foto antes de concluir.");
     return;
   }
+  const pricing = state.gallery.pricing || {};
+  if (pricing.needsMoreIncludedPhotos) {
+    showToast(`Selecione pelo menos ${pricing.includedPhotos} fotos para concluir.`);
+    return;
+  }
+  if (pricing.requiresPayment) {
+    await createPixPayment();
+    return;
+  }
   try {
     await api("/client-gallery/complete", {
       method: "POST",
@@ -304,6 +367,118 @@ completeBtn.addEventListener("click", async () => {
     showToast("Seleção concluída. Obrigado!");
   } catch (err) {
     showToast(err.message || "Não foi possível concluir a seleção.");
+  }
+});
+
+selectAllBtn.addEventListener("click", async () => {
+  if (!state.gallery || state.gallery.allowDownload) return;
+  selectAllBtn.disabled = true;
+  selectAllBtn.textContent = "Selecionando...";
+  try {
+    const data = await api("/client-gallery/select-all", {
+      method: "POST",
+      body: JSON.stringify({ slug }),
+    });
+    state.selected = new Set(data.selectedPublicIds || []);
+    if (data.pricing) state.gallery.pricing = data.pricing;
+    updatePhotoButtons();
+    showToast("Todas as fotos foram selecionadas.");
+  } catch (err) {
+    showToast(err.message || "Não foi possível selecionar todas.");
+  } finally {
+    selectAllBtn.disabled = false;
+    selectAllBtn.textContent = "Selecionar todas";
+  }
+});
+
+function openPaymentModal(payment, pricing) {
+  state.payment = payment;
+  paymentDescription.textContent = `Total das fotos extras: ${formatCurrency(payment.amountCents || pricing.totalCents || 0)}. Depois do pagamento aprovado, sua seleção será concluída automaticamente.`;
+  paymentQr.innerHTML = payment.qrCodeBase64
+    ? `<img src="data:image/png;base64,${escapeHtml(payment.qrCodeBase64)}" alt="QR Code Pix">`
+    : `<span>Use o código Pix abaixo.</span>`;
+  paymentCode.value = payment.qrCode || "";
+  paymentStatus.textContent = "Aguardando pagamento...";
+  paymentModal.classList.remove("hidden");
+  startPaymentPolling(payment.id);
+}
+
+function closePaymentModal() {
+  paymentModal.classList.add("hidden");
+  if (state.paymentPoll) {
+    clearInterval(state.paymentPoll);
+    state.paymentPoll = null;
+  }
+}
+
+async function createPixPayment() {
+  completeBtn.disabled = true;
+  completeBtn.textContent = "Gerando Pix...";
+  try {
+    const data = await api("/client-gallery/payment/create", {
+      method: "POST",
+      body: JSON.stringify({ slug }),
+    });
+    if (!data.paymentRequired) {
+      await api("/client-gallery/complete", {
+        method: "POST",
+        body: JSON.stringify({ slug }),
+      });
+      showToast("Seleção concluída. Obrigado!");
+      return;
+    }
+    if (data.pricing) state.gallery.pricing = data.pricing;
+    openPaymentModal(data.payment, data.pricing || state.gallery.pricing || {});
+  } catch (err) {
+    showToast(err.message || "Não foi possível gerar o Pix.");
+  } finally {
+    completeBtn.disabled = false;
+    completeBtn.textContent = "Concluir seleção";
+  }
+}
+
+function startPaymentPolling(paymentId) {
+  if (state.paymentPoll) clearInterval(state.paymentPoll);
+
+  const check = async () => {
+    try {
+      const data = await api(`/client-gallery/payment/status?id=${encodeURIComponent(paymentId)}`);
+      if (data.payment?.status === "approved" && data.completed) {
+        paymentStatus.textContent = "Pagamento aprovado. Seleção concluída!";
+        clearInterval(state.paymentPoll);
+        state.paymentPoll = null;
+        completeBtn.classList.add("hidden");
+        selectAllBtn.classList.add("hidden");
+        showToast("Pagamento aprovado. Seleção concluída!");
+      } else if (data.payment?.status === "rejected") {
+        paymentStatus.textContent = "Pagamento recusado ou cancelado. Gere um novo Pix para tentar novamente.";
+        clearInterval(state.paymentPoll);
+        state.paymentPoll = null;
+      } else {
+        paymentStatus.textContent = "Aguardando pagamento...";
+      }
+    } catch (err) {
+      paymentStatus.textContent = err.message || "Aguardando confirmação do pagamento...";
+    }
+  };
+
+  check();
+  state.paymentPoll = setInterval(check, 5000);
+}
+
+paymentClose.addEventListener("click", closePaymentModal);
+paymentModal.addEventListener("click", (event) => {
+  if (event.target === paymentModal) closePaymentModal();
+});
+copyPaymentCode.addEventListener("click", async () => {
+  if (!paymentCode.value) return;
+  try {
+    await navigator.clipboard.writeText(paymentCode.value);
+    showToast("Código Pix copiado.");
+  } catch {
+    paymentCode.select();
+    document.execCommand("copy");
+    showToast("Código Pix copiado.");
   }
 });
 

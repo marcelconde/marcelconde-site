@@ -151,6 +151,39 @@ h1 {
   text-transform: uppercase;
 }
 
+.pricing-summary {
+  margin-top: 1.4rem;
+  border: 1px solid rgba(184,149,106,0.32);
+  background: rgba(8,8,8,0.48);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.pricing-summary[hidden] {
+  display: none;
+}
+
+.pricing-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.pricing-line strong {
+  color: var(--ink);
+}
+
+.pricing-line.total {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  color: var(--ink);
+  font-weight: 800;
+}
+
 .gallery-body {
   padding: clamp(24px, 4vw, 56px);
 }
@@ -329,6 +362,90 @@ h1 {
   transform: translate(-50%, 0);
 }
 
+.payment-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0,0,0,0.84);
+}
+
+.payment-card {
+  position: relative;
+  width: min(520px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(184,149,106,0.12), transparent 35%),
+    #10100e;
+  padding: clamp(22px, 5vw, 38px);
+}
+
+.payment-card h2 {
+  margin: 0.45rem 0 0.75rem;
+  font-family: var(--serif);
+  font-size: clamp(2.4rem, 8vw, 4.2rem);
+  line-height: 0.9;
+}
+
+.payment-card p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.payment-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--ink);
+  padding: 0 12px;
+}
+
+.payment-qr {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  margin: 18px 0;
+  background: #f7f3ec;
+  padding: 18px;
+}
+
+.payment-qr img {
+  width: min(260px, 100%);
+  height: auto;
+  display: block;
+}
+
+.payment-copy {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.payment-copy textarea {
+  width: 100%;
+  min-height: 96px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--ink);
+  padding: 12px;
+  resize: vertical;
+}
+
+.payment-status {
+  margin-bottom: 0;
+}
+
 @media (max-width: 700px) {
   .selection-counter {
     font-size: 0.72rem;
@@ -340,5 +457,10 @@ h1 {
 
   .photo-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pricing-line {
+    display: grid;
+    gap: 4px;
   }
 }

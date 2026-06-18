@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260615-02">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260617-01">
 </head>
 <body>
   <div class="admin-shell" id="adminShell">
@@ -105,6 +105,28 @@
                 Limite de seleção
                 <input id="selectionLimit" type="number" min="0" max="2000" value="15">
               </label>
+              <label id="extraPhotoPriceField">
+                Valor por foto adicional
+                <input id="extraPhotoPrice" type="text" inputmode="decimal" placeholder="Ex: 25,00">
+              </label>
+              <label id="allPhotosDiscountField">
+                Desconto ao escolher todas (%)
+                <input id="allPhotosDiscount" type="number" min="0" max="95" step="0.1" value="0">
+              </label>
+              <div class="full discount-rule" id="quantityDiscountField">
+                <label class="check-field discount-toggle">
+                  <input id="quantityDiscountEnabled" type="checkbox">
+                  <span>Aplicar desconto por quantidade</span>
+                </label>
+                <label>
+                  A partir de quantas fotos
+                  <input id="quantityDiscountMinPhotos" type="number" min="0" max="2000" value="0">
+                </label>
+                <label>
+                  Desconto por quantidade (%)
+                  <input id="quantityDiscountPercent" type="number" min="0" max="95" step="0.1" value="0">
+                </label>
+              </div>
               <label class="full">
                 Mensagem personalizada
                 <textarea id="galleryMessage" placeholder="Olá Beatriz, selecione até 15 fotos para edição usando o coração exibido sobre cada imagem."></textarea>
@@ -203,6 +225,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/admin/galerias/galerias.js?v=20260615-04"></script>
+  <script src="/admin/galerias/galerias.js?v=20260617-01"></script>
 </body>
 </html>

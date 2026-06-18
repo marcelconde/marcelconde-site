@@ -37,6 +37,14 @@ const gallerySlug = $("#gallerySlug");
 const gallerySubtitle = $("#gallerySubtitle");
 const selectionLimitField = $("#selectionLimitField");
 const selectionLimit = $("#selectionLimit");
+const extraPhotoPriceField = $("#extraPhotoPriceField");
+const extraPhotoPrice = $("#extraPhotoPrice");
+const allPhotosDiscountField = $("#allPhotosDiscountField");
+const allPhotosDiscount = $("#allPhotosDiscount");
+const quantityDiscountField = $("#quantityDiscountField");
+const quantityDiscountEnabled = $("#quantityDiscountEnabled");
+const quantityDiscountMinPhotos = $("#quantityDiscountMinPhotos");
+const quantityDiscountPercent = $("#quantityDiscountPercent");
 const galleryMessage = $("#galleryMessage");
 const watermarkLogo = $("#watermarkLogo");
 const watermarkFile = $("#watermarkFile");
@@ -207,6 +215,25 @@ function formatPercent(value) {
   return `${Math.round(Number(value || 0) * 100)}%`;
 }
 
+function centsToCurrencyInput(cents = 0) {
+  const value = Number(cents || 0) / 100;
+  return value ? value.toFixed(2).replace(".", ",") : "";
+}
+
+function currencyInputToCents(value = "") {
+  const normalized = String(value || "")
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+  const parsed = Number(normalized);
+  return Math.max(0, Math.round((Number.isFinite(parsed) ? parsed : 0) * 100));
+}
+
+function normalizeDiscount(value = 0) {
+  const parsed = Number(value || 0);
+  return Math.max(0, Math.min(Number.isFinite(parsed) ? parsed : 0, 95));
+}
+
 function updateWatermarkValues() {
   watermarkOpacityValue.textContent = formatPercent(watermarkOpacity.value || 0.28);
   watermarkSizeValue.textContent = `${Number(watermarkSize.value || 180)}px`;
@@ -339,7 +366,14 @@ function renderStats() {
 
 function updateGalleryStatusUi() {
   const isSelection = galleryStatus.value === "selection";
-  selectionLimitField.hidden = !isSelection;
+  [
+    selectionLimitField,
+    extraPhotoPriceField,
+    allPhotosDiscountField,
+    quantityDiscountField,
+  ].forEach((field) => {
+    if (field) field.hidden = !isSelection;
+  });
   publishGalleryBtn.textContent = galleryStatus.value === "final"
     ? "Enviar entrega final"
     : "Publicar e enviar";
@@ -377,7 +411,14 @@ function renderSelectedGallery() {
   if (!gallery) {
     galleryTitle.textContent = "Selecione uma galeria";
     galleryMeta.textContent = "Crie ou escolha uma galeria privada para enviar fotos e acompanhar a seleção.";
-    selectionLimitField.hidden = false;
+    [
+      selectionLimitField,
+      extraPhotoPriceField,
+      allPhotosDiscountField,
+      quantityDiscountField,
+    ].forEach((field) => {
+      if (field) field.hidden = false;
+    });
     openGalleryBtn.classList.add("disabled");
     publishGalleryBtn.classList.add("disabled");
     publishGalleryBtn.disabled = true;
@@ -404,6 +445,11 @@ function renderSelectedGallery() {
   gallerySlug.value = gallery.slug || "";
   gallerySubtitle.value = gallery.subtitle || "";
   selectionLimit.value = gallery.selectionLimit || 15;
+  extraPhotoPrice.value = centsToCurrencyInput(gallery.extraPhotoPriceCents || 0);
+  allPhotosDiscount.value = gallery.allPhotosDiscountPercent || 0;
+  quantityDiscountEnabled.checked = gallery.quantityDiscountEnabled === true;
+  quantityDiscountMinPhotos.value = gallery.quantityDiscountMinPhotos || 0;
+  quantityDiscountPercent.value = gallery.quantityDiscountPercent || 0;
   galleryMessage.value = gallery.message || "";
   updateGalleryStatusUi();
   watermarkLogo.value = gallery.watermark?.logoUrl || "";
@@ -559,6 +605,11 @@ function currentGalleryPayload() {
     subtitle: gallerySubtitle.value.trim(),
     message: galleryMessage.value.trim(),
     selectionLimit: Number(selectionLimit.value || 0),
+    extraPhotoPriceCents: currencyInputToCents(extraPhotoPrice.value),
+    allPhotosDiscountPercent: normalizeDiscount(allPhotosDiscount.value),
+    quantityDiscountEnabled: quantityDiscountEnabled.checked,
+    quantityDiscountMinPhotos: Number(quantityDiscountMinPhotos.value || 0),
+    quantityDiscountPercent: normalizeDiscount(quantityDiscountPercent.value),
     watermark: {
       enabled: watermarkEnabled.checked,
       logoUrl: watermarkLogo.value.trim(),
@@ -579,6 +630,11 @@ quickCreateBtn.addEventListener("click", async () => {
       slug: slugify(title),
       message: `Olá,\n\nFoi um prazer registrar este momento especial.\n\nSelecione suas fotos favoritas usando o coração exibido sobre cada imagem.`,
       selectionLimit: 15,
+      extraPhotoPriceCents: 0,
+      allPhotosDiscountPercent: 0,
+      quantityDiscountEnabled: false,
+      quantityDiscountMinPhotos: 0,
+      quantityDiscountPercent: 0,
       watermark: { enabled: true, opacity: 0.28, size: 180, position: "center" },
     });
     quickTitle.value = "";
@@ -645,6 +701,10 @@ galleryName.addEventListener("input", () => {
 });
 
 galleryStatus.addEventListener("change", updateGalleryStatusUi);
+
+extraPhotoPrice.addEventListener("blur", () => {
+  extraPhotoPrice.value = centsToCurrencyInput(currencyInputToCents(extraPhotoPrice.value));
+});
 
 galleryForm.addEventListener("submit", async (event) => {
   event.preventDefault();
