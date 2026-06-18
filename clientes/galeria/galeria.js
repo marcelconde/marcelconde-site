@@ -36,9 +36,12 @@ const lightboxStage = document.getElementById("lightboxStage");
 const lightboxClose = document.getElementById("lightboxClose");
 const lightboxHeart = document.getElementById("lightboxHeart");
 const paymentModal = document.getElementById("paymentModal");
+const paymentCard = paymentModal.querySelector(".payment-card");
 const paymentClose = document.getElementById("paymentClose");
 const paymentDescription = document.getElementById("paymentDescription");
+const paymentSuccess = document.getElementById("paymentSuccess");
 const paymentQr = document.getElementById("paymentQr");
+const paymentCopy = paymentModal.querySelector(".payment-copy");
 const paymentCode = document.getElementById("paymentCode");
 const copyPaymentCode = document.getElementById("copyPaymentCode");
 const paymentStatus = document.getElementById("paymentStatus");
@@ -74,6 +77,14 @@ function showToast(message) {
   toastEl.classList.add("show");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toastEl.classList.remove("show"), 3200);
+}
+
+function isSelectionCompleted() {
+  return Boolean(state.gallery?.selectionCompletedAt) && state.gallery?.status === "final" && !state.gallery?.allowDownload;
+}
+
+function hasCompletedSelection() {
+  return Boolean(state.gallery?.selectionCompletedAt) && !state.gallery?.allowDownload;
 }
 
 function getToken() {
@@ -124,6 +135,17 @@ function updateCounters() {
     return;
   }
   selectionCounter.textContent = limit ? `${total}/${limit} inclusas` : `${total} selecionadas`;
+  if (isSelectionCompleted()) {
+    selectionCounter.textContent = `${total} selecionadas`;
+    galleryLimit.textContent = "Seleção concluída.";
+    renderPricingSummary();
+    return;
+  }
+  if (hasCompletedSelection() && !pricing.requiresPayment && !Number(pricing.extraCount || 0)) {
+    galleryLimit.textContent = "Seleção concluída. Você pode adicionar mais fotos enquanto a galeria estiver aberta.";
+    renderPricingSummary();
+    return;
+  }
   if (pricing.needsMoreIncludedPhotos) {
     galleryLimit.textContent = `Selecione pelo menos ${limit} fotos para concluir.`;
   } else if (pricing.extraCount > 0) {
@@ -140,22 +162,32 @@ function renderPricingSummary() {
     pricingSummary.hidden = true;
     return;
   }
+  if (pricing.additionalSelection && !Number(pricing.extraCount || 0) && !Number(pricing.totalCents || 0)) {
+    pricingSummary.hidden = true;
+    return;
+  }
 
   const showMoney = Number(pricing.unitPriceCents || 0) > 0 || Number(pricing.extraCount || 0) > 0;
   pricingSummary.hidden = !showMoney;
   if (!showMoney) return;
 
+  const additionalLine = pricing.additionalSelection && Number(pricing.lockedExtraCount || 0) > 0
+    ? `<div class="pricing-line"><span>Extras já confirmadas</span><strong>${Number(pricing.lockedExtraCount || 0)}</strong></div>`
+    : "";
   const discountLine = pricing.discountCents > 0
     ? `<div class="pricing-line"><span>${escapeHtml(pricing.discountLabel || "Desconto")}</span><strong>-${formatCurrency(pricing.discountCents)}</strong></div>`
     : "";
+  const extraLabel = pricing.additionalSelection ? "Novas fotos extras" : "Fotos extras";
+  const totalLabel = pricing.additionalSelection ? "Total adicional" : "Total a pagar";
 
   pricingSummary.innerHTML = `
     <div class="pricing-line"><span>Fotos inclusas</span><strong>${Number(pricing.includedPhotos || 0)}</strong></div>
     <div class="pricing-line"><span>Selecionadas</span><strong>${Number(pricing.selectedTotal || 0)}</strong></div>
-    <div class="pricing-line"><span>Fotos extras</span><strong>${Number(pricing.extraCount || 0)} × ${formatCurrency(pricing.unitPriceCents || 0)}</strong></div>
+    ${additionalLine}
+    <div class="pricing-line"><span>${extraLabel}</span><strong>${Number(pricing.extraCount || 0)} × ${formatCurrency(pricing.unitPriceCents || 0)}</strong></div>
     <div class="pricing-line"><span>Subtotal extras</span><strong>${formatCurrency(pricing.subtotalCents || 0)}</strong></div>
     ${discountLine}
-    <div class="pricing-line total"><span>Total a pagar</span><strong>${formatCurrency(pricing.totalCents || 0)}</strong></div>
+    <div class="pricing-line total"><span>${totalLabel}</span><strong>${formatCurrency(pricing.totalCents || 0)}</strong></div>
   `;
 }
 
@@ -178,9 +210,10 @@ function renderImages(images) {
   const wm = watermarkStyle();
   const html = images.map((image) => {
     const selected = state.selected.has(image.public_id);
+    const selectionCompleted = isSelectionCompleted();
     const action = state.gallery?.allowDownload
       ? `<button class="download-btn" type="button" aria-label="Baixar foto">Baixar</button>`
-      : `<button class="heart-btn ${selected ? "selected" : ""}" type="button" aria-label="Selecionar foto">${selected ? "♥" : "♡"}</button>`;
+      : `<button class="heart-btn ${selected ? "selected" : ""}" type="button" aria-label="${selectionCompleted ? "Seleção concluída" : "Selecionar foto"}" ${selectionCompleted ? "disabled" : ""}>${selected ? "♥" : "♡"}</button>`;
     return `
       <article class="photo-card" data-public-id="${escapeHtml(image.public_id)}">
         <img src="${escapeHtml(cloudUrl(image.url, "w_400,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" loading="lazy" decoding="async">
@@ -223,6 +256,7 @@ function updatePhotoButtons(publicIdFilter = "") {
     if (state.currentImage) {
       lightboxHeart.classList.add("download-mode");
       lightboxHeart.textContent = "Baixar";
+      lightboxHeart.disabled = false;
     }
     updateCounters();
     return;
@@ -239,12 +273,15 @@ function updatePhotoButtons(publicIdFilter = "") {
     const selected = state.selected.has(publicId);
     button.classList.toggle("selected", selected);
     button.textContent = selected ? "♥" : "♡";
+    button.disabled = isSelectionCompleted();
+    button.setAttribute("aria-label", isSelectionCompleted() ? "Seleção concluída" : "Selecionar foto");
   });
 
   if (state.currentImage) {
     const selected = state.selected.has(state.currentImage.public_id);
     lightboxHeart.classList.toggle("selected", selected);
     lightboxHeart.textContent = selected ? "♥" : "♡";
+    lightboxHeart.disabled = isSelectionCompleted();
   }
   updateCounters();
 }
@@ -351,6 +388,10 @@ completeBtn.addEventListener("click", async () => {
     return;
   }
   const pricing = state.gallery.pricing || {};
+  if (hasCompletedSelection() && !pricing.requiresPayment && !Number(pricing.extraCount || 0)) {
+    showToast("Seleção já concluída. Marque novas fotos para atualizar.");
+    return;
+  }
   if (pricing.needsMoreIncludedPhotos) {
     showToast(`Selecione pelo menos ${pricing.includedPhotos} fotos para concluir.`);
     return;
@@ -360,11 +401,15 @@ completeBtn.addEventListener("click", async () => {
     return;
   }
   try {
-    await api("/client-gallery/complete", {
+    const data = await api("/client-gallery/complete", {
       method: "POST",
       body: JSON.stringify({ slug }),
     });
-    showToast("Seleção concluída. Obrigado!");
+    if (data.gallery) state.gallery = data.gallery;
+    if (data.pricing && state.gallery) state.gallery.pricing = data.pricing;
+    renderHeader();
+    updatePhotoButtons();
+    showToast(hasCompletedSelection() ? "Seleção atualizada. Obrigado!" : "Seleção concluída. Obrigado!");
   } catch (err) {
     showToast(err.message || "Não foi possível concluir a seleção.");
   }
@@ -393,14 +438,36 @@ selectAllBtn.addEventListener("click", async () => {
 
 function openPaymentModal(payment, pricing) {
   state.payment = payment;
-  paymentDescription.textContent = `Total das fotos extras: ${formatCurrency(payment.amountCents || pricing.totalCents || 0)}. Depois do pagamento aprovado, sua seleção será concluída automaticamente.`;
+  paymentDescription.textContent = `${pricing.additionalSelection ? "Total adicional das fotos extras" : "Total das fotos extras"}: ${formatCurrency(payment.amountCents || pricing.totalCents || 0)}. Depois do pagamento aprovado, sua seleção será confirmada automaticamente.`;
   paymentQr.innerHTML = payment.qrCodeBase64
     ? `<img src="data:image/png;base64,${escapeHtml(payment.qrCodeBase64)}" alt="QR Code Pix">`
     : `<span>Use o código Pix abaixo.</span>`;
   paymentCode.value = payment.qrCode || "";
-  paymentStatus.textContent = "Aguardando pagamento...";
+  setPaymentModalState("pending");
   paymentModal.classList.remove("hidden");
   startPaymentPolling(payment.id);
+}
+
+function setPaymentModalState(status, message = "") {
+  const approved = status === "approved";
+  const rejected = status === "rejected";
+
+  paymentCard.classList.toggle("is-approved", approved);
+  paymentCard.classList.toggle("is-rejected", rejected);
+  paymentSuccess.classList.toggle("hidden", !approved);
+  paymentQr.classList.toggle("hidden", approved);
+  paymentCopy.classList.toggle("hidden", approved);
+  copyPaymentCode.classList.toggle("hidden", approved);
+  paymentStatus.classList.toggle("is-approved", approved);
+  paymentStatus.classList.toggle("is-rejected", rejected);
+
+  if (approved) {
+    paymentStatus.textContent = message || "Pagamento aprovado. Seleção concluída!";
+  } else if (rejected) {
+    paymentStatus.textContent = message || "Pagamento recusado ou cancelado. Gere um novo Pix para tentar novamente.";
+  } else {
+    paymentStatus.textContent = message || "Aguardando pagamento...";
+  }
 }
 
 function closePaymentModal() {
@@ -420,11 +487,15 @@ async function createPixPayment() {
       body: JSON.stringify({ slug }),
     });
     if (!data.paymentRequired) {
-      await api("/client-gallery/complete", {
+      const completed = await api("/client-gallery/complete", {
         method: "POST",
         body: JSON.stringify({ slug }),
       });
-      showToast("Seleção concluída. Obrigado!");
+      if (completed.gallery) state.gallery = completed.gallery;
+      if (completed.pricing && state.gallery) state.gallery.pricing = completed.pricing;
+      renderHeader();
+      updatePhotoButtons();
+      showToast(hasCompletedSelection() ? "Seleção atualizada. Obrigado!" : "Seleção concluída. Obrigado!");
       return;
     }
     if (data.pricing) state.gallery.pricing = data.pricing;
@@ -444,21 +515,37 @@ function startPaymentPolling(paymentId) {
     try {
       const data = await api(`/client-gallery/payment/status?id=${encodeURIComponent(paymentId)}`);
       if (data.payment?.status === "approved" && data.completed) {
-        paymentStatus.textContent = "Pagamento aprovado. Seleção concluída!";
+        const wasCompleted = hasCompletedSelection();
+        state.payment = data.payment;
+        if (state.gallery) {
+          state.gallery.selectionCompletedAt = data.payment.selectionCompletedAt || new Date().toISOString();
+          state.gallery.selectionPaymentId = data.payment.id || state.gallery.selectionPaymentId || null;
+          state.gallery.pricing = {
+            ...(state.gallery.pricing || {}),
+            requiresPayment: false,
+            extraCount: 0,
+            subtotalCents: 0,
+            discountCents: 0,
+            totalCents: 0,
+          };
+        }
+        setPaymentModalState("approved", wasCompleted
+          ? "Pagamento aprovado. Fotos adicionais confirmadas!"
+          : "Pagamento aprovado. Seleção concluída!");
         clearInterval(state.paymentPoll);
         state.paymentPoll = null;
-        completeBtn.classList.add("hidden");
-        selectAllBtn.classList.add("hidden");
-        showToast("Pagamento aprovado. Seleção concluída!");
+        renderHeader();
+        updatePhotoButtons();
+        showToast(wasCompleted ? "Fotos adicionais confirmadas!" : "Pagamento aprovado. Seleção concluída!");
       } else if (data.payment?.status === "rejected") {
-        paymentStatus.textContent = "Pagamento recusado ou cancelado. Gere um novo Pix para tentar novamente.";
+        setPaymentModalState("rejected");
         clearInterval(state.paymentPoll);
         state.paymentPoll = null;
       } else {
-        paymentStatus.textContent = "Aguardando pagamento...";
+        setPaymentModalState("pending");
       }
     } catch (err) {
-      paymentStatus.textContent = err.message || "Aguardando confirmação do pagamento...";
+      setPaymentModalState("pending", err.message || "Aguardando confirmação do pagamento...");
     }
   };
 

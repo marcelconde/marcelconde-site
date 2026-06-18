@@ -1021,10 +1021,12 @@ publishGalleryBtn.addEventListener("click", async () => {
       showToast(data.emailType === "final_delivery"
         ? `Entrega final enviada para ${client.email}.`
         : `Galeria publicada. E-mail enviado para ${client.email}.`);
+    } else if (data.emailType === "final_delivery") {
+      showToast(`Entrega final salva, mas o e-mail não foi enviado: ${data.emailError || "verifique o Resend"}`);
+    } else if (data.emailType === "login_access") {
+      showToast(`Galeria publicada, mas o e-mail de login não foi enviado: ${data.emailError || "verifique o Resend"}`);
     } else {
-      showToast(data.emailType === "final_delivery"
-        ? `Entrega final salva, mas o e-mail não foi enviado: ${data.emailError || "verifique o Resend"}`
-        : `Convite criado, mas o e-mail não foi enviado: ${data.emailError || "verifique o Resend"}`);
+      showToast(`Convite criado, mas o e-mail não foi enviado: ${data.emailError || "verifique o Resend"}`);
     }
   } catch (err) {
     showToast(err.message || "Erro ao publicar galeria.");

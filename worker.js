@@ -421,8 +421,12 @@ function normalizeGalleryCommerce(input = {}, existing = {}) {
   };
 }
 
-function calculateSelectionPricing(gallery = {}, images = [], selection = []) {
-  const selectedPublicIds = [...new Set((selection || []).filter(Boolean))];
+function uniquePublicIds(selection = []) {
+  return [...new Set((selection || []).filter(Boolean))];
+}
+
+function calculateSelectionPricingRaw(gallery = {}, images = [], selection = []) {
+  const selectedPublicIds = uniquePublicIds(selection);
   const selectedTotal = selectedPublicIds.length;
   const totalImages = images.length;
   const includedPhotos = Math.max(0, Math.round(Number(gallery.selectionLimit || 0)));
@@ -471,6 +475,46 @@ function calculateSelectionPricing(gallery = {}, images = [], selection = []) {
     requiresPayment: totalCents > 0,
     canCompleteWithoutPayment: selectedTotal >= includedPhotos && totalCents === 0,
     needsMoreIncludedPhotos: includedPhotos > 0 && selectedTotal < includedPhotos,
+  };
+}
+
+function completedSelectionBaseline(gallery = {}, selection = []) {
+  if (!gallery.selectionCompletedAt) return [];
+  const locked = uniquePublicIds(gallery.selectionLockedPublicIds || []);
+  return locked.length ? locked : uniquePublicIds(selection);
+}
+
+function calculateSelectionPricing(gallery = {}, images = [], selection = [], baselineSelection = null) {
+  const current = calculateSelectionPricingRaw(gallery, images, selection);
+  const baseline = Array.isArray(baselineSelection)
+    ? uniquePublicIds(baselineSelection)
+    : completedSelectionBaseline(gallery, selection);
+
+  if (!baseline.length) return current;
+
+  const locked = calculateSelectionPricingRaw(gallery, images, baseline);
+  const extraCount = Math.max(0, current.extraCount - locked.extraCount);
+  const subtotalCents = Math.max(0, current.subtotalCents - locked.subtotalCents);
+  const discountCents = Math.max(0, current.discountCents - locked.discountCents);
+  const totalCents = Math.max(0, current.totalCents - locked.totalCents);
+
+  return {
+    ...current,
+    extraCount,
+    subtotalCents,
+    discountCents,
+    totalCents,
+    lockedSelectedTotal: locked.selectedTotal,
+    lockedExtraCount: locked.extraCount,
+    lockedTotalCents: locked.totalCents,
+    totalExtraCount: current.extraCount,
+    totalSubtotalCents: current.subtotalCents,
+    totalDiscountCents: current.discountCents,
+    totalSelectionCents: current.totalCents,
+    additionalSelection: true,
+    requiresPayment: totalCents > 0,
+    canCompleteWithoutPayment: current.selectedTotal >= current.includedPhotos && totalCents === 0,
+    needsMoreIncludedPhotos: gallery.selectionCompletedAt ? false : current.needsMoreIncludedPhotos,
   };
 }
 
@@ -1166,6 +1210,12 @@ function clientLoginUrl(env) {
   return `${origin}/clientes/login/`;
 }
 
+function clientGalleryLoginUrl(env, slug) {
+  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+  const next = `/clientes/galeria/?slug=${encodeURIComponent(slug || "")}`;
+  return `${origin}/clientes/login/?next=${encodeURIComponent(next)}`;
+}
+
 function emailHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -1198,6 +1248,45 @@ async function sendClientGalleryInviteEmail(env, email, token, gallery = {}, cli
              <p><a href="${inviteUrl}">Criar senha e acessar galeria</a></p>
              <p>Depois disso, você poderá voltar quando quiser pela Área do Cliente usando seu e-mail e senha.</p>
              <p>Este link de primeiro acesso expira em 7 dias.</p>`,
+    }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Resend ${res.status}: ${text}`);
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+async function sendClientGalleryLoginEmail(env, email, gallery = {}, client = {}) {
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY não configurada no Worker.");
+  }
+
+  const galleryLoginUrl = clientGalleryLoginUrl(env, gallery.slug || "");
+  const areaLoginUrl = clientLoginUrl(env);
+  const galleryTitle = emailHtml(gallery.title || "sua galeria");
+  const clientName = emailHtml(client.name || email);
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      to: [email],
+      subject: `Sua galeria está disponível — ${gallery.title || "galeria"}`,
+      html: `<p>Olá ${clientName},</p>
+             <p>Sua galeria <strong>${galleryTitle}</strong> está disponível na área do cliente Marcel Conde.</p>
+             <p>Como você já possui senha cadastrada, entre pelo botão abaixo usando seu e-mail e senha:</p>
+             <p><a href="${emailHtml(galleryLoginUrl)}">Entrar e acessar galeria</a></p>
+             <p>Você também pode acessar pela <a href="${emailHtml(areaLoginUrl)}">Área do Cliente</a>.</p>`,
     }),
   });
 
@@ -1311,16 +1400,81 @@ async function sendSelectionCompletedEmail(env, gallery = {}, client = {}, selec
   }
 }
 
+async function sendPaymentApprovedEmail(env, gallery = {}, client = {}, payment = {}, pricing = {}) {
+  if (!env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY não configurada no Worker.");
+  }
+
+  const to = adminEmail(env) || "contato@marcelconde.com.br";
+  const galleryTitle = emailHtml(gallery.title || gallery.slug || "galeria");
+  const clientName = emailHtml(client.name || client.email || "Cliente");
+  const clientEmail = emailHtml(client.email || payment.clientEmail || "");
+  const galleryUrl = clientGalleryUrl(env, gallery.slug || payment.gallerySlug || "");
+  const amountCents = payment.amountCents ?? pricing.totalCents ?? 0;
+  const providerPaymentId = emailHtml(payment.providerPaymentId || "");
+  const internalPaymentId = emailHtml(payment.id || "");
+  const description = emailHtml(payment.description || `Fotos extras — ${gallery.title || gallery.slug || "galeria"}`);
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      to: [to],
+      subject: `Pix aprovado — ${gallery.title || gallery.slug || "galeria"}`,
+      html: `<p>Pagamento Pix aprovado para fotos extras.</p>
+             <p><strong>Galeria:</strong> ${galleryTitle}</p>
+             <p><strong>Cliente:</strong> ${clientName} (${clientEmail})</p>
+             <p><strong>Valor aprovado:</strong> ${formatCurrencyFromCents(amountCents)}</p>
+             <p><strong>Fotos selecionadas:</strong> ${Number(pricing.selectedTotal || 0)} · <strong>Fotos extras:</strong> ${Number(pricing.extraCount || 0)}</p>
+             <p><strong>Descrição:</strong> ${description}</p>
+             <p><strong>ID Mercado Pago:</strong> ${providerPaymentId || "não informado"}<br>
+                <strong>ID interno:</strong> ${internalPaymentId || "não informado"}</p>
+             <p><a href="${emailHtml(galleryUrl)}">Abrir galeria do cliente</a></p>`,
+    }),
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${text}`);
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+async function ensureCompletedSelectionBaseline(env, gallery = {}, images = [], currentSelection = []) {
+  if (!gallery.selectionCompletedAt) return [];
+
+  const existing = uniquePublicIds(gallery.selectionLockedPublicIds || []);
+  if (existing.length) return existing;
+
+  const lockedPublicIds = uniquePublicIds(currentSelection);
+  gallery.selectionLockedPublicIds = lockedPublicIds;
+  gallery.selectionLockedPricing = calculateSelectionPricingRaw(gallery, images, lockedPublicIds);
+  gallery.selectionLockedAt = gallery.selectionCompletedAt;
+  gallery.updatedAt = new Date().toISOString();
+  await writeKvJson(env, privateGalleryKey(gallery.id), gallery);
+  return lockedPublicIds;
+}
+
 async function completePrivateGallerySelection(env, request, gallery, client, images, selectedPublicIds, payment = null) {
   const now = new Date().toISOString();
-  const cleanSelection = [...new Set((selectedPublicIds || []).filter(Boolean))];
-  const pricing = payment?.pricing || calculateSelectionPricing(gallery, images, cleanSelection);
+  const cleanSelection = uniquePublicIds(selectedPublicIds);
+  const pricing = calculateSelectionPricingRaw(gallery, images, cleanSelection);
 
   await writeKvJson(env, privateGallerySelectionKey(gallery.id), cleanSelection);
 
   const nextGallery = {
     ...gallery,
     selectionCompletedAt: gallery.selectionCompletedAt || now,
+    selectionLockedPublicIds: cleanSelection,
+    selectionLockedPricing: pricing,
+    selectionLockedAt: now,
     selectionPaymentId: payment?.id || gallery.selectionPaymentId || null,
     updatedAt: now,
   };
@@ -1505,12 +1659,13 @@ async function approveMercadoPagoPayment(env, request, providerPaymentId) {
   const gallery = await readKvJson(env, privateGalleryKey(payment.galleryId), null);
   if (!gallery) return { ok: false, reason: "gallery_not_found", payment: nextPayment };
   const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+  const paymentClient = client || { email: payment.clientEmail || "", name: payment.clientName || "Cliente" };
   const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
   const completed = await completePrivateGallerySelection(
     env,
     request,
     gallery,
-    client || { email: payment.clientEmail || "", name: payment.clientName || "Cliente" },
+    paymentClient,
     images,
     payment.selectedPublicIds || [],
     { ...payment, ...nextPayment, status: "approved", approvedAt: now }
@@ -1519,7 +1674,42 @@ async function approveMercadoPagoPayment(env, request, providerPaymentId) {
   nextPayment.status = "approved";
   nextPayment.approvedAt = now;
   nextPayment.selectionCompletedAt = completed.gallery.selectionCompletedAt;
+  nextPayment.amountCents = payment.amountCents || completed.pricing.totalCents || 0;
+
+  let approvedNotificationQueued = false;
+  let approvedNotificationError = "";
+  let approvedNotificationResendId = null;
+  if (!payment.approvedNotificationSentAt) {
+    try {
+      const resend = await sendPaymentApprovedEmail(
+        env,
+        completed.gallery,
+        paymentClient,
+        nextPayment,
+        completed.pricing
+      );
+      approvedNotificationQueued = true;
+      approvedNotificationResendId = resend?.id || null;
+      nextPayment.approvedNotificationSentAt = new Date().toISOString();
+      nextPayment.approvedNotificationResendId = approvedNotificationResendId;
+      delete nextPayment.approvedNotificationError;
+    } catch (err) {
+      approvedNotificationError = String(err?.message || err || "unknown");
+      nextPayment.approvedNotificationError = approvedNotificationError;
+      console.error("Payment approved email error:", err);
+    }
+  }
+
   await writeKvJson(env, privateGalleryPaymentKey(payment.id), nextPayment);
+  await appendPrivateGalleryEvent(env, request, gallery.id, "pix_aprovado", {
+    paymentId: payment.id,
+    providerPaymentId,
+    amountCents: nextPayment.amountCents,
+    pricing: completed.pricing,
+    approvedNotificationQueued,
+    approvedNotificationError,
+    approvedNotificationResendId,
+  }, paymentClient);
 
   return { ok: true, approved: true, payment: nextPayment };
 }
@@ -1806,7 +1996,6 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
-      if (gallery.selectionCompletedAt) return errorJson("A seleção desta galeria já foi concluída.", 409);
       if (!publicId) return errorJson("Foto inválida.", 400);
 
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
@@ -1816,6 +2005,12 @@ export default {
 
       const limit = Number(gallery.selectionLimit || 0);
       const current = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, current);
+      const lockedSet = new Set(lockedSelection);
+      if (!selected && lockedSet.has(publicId)) {
+        return errorJson("Esta foto já foi confirmada na seleção anterior.", 409);
+      }
+
       let next = current.filter((item) => item !== publicId);
 
       if (selected) {
@@ -1824,14 +2019,13 @@ export default {
 
       await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
       await appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", { publicId }, access.client);
-      const pricing = calculateSelectionPricing(gallery, images, next);
 
       return json({
         ok: true,
         selectedPublicIds: next,
         totalSelected: next.length,
         limit,
-        pricing,
+        pricing: calculateSelectionPricing(gallery, images, next, lockedSelection),
       }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -1844,9 +2038,10 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
-      if (gallery.selectionCompletedAt) return errorJson("A seleção desta galeria já foi concluída.", 409);
 
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      const current = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, current);
       const next = images.map((image) => image.public_id).filter(Boolean);
       await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
       await appendPrivateGalleryEvent(env, request, gallery.id, "selecionar_todas", {
@@ -1858,7 +2053,7 @@ export default {
         selectedPublicIds: next,
         totalSelected: next.length,
         limit: Number(gallery.selectionLimit || 0),
-        pricing: calculateSelectionPricing(gallery, images, next),
+        pricing: calculateSelectionPricing(gallery, images, next, lockedSelection),
       }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -1870,14 +2065,17 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
-      if (gallery.selectionCompletedAt) {
-        const existingSelection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
-        return json({ ok: true, alreadyCompleted: true, totalSelected: existingSelection.length }, 200, { "Cache-Control": "no-store" });
-      }
 
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
-      const pricing = calculateSelectionPricing(gallery, images, selection);
+      const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, selection);
+      const lockedSet = new Set(lockedSelection);
+      const hasNewSelection = lockedSelection.length > 0 && selection.some((publicId) => !lockedSet.has(publicId));
+      if (gallery.selectionCompletedAt && !hasNewSelection) {
+        return json({ ok: true, alreadyCompleted: true, totalSelected: selection.length }, 200, { "Cache-Control": "no-store" });
+      }
+
+      const pricing = calculateSelectionPricing(gallery, images, selection, lockedSelection);
 
       if (pricing.needsMoreIncludedPhotos) {
         return errorJson(`Selecione pelo menos ${pricing.includedPhotos} fotos para concluir.`, 409, { pricing });
@@ -1892,6 +2090,7 @@ export default {
       return json({
         ok: true,
         totalSelected: selection.length,
+        gallery: publicPrivateGallery(completed.gallery, images, selection),
         pricing: completed.pricing,
         emailQueued: completed.emailQueued,
         emailError: completed.emailError,
@@ -1906,15 +2105,20 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
-      if (gallery.selectionCompletedAt) return errorJson("A seleção desta galeria já foi concluída.", 409);
       if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
 
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
-      const pricing = calculateSelectionPricing(gallery, images, selection);
+      const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, selection);
+      const lockedSet = new Set(lockedSelection);
+      const hasNewSelection = lockedSelection.length > 0 && selection.some((publicId) => !lockedSet.has(publicId));
+      const pricing = calculateSelectionPricing(gallery, images, selection, lockedSelection);
 
       if (pricing.needsMoreIncludedPhotos) {
         return errorJson(`Selecione pelo menos ${pricing.includedPhotos} fotos para concluir.`, 409, { pricing });
+      }
+      if (gallery.selectionCompletedAt && !hasNewSelection) {
+        return json({ ok: true, alreadyCompleted: true, paymentRequired: false, pricing }, 200, { "Cache-Control": "no-store" });
       }
       if (!pricing.requiresPayment) {
         return json({ ok: true, paymentRequired: false, pricing }, 200, { "Cache-Control": "no-store" });
@@ -2377,9 +2581,11 @@ export default {
         return errorJson("Vincule um cliente com e-mail antes de publicar a galeria.", 400);
       }
 
+      const existingClientUser = await getClientUser(env, client.email);
+      const hasClientPassword = existingClientUser?.active !== false && Boolean(existingClientUser?.passwordHash);
       const emailType = gallery.status === "final" || gallery.allowDownload === true
         ? "final_delivery"
-        : "first_access";
+        : hasClientPassword ? "login_access" : "first_access";
       let token = "";
       let resend = null;
       let emailError = "";
@@ -2387,6 +2593,8 @@ export default {
       try {
         if (emailType === "final_delivery") {
           resend = await sendClientFinalDeliveryEmail(env, client.email, gallery, client);
+        } else if (emailType === "login_access") {
+          resend = await sendClientGalleryLoginEmail(env, client.email, gallery, client);
         } else {
           token = randomToken(36);
           const invite = {
@@ -2411,6 +2619,8 @@ export default {
       gallery.publishedAt = gallery.publishedAt || new Date().toISOString();
       if (emailType === "final_delivery") {
         gallery.lastDeliveryEmailAt = new Date().toISOString();
+      } else if (emailType === "login_access") {
+        gallery.lastAccessEmailAt = new Date().toISOString();
       } else {
         gallery.lastInviteAt = new Date().toISOString();
       }
@@ -2422,12 +2632,14 @@ export default {
         slug: gallery.slug,
         email: client.email,
         emailType,
+        hasClientPassword,
         emailQueued: Boolean(resend),
         emailError,
       });
       await appendPrivateGalleryEvent(env, request, gallery.id, "admin_publicou_galeria", {
         email: client.email,
         emailType,
+        hasClientPassword,
         emailQueued: Boolean(resend),
         emailError,
       }, user);
@@ -2436,6 +2648,7 @@ export default {
         ok: true,
         gallery,
         emailType,
+        hasClientPassword,
         inviteUrl: token ? clientGalleryInviteUrl(env, token) : "",
         galleryUrl: clientGalleryUrl(env, gallery.slug),
         emailQueued: Boolean(resend),
