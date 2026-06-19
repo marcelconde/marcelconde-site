@@ -1241,14 +1241,141 @@ function emailHtml(value = "") {
     .replace(/"/g, "&quot;");
 }
 
+function siteOrigin(env) {
+  return String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+}
+
+function brandName(env) {
+  return env.BRAND_NAME || "Marcel Conde | Photography";
+}
+
+function resendFrom(env) {
+  const configured = String(env.RESEND_FROM || env.CONTACT_EMAIL || "contato@marcelconde.com.br").trim();
+  const match = configured.match(/<([^>]+)>/);
+  const email = match?.[1] || configured;
+  return `${brandName(env)} <${email}>`;
+}
+
+function emailButton(label, href, variant = "primary") {
+  const styles = variant === "secondary"
+    ? "background:#151515;color:#f7f3ed;border:1px solid #2a2a2a;"
+    : "background:#c6a376;color:#0b0a08;border:1px solid #c6a376;";
+  return `<a href="${emailHtml(href)}" style="${styles}display:inline-block;padding:15px 22px;text-decoration:none;border-radius:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">${emailHtml(label)}</a>`;
+}
+
+function emailLayout(env, {
+  preheader = "",
+  eyebrow = "",
+  title = "",
+  intro = "",
+  body = "",
+  ctaLabel = "",
+  ctaUrl = "",
+  secondaryCtaLabel = "",
+  secondaryCtaUrl = "",
+  footerNote = "",
+  reason = "Você recebeu este e-mail porque existe uma galeria vinculada ao seu cadastro na área do cliente.",
+} = {}) {
+  const origin = siteOrigin(env);
+  const logoUrl = env.EMAIL_LOGO_URL || `${origin}/images/logo.png`;
+  const instagramUrl = env.INSTAGRAM_URL || "https://www.instagram.com/mconde.foto/";
+  const pinterestUrl = env.PINTEREST_URL || "https://br.pinterest.com/marcelconde/";
+  const whatsappUrl = env.WHATSAPP_URL || "https://wa.me/5581984094212?text=Ol%C3%A1%21%20Vim%20pela%20%C3%A1rea%20do%20cliente.";
+  const contactEmail = env.CONTACT_EMAIL || "contato@marcelconde.com.br";
+  const cnpj = env.BRAND_CNPJ || "67.096.533/0001-90";
+  const safeBrand = emailHtml(brandName(env));
+
+  return `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <title>${title ? emailHtml(title) : safeBrand}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#0b0a08;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${emailHtml(preheader)}</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#0b0a08;margin:0;padding:0;">
+      <tr>
+        <td align="center" style="padding:34px 14px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:660px;background:#f7f3ed;border:1px solid rgba(198,163,118,.38);">
+            <tr>
+              <td style="padding:28px 30px 22px;background:#0b0a08;border-bottom:1px solid rgba(198,163,118,.38);">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      <img src="${emailHtml(logoUrl)}" width="64" alt="${safeBrand}" style="display:block;width:64px;height:auto;border:0;outline:none;text-decoration:none;">
+                    </td>
+                    <td align="right" style="vertical-align:middle;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.4;color:#c6a376;letter-spacing:.18em;text-transform:uppercase;">
+                      ${safeBrand}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:38px 30px 12px;">
+                ${eyebrow ? `<p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#a98758;">${emailHtml(eyebrow)}</p>` : ""}
+                <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:38px;line-height:1.02;font-weight:400;color:#151515;letter-spacing:0;">${emailHtml(title)}</h1>
+                ${intro ? `<p style="margin:18px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.7;color:#4b4741;">${intro}</p>` : ""}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 30px 34px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.75;color:#2a2926;">
+                ${body}
+                ${ctaLabel && ctaUrl ? `<div style="margin:28px 0 0;">${emailButton(ctaLabel, ctaUrl)}</div>` : ""}
+                ${secondaryCtaLabel && secondaryCtaUrl ? `<div style="margin:14px 0 0;">${emailButton(secondaryCtaLabel, secondaryCtaUrl, "secondary")}</div>` : ""}
+                ${footerNote ? `<p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#6f6960;">${footerNote}</p>` : ""}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 30px;background:#151515;border-top:1px solid rgba(198,163,118,.38);">
+                <p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#c6a376;">Acompanhe o trabalho</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="padding:0 8px 8px 0;">${emailButton("Instagram", instagramUrl, "secondary")}</td>
+                    <td style="padding:0 8px 8px 0;">${emailButton("Pinterest", pinterestUrl, "secondary")}</td>
+                    <td style="padding:0 0 8px 0;">${emailButton("WhatsApp", whatsappUrl, "secondary")}</td>
+                  </tr>
+                </table>
+                <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.7;color:#b9b1a6;">
+                  ${safeBrand}<br>
+                  CNPJ ${emailHtml(cnpj)} · Recife, PE · <a href="mailto:${emailHtml(contactEmail)}" style="color:#c6a376;text-decoration:none;">${emailHtml(contactEmail)}</a>
+                </p>
+                <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:#7f776d;">
+                  ${emailHtml(reason)}
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 async function sendClientGalleryInviteEmail(env, email, token, gallery = {}, client = {}) {
   if (!env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY não configurada no Worker.");
   }
 
   const inviteUrl = clientGalleryInviteUrl(env, token);
-  const galleryTitle = emailHtml(gallery.title || "sua galeria");
+  const galleryTitle = gallery.title || "sua galeria";
   const clientName = emailHtml(client.name || email);
+  const html = emailLayout(env, {
+    preheader: `Crie sua senha para acessar ${galleryTitle}.`,
+    eyebrow: "Galeria privada",
+    title: "Sua galeria está pronta",
+    intro: `Olá ${clientName}, sua galeria <strong>${emailHtml(galleryTitle)}</strong> está disponível na área do cliente.`,
+    body: `<p style="margin:0;">Para o primeiro acesso, crie sua senha pelo botão abaixo. Depois disso, você poderá voltar quando quiser usando seu e-mail e senha.</p>`,
+    ctaLabel: "Criar senha e acessar",
+    ctaUrl: inviteUrl,
+    secondaryCtaLabel: "Abrir área do cliente",
+    secondaryCtaUrl: clientLoginUrl(env),
+    footerNote: "Este link de primeiro acesso expira em 7 dias.",
+  });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -1256,15 +1383,10 @@ async function sendClientGalleryInviteEmail(env, email, token, gallery = {}, cli
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      from: resendFrom(env),
       to: [email],
       subject: `Sua galeria está disponível — ${galleryTitle}`,
-      html: `<p>Olá ${clientName},</p>
-             <p>Sua galeria <strong>${galleryTitle}</strong> está disponível na área do cliente Marcel Conde.</p>
-             <p>Para o primeiro acesso, crie sua senha pelo botão abaixo:</p>
-             <p><a href="${inviteUrl}">Criar senha e acessar galeria</a></p>
-             <p>Depois disso, você poderá voltar quando quiser pela Área do Cliente usando seu e-mail e senha.</p>
-             <p>Este link de primeiro acesso expira em 7 dias.</p>`,
+      html,
     }),
   });
 
@@ -1287,8 +1409,19 @@ async function sendClientGalleryLoginEmail(env, email, gallery = {}, client = {}
 
   const galleryLoginUrl = clientGalleryLoginUrl(env, gallery.slug || "");
   const areaLoginUrl = clientLoginUrl(env);
-  const galleryTitle = emailHtml(gallery.title || "sua galeria");
+  const galleryTitle = gallery.title || "sua galeria";
   const clientName = emailHtml(client.name || email);
+  const html = emailLayout(env, {
+    preheader: `Acesse ${galleryTitle} com seu e-mail e senha.`,
+    eyebrow: "Área do cliente",
+    title: "Sua galeria está disponível",
+    intro: `Olá ${clientName}, sua galeria <strong>${emailHtml(galleryTitle)}</strong> está disponível na área do cliente.`,
+    body: `<p style="margin:0;">Como você já possui senha cadastrada, entre pelo botão abaixo usando seu e-mail e senha.</p>`,
+    ctaLabel: "Entrar e acessar galeria",
+    ctaUrl: galleryLoginUrl,
+    secondaryCtaLabel: "Área do cliente",
+    secondaryCtaUrl: areaLoginUrl,
+  });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -1296,14 +1429,10 @@ async function sendClientGalleryLoginEmail(env, email, gallery = {}, client = {}
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      from: resendFrom(env),
       to: [email],
       subject: `Sua galeria está disponível — ${gallery.title || "galeria"}`,
-      html: `<p>Olá ${clientName},</p>
-             <p>Sua galeria <strong>${galleryTitle}</strong> está disponível na área do cliente Marcel Conde.</p>
-             <p>Como você já possui senha cadastrada, entre pelo botão abaixo usando seu e-mail e senha:</p>
-             <p><a href="${emailHtml(galleryLoginUrl)}">Entrar e acessar galeria</a></p>
-             <p>Você também pode acessar pela <a href="${emailHtml(areaLoginUrl)}">Área do Cliente</a>.</p>`,
+      html,
     }),
   });
 
@@ -1326,8 +1455,19 @@ async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {
 
   const galleryUrl = clientGalleryUrl(env, gallery.slug || "");
   const loginUrl = clientLoginUrl(env);
-  const galleryTitle = emailHtml(gallery.title || "sua galeria");
+  const galleryTitle = gallery.title || "sua galeria";
   const clientName = emailHtml(client.name || email);
+  const html = emailLayout(env, {
+    preheader: `As fotos de ${galleryTitle} estão prontas para download.`,
+    eyebrow: "Entrega final",
+    title: "Suas fotos estão prontas",
+    intro: `Olá ${clientName}, as fotos da galeria <strong>${emailHtml(galleryTitle)}</strong> estão prontas para download.`,
+    body: `<p style="margin:0;">Acesse a galeria pelo botão abaixo e entre com seu e-mail e senha cadastrados.</p>`,
+    ctaLabel: "Acessar e baixar fotos",
+    ctaUrl: galleryUrl,
+    secondaryCtaLabel: "Área do cliente",
+    secondaryCtaUrl: loginUrl,
+  });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -1335,14 +1475,10 @@ async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      from: resendFrom(env),
       to: [email],
       subject: `Suas fotos estão prontas — ${gallery.title || "galeria"}`,
-      html: `<p>Olá ${clientName},</p>
-             <p>As fotos da galeria <strong>${galleryTitle}</strong> estão prontas para download.</p>
-             <p>Acesse pelo link abaixo e entre com seu e-mail e senha cadastrados:</p>
-             <p><a href="${galleryUrl}">Acessar galeria e baixar fotos</a></p>
-             <p>Você também pode voltar quando quiser pela <a href="${loginUrl}">Área do Cliente</a>.</p>`,
+      html,
     }),
   });
 
@@ -1379,11 +1515,28 @@ async function sendSelectionCompletedEmail(env, gallery = {}, client = {}, selec
   const fileList = selectedImages
     .map((image) => image.filename || image.display_name || String(image.public_id || "").split("/").pop())
     .filter(Boolean)
-    .map((name) => `<li>${emailHtml(name)}</li>`)
+    .map((name) => `<li style="margin:0 0 6px;">${emailHtml(name)}</li>`)
     .join("");
   const paymentHtml = payment
-    ? `<p><strong>Pagamento:</strong> ${formatCurrencyFromCents(payment.amountCents)} (${emailHtml(payment.providerPaymentId || payment.id || "")})</p>`
-    : "<p><strong>Pagamento:</strong> não houve fotos extras.</p>";
+    ? `<p style="margin:16px 0 0;"><strong>Pagamento:</strong> ${formatCurrencyFromCents(payment.amountCents)} (${emailHtml(payment.providerPaymentId || payment.id || "")})</p>`
+    : `<p style="margin:16px 0 0;"><strong>Pagamento:</strong> não houve fotos extras.</p>`;
+  const html = emailLayout(env, {
+    preheader: `Seleção concluída por ${client.name || client.email || "cliente"}.`,
+    eyebrow: "Seleção de fotos",
+    title: "Seleção concluída",
+    intro: `A galeria <strong>${galleryTitle}</strong> recebeu uma seleção de fotos.`,
+    body: `<p style="margin:0;"><strong>Cliente:</strong> ${clientName} (${clientEmail})</p>
+           <p style="margin:14px 0 0;"><strong>Total selecionado:</strong> ${Number(pricing.selectedTotal || selectedImages.length)} foto(s)</p>
+           <p style="margin:8px 0 0;"><strong>Fotos inclusas:</strong> ${Number(pricing.includedPhotos || 0)} · <strong>Extras:</strong> ${Number(pricing.extraCount || 0)}</p>
+           <p style="margin:8px 0 0;"><strong>Desconto:</strong> ${Number(pricing.discountPercent || 0)}% (${emailHtml(pricing.discountLabel || "sem desconto")})</p>
+           <p style="margin:8px 0 0;"><strong>Total bruto extras:</strong> ${formatCurrencyFromCents(pricing.subtotalCents || 0)} · <strong>Total final:</strong> ${formatCurrencyFromCents(pricing.totalCents || 0)}</p>
+           ${paymentHtml}
+           <p style="margin:20px 0 8px;"><strong>Arquivos selecionados:</strong></p>
+           <ol style="margin:0;padding-left:22px;">${fileList || "<li>Nenhum arquivo encontrado.</li>"}</ol>`,
+    ctaLabel: "Abrir área administrativa",
+    ctaUrl: `${siteOrigin(env)}/admin/`,
+    reason: "Você recebeu este e-mail porque este endereço recebe notificações administrativas da plataforma.",
+  });
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -1392,18 +1545,10 @@ async function sendSelectionCompletedEmail(env, gallery = {}, client = {}, selec
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      from: resendFrom(env),
       to: [to],
       subject: `Seleção concluída — ${gallery.title || "galeria"}`,
-      html: `<p>Seleção concluída na galeria <strong>${galleryTitle}</strong>.</p>
-             <p><strong>Cliente:</strong> ${clientName} (${clientEmail})</p>
-             <p><strong>Total selecionado:</strong> ${Number(pricing.selectedTotal || selectedImages.length)} foto(s)</p>
-             <p><strong>Fotos inclusas:</strong> ${Number(pricing.includedPhotos || 0)} · <strong>Extras:</strong> ${Number(pricing.extraCount || 0)}</p>
-             <p><strong>Desconto:</strong> ${Number(pricing.discountPercent || 0)}% (${emailHtml(pricing.discountLabel || "sem desconto")})</p>
-             <p><strong>Total bruto extras:</strong> ${formatCurrencyFromCents(pricing.subtotalCents || 0)} · <strong>Total final:</strong> ${formatCurrencyFromCents(pricing.totalCents || 0)}</p>
-             ${paymentHtml}
-             <p><strong>Arquivos selecionados:</strong></p>
-             <ol>${fileList || "<li>Nenhum arquivo encontrado.</li>"}</ol>`,
+      html,
     }),
   });
 
@@ -1431,6 +1576,23 @@ async function sendPaymentApprovedEmail(env, gallery = {}, client = {}, payment 
   const providerPaymentId = emailHtml(payment.providerPaymentId || "");
   const internalPaymentId = emailHtml(payment.id || "");
   const description = emailHtml(payment.description || `Fotos extras — ${gallery.title || gallery.slug || "galeria"}`);
+  const html = emailLayout(env, {
+    preheader: `Pagamento Pix aprovado para ${gallery.title || gallery.slug || "galeria"}.`,
+    eyebrow: "Pagamento aprovado",
+    title: "Pix aprovado",
+    intro: `Pagamento Pix aprovado para fotos extras da galeria <strong>${galleryTitle}</strong>.`,
+    body: `<p style="margin:0;"><strong>Cliente:</strong> ${clientName} (${clientEmail})</p>
+           <p style="margin:14px 0 0;"><strong>Valor aprovado:</strong> ${formatCurrencyFromCents(amountCents)}</p>
+           <p style="margin:8px 0 0;"><strong>Fotos selecionadas:</strong> ${Number(pricing.selectedTotal || 0)} · <strong>Fotos extras:</strong> ${Number(pricing.extraCount || 0)}</p>
+           <p style="margin:8px 0 0;"><strong>Descrição:</strong> ${description}</p>
+           <p style="margin:8px 0 0;"><strong>ID Mercado Pago:</strong> ${providerPaymentId || "não informado"}<br>
+              <strong>ID interno:</strong> ${internalPaymentId || "não informado"}</p>`,
+    ctaLabel: "Abrir galeria do cliente",
+    ctaUrl: galleryUrl,
+    secondaryCtaLabel: "Abrir admin",
+    secondaryCtaUrl: `${siteOrigin(env)}/admin/`,
+    reason: "Você recebeu este e-mail porque este endereço recebe notificações administrativas da plataforma.",
+  });
 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -1439,18 +1601,10 @@ async function sendPaymentApprovedEmail(env, gallery = {}, client = {}, payment 
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      from: resendFrom(env),
       to: [to],
       subject: `Pix aprovado — ${gallery.title || gallery.slug || "galeria"}`,
-      html: `<p>Pagamento Pix aprovado para fotos extras.</p>
-             <p><strong>Galeria:</strong> ${galleryTitle}</p>
-             <p><strong>Cliente:</strong> ${clientName} (${clientEmail})</p>
-             <p><strong>Valor aprovado:</strong> ${formatCurrencyFromCents(amountCents)}</p>
-             <p><strong>Fotos selecionadas:</strong> ${Number(pricing.selectedTotal || 0)} · <strong>Fotos extras:</strong> ${Number(pricing.extraCount || 0)}</p>
-             <p><strong>Descrição:</strong> ${description}</p>
-             <p><strong>ID Mercado Pago:</strong> ${providerPaymentId || "não informado"}<br>
-                <strong>ID interno:</strong> ${internalPaymentId || "não informado"}</p>
-             <p><a href="${emailHtml(galleryUrl)}">Abrir galeria do cliente</a></p>`,
+      html,
     }),
   });
 
@@ -1759,6 +1913,17 @@ async function sendResetEmail(env, request, email, token) {
 
   const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
   const resetUrl = `${origin}/admin/?reset=${encodeURIComponent(token)}`;
+  const html = emailLayout(env, {
+    preheader: "Use este link para criar uma nova senha do painel administrativo.",
+    eyebrow: "Segurança",
+    title: "Redefinir senha",
+    intro: "Recebemos uma solicitação para redefinir a senha do painel administrativo.",
+    body: `<p style="margin:0;">Se foi você, clique no botão abaixo para criar uma nova senha.</p>`,
+    ctaLabel: "Criar nova senha",
+    ctaUrl: resetUrl,
+    footerNote: "Este link expira em 1 hora. Se você não solicitou esta alteração, ignore este e-mail.",
+    reason: "Você recebeu este e-mail porque foi solicitada uma redefinição de senha para o painel administrativo.",
+  });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -1766,12 +1931,10 @@ async function sendResetEmail(env, request, email, token) {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      from: resendFrom(env),
       to: [email],
-      subject: "Redefinir senha do admin — Marcel Conde",
-      html: `<p>Você solicitou a redefinição da senha do painel administrativo.</p>
-             <p><a href="${resetUrl}">Clique aqui para criar uma nova senha</a></p>
-             <p>Este link expira em 1 hora.</p>`,
+      subject: `Redefinir senha do admin — ${brandName(env)}`,
+      html,
     }),
   });
 
@@ -1793,6 +1956,18 @@ async function sendInviteEmail(env, email, token, inviterName = "Marcel Conde") 
   }
 
   const inviteUrl = adminInviteUrl(env, token);
+  const safeInviterName = emailHtml(inviterName);
+  const html = emailLayout(env, {
+    preheader: `${inviterName} convidou você para acessar o painel administrativo.`,
+    eyebrow: "Convite administrativo",
+    title: "Acesso ao painel",
+    intro: `<strong>${safeInviterName}</strong> convidou você para acessar o painel administrativo ${emailHtml(brandName(env))}.`,
+    body: `<p style="margin:0;">Clique no botão abaixo para criar sua senha e aceitar o convite.</p>`,
+    ctaLabel: "Aceitar convite",
+    ctaUrl: inviteUrl,
+    footerNote: "Este link expira em 48 horas.",
+    reason: "Você recebeu este e-mail porque foi convidado para acessar o painel administrativo.",
+  });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -1800,12 +1975,10 @@ async function sendInviteEmail(env, email, token, inviterName = "Marcel Conde") 
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: env.RESEND_FROM || "Marcel Conde <contato@marcelconde.com.br>",
+      from: resendFrom(env),
       to: [email],
-      subject: "Convite para o admin — Marcel Conde",
-      html: `<p><strong>${inviterName}</strong> convidou você para acessar o painel administrativo Marcel Conde.</p>
-             <p><a href="${inviteUrl}">Clique aqui para criar sua senha e aceitar o convite</a></p>
-             <p>Este link expira em 48 horas.</p>`,
+      subject: `Convite para o admin — ${brandName(env)}`,
+      html,
     }),
   });
 
@@ -3396,6 +3569,18 @@ export default {
 
       if (env.RESEND_API_KEY) {
         try {
+          const albumTitle = emailHtml(albumName);
+          const albumUrl = `https://marcelconde.com.br/categoria.html?slug=${encodeURIComponent(album)}`;
+          const likeHtml = emailLayout(env, {
+            preheader: `Uma foto do álbum ${albumName} recebeu uma nova curtida.`,
+            eyebrow: "Nova curtida",
+            title: "Uma foto recebeu curtida",
+            intro: `Uma foto do álbum <strong>${albumTitle}</strong> foi curtida.`,
+            body: `<p style="margin:0;"><strong>Total nessa foto:</strong> ${Number(data[String(index)] || 0)}</p>`,
+            ctaLabel: "Ver álbum",
+            ctaUrl: albumUrl,
+            reason: "Você recebeu este e-mail porque este endereço recebe notificações administrativas da plataforma.",
+          });
           await fetch("https://api.resend.com/emails", {
             method: "POST",
             headers: {
@@ -3403,12 +3588,10 @@ export default {
               Authorization: `Bearer ${env.RESEND_API_KEY}`,
             },
             body: JSON.stringify({
-              from: "curtidas@marcelconde.com.br",
+              from: resendFrom(env),
               to: ["contato@marcelconde.com.br"],
               subject: `❤️ Nova curtida — álbum "${albumName}"`,
-              html: `<p>Uma foto do álbum <strong>${albumName}</strong> foi curtida!</p>
-                     <p>Total nessa foto: <strong>${data[String(index)]}</strong></p>
-                     <p><a href="https://marcelconde.com.br/categoria.html?slug=${encodeURIComponent(album)}">Ver álbum →</a></p>`,
+              html: likeHtml,
             }),
           });
         } catch (e) {
