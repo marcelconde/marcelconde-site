@@ -19,6 +19,7 @@ const state = {
   paymentPoll: null,
 };
 
+const galleryHero = document.getElementById("galleryHero");
 const galleryHeroBg = document.getElementById("galleryHeroBg");
 const galleryTitle = document.getElementById("galleryTitle");
 const gallerySubtitle = document.getElementById("gallerySubtitle");
@@ -139,6 +140,7 @@ function updateCounters() {
   const limit = Number(state.gallery?.selectionLimit || 0);
   const pricing = state.gallery?.pricing || {};
   renderWorkflowStatus();
+  if (showCompletionStatus()) return;
   if (state.gallery?.allowDownload) {
     selectionCounter.textContent = "Downloads liberados";
     galleryLimit.textContent = "Entrega final disponível para download.";
@@ -173,12 +175,25 @@ function renderWorkflowStatus() {
   if (!workflowStatus) return;
 
   if (!showCompletionStatus()) {
+    document.body.classList.remove("selection-processing");
+    if (galleryHero) galleryHero.hidden = false;
+    photoGrid.hidden = false;
+    loadSentinel.hidden = false;
     workflowStatus.hidden = true;
     workflowStatus.innerHTML = "";
     return;
   }
 
   const hasPayment = Boolean(state.gallery?.selectionPaymentId);
+  document.body.classList.add("selection-processing");
+  if (galleryHero) galleryHero.hidden = true;
+  photoGrid.hidden = true;
+  loadSentinel.hidden = true;
+  completeBtn.classList.add("hidden");
+  selectAllBtn.classList.add("hidden");
+  downloadAllBtn.classList.add("hidden");
+  pricingSummary.hidden = true;
+  selectionCounter.textContent = "Fotos em edição";
   workflowStatus.hidden = false;
   workflowStatus.innerHTML = `
     <span class="eyebrow">${hasPayment ? "Pagamento confirmado" : "Seleção recebida"}</span>
@@ -270,6 +285,14 @@ async function loadBatch() {
     state.nextCursor = data.paging.nextCursor;
 
     if (state.images.length === data.images.length) renderHeader();
+    if (showCompletionStatus()) {
+      state.images = [];
+      state.nextCursor = null;
+      photoGrid.innerHTML = "";
+      renderHeader();
+      loadSentinel.textContent = "";
+      return;
+    }
     renderImages(data.images || []);
     updateCounters();
     loadSentinel.textContent = state.nextCursor === null ? "Todas as fotos foram carregadas." : "Carregar mais fotos";

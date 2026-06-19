@@ -189,12 +189,25 @@ h1 {
   padding: clamp(24px, 4vw, 56px);
 }
 
+body.selection-processing .gallery-body {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+  padding-top: 120px;
+  padding-bottom: 56px;
+}
+
 .workflow-status {
   max-width: 860px;
   margin: 0 auto clamp(24px, 4vw, 42px);
   border: 1px solid rgba(184,149,106,0.34);
   background: linear-gradient(135deg, rgba(184,149,106,0.14), rgba(255,255,255,0.035));
   padding: clamp(22px, 4vw, 34px);
+}
+
+body.selection-processing .workflow-status {
+  width: min(760px, 100%);
+  margin: 0;
 }
 
 .workflow-status[hidden] {
