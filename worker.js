@@ -484,6 +484,23 @@ function completedSelectionBaseline(gallery = {}, selection = []) {
   return locked.length ? locked : uniquePublicIds(selection);
 }
 
+function selectionDiff(previous = [], current = []) {
+  const previousIds = uniquePublicIds(previous);
+  const currentIds = uniquePublicIds(current);
+  const previousSet = new Set(previousIds);
+  const currentSet = new Set(currentIds);
+
+  return {
+    addedPublicIds: currentIds.filter((publicId) => !previousSet.has(publicId)),
+    removedPublicIds: previousIds.filter((publicId) => !currentSet.has(publicId)),
+  };
+}
+
+function selectionChanged(previous = [], current = []) {
+  const diff = selectionDiff(previous, current);
+  return diff.addedPublicIds.length > 0 || diff.removedPublicIds.length > 0;
+}
+
 function calculateSelectionPricing(gallery = {}, images = [], selection = [], baselineSelection = null) {
   const current = calculateSelectionPricingRaw(gallery, images, selection);
   const baseline = Array.isArray(baselineSelection)
@@ -514,7 +531,7 @@ function calculateSelectionPricing(gallery = {}, images = [], selection = [], ba
     additionalSelection: true,
     requiresPayment: totalCents > 0,
     canCompleteWithoutPayment: current.selectedTotal >= current.includedPhotos && totalCents === 0,
-    needsMoreIncludedPhotos: gallery.selectionCompletedAt ? false : current.needsMoreIncludedPhotos,
+    needsMoreIncludedPhotos: current.needsMoreIncludedPhotos,
   };
 }
 
@@ -1466,6 +1483,9 @@ async function completePrivateGallerySelection(env, request, gallery, client, im
   const now = new Date().toISOString();
   const cleanSelection = uniquePublicIds(selectedPublicIds);
   const pricing = calculateSelectionPricingRaw(gallery, images, cleanSelection);
+  const previousLockedPublicIds = completedSelectionBaseline(gallery, []);
+  const diff = selectionDiff(previousLockedPublicIds, cleanSelection);
+  const selectionRevision = Math.max(0, Number(gallery.selectionRevision || 0)) + 1;
 
   await writeKvJson(env, privateGallerySelectionKey(gallery.id), cleanSelection);
 
@@ -1475,6 +1495,7 @@ async function completePrivateGallerySelection(env, request, gallery, client, im
     selectionLockedPublicIds: cleanSelection,
     selectionLockedPricing: pricing,
     selectionLockedAt: now,
+    selectionRevision,
     selectionPaymentId: payment?.id || gallery.selectionPaymentId || null,
     updatedAt: now,
   };
@@ -1498,8 +1519,12 @@ async function completePrivateGallerySelection(env, request, gallery, client, im
   }
 
   await appendPrivateGalleryEvent(env, request, gallery.id, "concluir_selecao", {
+    selectionRevision,
+    previousLockedPublicIds,
     totalSelected: cleanSelection.length,
     selectedPublicIds: cleanSelection,
+    addedPublicIds: diff.addedPublicIds,
+    removedPublicIds: diff.removedPublicIds,
     pricing,
     paymentId: payment?.id || null,
     providerPaymentId: payment?.providerPaymentId || null,
@@ -2006,10 +2031,7 @@ export default {
       const limit = Number(gallery.selectionLimit || 0);
       const current = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
       const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, current);
-      const lockedSet = new Set(lockedSelection);
-      if (!selected && lockedSet.has(publicId)) {
-        return errorJson("Esta foto já foi confirmada na seleção anterior.", 409);
-      }
+      const beforeSelection = uniquePublicIds(current);
 
       let next = current.filter((item) => item !== publicId);
 
@@ -2017,8 +2039,21 @@ export default {
         next.push(publicId);
       }
 
+      next = uniquePublicIds(next);
+      const diff = selectionDiff(beforeSelection, next);
+      const lockedDiff = selectionDiff(lockedSelection, next);
       await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
-      await appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", { publicId }, access.client);
+      await appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", {
+        publicId,
+        wasSelectionCompleted: Boolean(gallery.selectionCompletedAt),
+        wasConfirmedBefore: lockedSelection.includes(publicId),
+        beforeSelectedPublicIds: beforeSelection,
+        afterSelectedPublicIds: next,
+        addedPublicIds: diff.addedPublicIds,
+        removedPublicIds: diff.removedPublicIds,
+        addedSinceLastConfirmation: lockedDiff.addedPublicIds,
+        removedSinceLastConfirmation: lockedDiff.removedPublicIds,
+      }, access.client);
 
       return json({
         ok: true,
@@ -2069,9 +2104,8 @@ export default {
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
       const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, selection);
-      const lockedSet = new Set(lockedSelection);
-      const hasNewSelection = lockedSelection.length > 0 && selection.some((publicId) => !lockedSet.has(publicId));
-      if (gallery.selectionCompletedAt && !hasNewSelection) {
+      const hasSelectionChanges = lockedSelection.length > 0 && selectionChanged(lockedSelection, selection);
+      if (gallery.selectionCompletedAt && !hasSelectionChanges) {
         return json({ ok: true, alreadyCompleted: true, totalSelected: selection.length }, 200, { "Cache-Control": "no-store" });
       }
 
@@ -2110,14 +2144,13 @@ export default {
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
       const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, selection);
-      const lockedSet = new Set(lockedSelection);
-      const hasNewSelection = lockedSelection.length > 0 && selection.some((publicId) => !lockedSet.has(publicId));
+      const hasSelectionChanges = lockedSelection.length > 0 && selectionChanged(lockedSelection, selection);
       const pricing = calculateSelectionPricing(gallery, images, selection, lockedSelection);
 
       if (pricing.needsMoreIncludedPhotos) {
         return errorJson(`Selecione pelo menos ${pricing.includedPhotos} fotos para concluir.`, 409, { pricing });
       }
-      if (gallery.selectionCompletedAt && !hasNewSelection) {
+      if (gallery.selectionCompletedAt && !hasSelectionChanges) {
         return json({ ok: true, alreadyCompleted: true, paymentRequired: false, pricing }, 200, { "Cache-Control": "no-store" });
       }
       if (!pricing.requiresPayment) {
