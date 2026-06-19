@@ -1263,6 +1263,12 @@ function emailButton(label, href, variant = "primary") {
   return `<a href="${emailHtml(href)}" style="${styles}display:inline-block;padding:15px 22px;text-decoration:none;border-radius:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;">${emailHtml(label)}</a>`;
 }
 
+function emailSocialIcon(label, href, iconUrl) {
+  return `<a href="${emailHtml(href)}" title="${emailHtml(label)}" style="display:inline-block;width:44px;height:44px;border-radius:44px;background:#0b0a08;border:1px solid rgba(198,163,118,.55);text-align:center;text-decoration:none;">
+    <img src="${emailHtml(iconUrl)}" width="22" height="22" alt="${emailHtml(label)}" style="display:block;width:22px;height:22px;margin:11px auto;border:0;outline:none;text-decoration:none;">
+  </a>`;
+}
+
 function emailLayout(env, {
   preheader = "",
   eyebrow = "",
@@ -1281,6 +1287,9 @@ function emailLayout(env, {
   const instagramUrl = env.INSTAGRAM_URL || "https://www.instagram.com/mconde.foto/";
   const pinterestUrl = env.PINTEREST_URL || "https://br.pinterest.com/marcelconde/";
   const whatsappUrl = env.WHATSAPP_URL || "https://wa.me/5581984094212?text=Ol%C3%A1%21%20Vim%20pela%20%C3%A1rea%20do%20cliente.";
+  const instagramIconUrl = env.EMAIL_INSTAGRAM_ICON_URL || "https://img.icons8.com/ios-glyphs/90/c6a376/instagram-new.png";
+  const pinterestIconUrl = env.EMAIL_PINTEREST_ICON_URL || "https://img.icons8.com/ios-glyphs/90/c6a376/pinterest.png";
+  const whatsappIconUrl = env.EMAIL_WHATSAPP_ICON_URL || "https://img.icons8.com/ios-glyphs/90/c6a376/whatsapp.png";
   const contactEmail = env.CONTACT_EMAIL || "contato@marcelconde.com.br";
   const cnpj = env.BRAND_CNPJ || "67.096.533/0001-90";
   const safeBrand = emailHtml(brandName(env));
@@ -1334,9 +1343,9 @@ function emailLayout(env, {
                 <p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:#c6a376;">Acompanhe o trabalho</p>
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                   <tr>
-                    <td style="padding:0 8px 8px 0;">${emailButton("Instagram", instagramUrl, "secondary")}</td>
-                    <td style="padding:0 8px 8px 0;">${emailButton("Pinterest", pinterestUrl, "secondary")}</td>
-                    <td style="padding:0 0 8px 0;">${emailButton("WhatsApp", whatsappUrl, "secondary")}</td>
+                    <td style="padding:0 12px 8px 0;">${emailSocialIcon("Instagram", instagramUrl, instagramIconUrl)}</td>
+                    <td style="padding:0 12px 8px 0;">${emailSocialIcon("Pinterest", pinterestUrl, pinterestIconUrl)}</td>
+                    <td style="padding:0 0 8px 0;">${emailSocialIcon("WhatsApp", whatsappUrl, whatsappIconUrl)}</td>
                   </tr>
                 </table>
                 <p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.7;color:#b9b1a6;">
