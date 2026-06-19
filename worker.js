@@ -1649,11 +1649,14 @@ async function completePrivateGallerySelection(env, request, gallery, client, im
   const previousLockedPublicIds = completedSelectionBaseline(gallery, []);
   const diff = selectionDiff(previousLockedPublicIds, cleanSelection);
   const selectionRevision = Math.max(0, Number(gallery.selectionRevision || 0)) + 1;
+  const previousStatus = gallery.status || "selection";
+  const nextStatus = previousStatus === "final" ? "final" : "editing";
 
   await writeKvJson(env, privateGallerySelectionKey(gallery.id), cleanSelection);
 
   const nextGallery = {
     ...gallery,
+    status: nextStatus,
     selectionCompletedAt: gallery.selectionCompletedAt || now,
     selectionLockedPublicIds: cleanSelection,
     selectionLockedPricing: pricing,
@@ -1683,6 +1686,8 @@ async function completePrivateGallerySelection(env, request, gallery, client, im
 
   await appendPrivateGalleryEvent(env, request, gallery.id, "concluir_selecao", {
     selectionRevision,
+    previousStatus,
+    nextStatus,
     previousLockedPublicIds,
     totalSelected: cleanSelection.length,
     selectedPublicIds: cleanSelection,

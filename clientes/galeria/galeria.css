@@ -189,6 +189,33 @@ h1 {
   padding: clamp(24px, 4vw, 56px);
 }
 
+.workflow-status {
+  max-width: 860px;
+  margin: 0 auto clamp(24px, 4vw, 42px);
+  border: 1px solid rgba(184,149,106,0.34);
+  background: linear-gradient(135deg, rgba(184,149,106,0.14), rgba(255,255,255,0.035));
+  padding: clamp(22px, 4vw, 34px);
+}
+
+.workflow-status[hidden] {
+  display: none;
+}
+
+.workflow-status h2 {
+  margin: 0.45rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(2.3rem, 6vw, 4.4rem);
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.workflow-status p {
+  max-width: 680px;
+  margin: 1rem 0 0;
+  color: rgba(240,236,227,0.72);
+  line-height: 1.75;
+}
+
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));

@@ -26,6 +26,7 @@ const galleryMessage = document.getElementById("galleryMessage");
 const galleryLimit = document.getElementById("galleryLimit");
 const selectionCounter = document.getElementById("selectionCounter");
 const pricingSummary = document.getElementById("pricingSummary");
+const workflowStatus = document.getElementById("workflowStatus");
 const photoGrid = document.getElementById("photoGrid");
 const loadSentinel = document.getElementById("loadSentinel");
 const completeBtn = document.getElementById("completeBtn");
@@ -87,6 +88,15 @@ function hasCompletedSelection() {
   return Boolean(state.gallery?.selectionCompletedAt) && !state.gallery?.allowDownload;
 }
 
+function hasPendingExtraSelection() {
+  const pricing = state.gallery?.pricing || {};
+  return Boolean(pricing.requiresPayment) || Number(pricing.extraCount || 0) > 0;
+}
+
+function showCompletionStatus() {
+  return hasCompletedSelection() && state.gallery?.status === "editing" && !hasPendingExtraSelection();
+}
+
 function getToken() {
   return localStorage.getItem(CONFIG.tokenKey) || "";
 }
@@ -128,6 +138,7 @@ function updateCounters() {
   const total = state.selected.size;
   const limit = Number(state.gallery?.selectionLimit || 0);
   const pricing = state.gallery?.pricing || {};
+  renderWorkflowStatus();
   if (state.gallery?.allowDownload) {
     selectionCounter.textContent = "Downloads liberados";
     galleryLimit.textContent = "Entrega final disponível para download.";
@@ -142,7 +153,9 @@ function updateCounters() {
     return;
   }
   if (hasCompletedSelection() && !pricing.requiresPayment && !Number(pricing.extraCount || 0)) {
-    galleryLimit.textContent = "Seleção concluída. Você pode adicionar mais fotos enquanto a galeria estiver aberta.";
+    galleryLimit.textContent = showCompletionStatus()
+      ? "Seleção concluída. Fotos em edição."
+      : "Seleção concluída. Você pode adicionar mais fotos enquanto a galeria estiver aberta.";
     renderPricingSummary();
     return;
   }
@@ -154,6 +167,24 @@ function updateCounters() {
     galleryLimit.textContent = limit ? `Pacote com ${limit} fotos inclusas.` : "Sem limite de seleção definido.";
   }
   renderPricingSummary();
+}
+
+function renderWorkflowStatus() {
+  if (!workflowStatus) return;
+
+  if (!showCompletionStatus()) {
+    workflowStatus.hidden = true;
+    workflowStatus.innerHTML = "";
+    return;
+  }
+
+  const hasPayment = Boolean(state.gallery?.selectionPaymentId);
+  workflowStatus.hidden = false;
+  workflowStatus.innerHTML = `
+    <span class="eyebrow">${hasPayment ? "Pagamento confirmado" : "Seleção recebida"}</span>
+    <h2>${hasPayment ? "Pagamento e seleção concluídos" : "Seleção concluída"}</h2>
+    <p>As fotos selecionadas já estão em processo de edição. Aguarde o retorno por e-mail ou WhatsApp com o link para baixar as imagens assim que a entrega final estiver liberada.</p>
+  `;
 }
 
 function renderPricingSummary() {
@@ -409,7 +440,7 @@ completeBtn.addEventListener("click", async () => {
     if (data.pricing && state.gallery) state.gallery.pricing = data.pricing;
     renderHeader();
     updatePhotoButtons();
-    showToast(hasCompletedSelection() ? "Seleção atualizada. Obrigado!" : "Seleção concluída. Obrigado!");
+    showToast("Seleção concluída. Fotos em edição.");
   } catch (err) {
     showToast(err.message || "Não foi possível concluir a seleção.");
   }
@@ -495,7 +526,7 @@ async function createPixPayment() {
       if (completed.pricing && state.gallery) state.gallery.pricing = completed.pricing;
       renderHeader();
       updatePhotoButtons();
-      showToast(hasCompletedSelection() ? "Seleção atualizada. Obrigado!" : "Seleção concluída. Obrigado!");
+      showToast("Seleção concluída. Fotos em edição.");
       return;
     }
     if (data.pricing) state.gallery.pricing = data.pricing;
@@ -518,6 +549,7 @@ function startPaymentPolling(paymentId) {
         const wasCompleted = hasCompletedSelection();
         state.payment = data.payment;
         if (state.gallery) {
+          state.gallery.status = "editing";
           state.gallery.selectionCompletedAt = data.payment.selectionCompletedAt || new Date().toISOString();
           state.gallery.selectionPaymentId = data.payment.id || state.gallery.selectionPaymentId || null;
           state.gallery.pricing = {
@@ -529,14 +561,12 @@ function startPaymentPolling(paymentId) {
             totalCents: 0,
           };
         }
-        setPaymentModalState("approved", wasCompleted
-          ? "Pagamento aprovado. Fotos adicionais confirmadas!"
-          : "Pagamento aprovado. Seleção concluída!");
         clearInterval(state.paymentPoll);
         state.paymentPoll = null;
         renderHeader();
         updatePhotoButtons();
-        showToast(wasCompleted ? "Fotos adicionais confirmadas!" : "Pagamento aprovado. Seleção concluída!");
+        closePaymentModal();
+        showToast(wasCompleted ? "Pagamento aprovado. Fotos em edição." : "Pagamento aprovado. Seleção em edição.");
       } else if (data.payment?.status === "rejected") {
         setPaymentModalState("rejected");
         clearInterval(state.paymentPoll);
