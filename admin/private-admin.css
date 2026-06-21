@@ -365,6 +365,103 @@
   margin-top: 22px;
 }
 
+.selection-log-panel {
+  margin: 18px 0 20px;
+  border: 1px solid rgba(184,149,106,0.34);
+  background: rgba(184,149,106,0.055);
+  padding: 16px;
+}
+
+.selection-log-panel[hidden] {
+  display: none;
+}
+
+.selection-log-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.selection-log-head h2 {
+  margin: 4px 0 0;
+  font-family: var(--serif);
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  line-height: 0.95;
+}
+
+.selection-log-head span:last-child {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.selection-log-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.selection-log-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.18);
+  padding: 12px;
+}
+
+.selection-log-row.is-revision {
+  border-color: rgba(224,145,145,0.55);
+  background: rgba(140,42,42,0.12);
+}
+
+.selection-log-row strong,
+.selection-log-row span,
+.selection-log-row small {
+  display: block;
+}
+
+.selection-log-row strong {
+  color: var(--ink);
+}
+
+.selection-log-row span,
+.selection-log-row small,
+.selection-log-empty {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.selection-log-row small {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.selection-log-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.selection-log-files em {
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-style: normal;
+  font-size: 0.75rem;
+  padding: 4px 7px;
+}
+
+.selection-log-empty {
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,0.14);
+  padding: 12px;
+}
+
 .gallery-photo-grid {
   margin-top: 22px;
   display: grid;
@@ -468,6 +565,21 @@
   .watermark-layout,
   .discount-rule {
     grid-template-columns: 1fr;
+  }
+
+  .selection-log-head,
+  .selection-log-row {
+    grid-template-columns: 1fr;
+  }
+
+  .selection-log-head {
+    align-items: start;
+  }
+
+  .selection-log-head span:last-child,
+  .selection-log-row small {
+    text-align: left;
+    white-space: normal;
   }
 
   .sidebar {

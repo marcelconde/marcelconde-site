@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260617-01">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260620-01">
 </head>
 <body>
   <div class="admin-shell" id="adminShell">
@@ -74,6 +74,17 @@
               <button class="btn btn-danger disabled" id="deleteGalleryBtn" type="button">Apagar galeria</button>
             </div>
           </div>
+
+          <section class="selection-log-panel" id="selectionLogPanel" hidden>
+            <div class="selection-log-head">
+              <div>
+                <span class="eyebrow">Log da seleção</span>
+                <h2>Alterações do cliente</h2>
+              </div>
+              <span id="selectionLogSummary"></span>
+            </div>
+            <div class="selection-log-list" id="selectionLogList"></div>
+          </section>
 
           <form class="private-form" id="galleryForm">
             <div class="form-grid">
@@ -225,6 +236,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/admin/galerias/galerias.js?v=20260618-01"></script>
+  <script src="/admin/galerias/galerias.js?v=20260620-01"></script>
 </body>
 </html>

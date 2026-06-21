@@ -610,6 +610,45 @@ async function listPrivateClients(env) {
   return clients.filter(Boolean).sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
+function shouldRepairGalleryToEditing(gallery = {}, latestPayment = null, events = []) {
+  const hasCompletionEvent = events.some((event) => (
+    event?.action === "concluir_selecao" ||
+    event?.action === "pix_aprovado"
+  ));
+  return (
+    gallery?.status === "selection" &&
+    (
+      Boolean(gallery.selectionCompletedAt) ||
+      (latestPayment?.status === "approved" && Boolean(latestPayment.selectionCompletedAt)) ||
+      hasCompletionEvent
+    )
+  );
+}
+
+async function getPrivateGalleryLatestPayment(env, galleryId = "") {
+  if (!env.LIKES_KV || !galleryId) return null;
+  const latestPaymentId = await env.LIKES_KV.get(privateGalleryLatestPaymentKey(galleryId));
+  if (!latestPaymentId) return null;
+  return readKvJson(env, privateGalleryPaymentKey(latestPaymentId), null);
+}
+
+async function repairPrivateGalleryProgress(env, gallery = {}, latestPayment = null, events = []) {
+  if (!gallery?.id || !shouldRepairGalleryToEditing(gallery, latestPayment, events)) return gallery;
+  const completionEvent = events.find((event) => (
+    event?.action === "concluir_selecao" ||
+    event?.action === "pix_aprovado"
+  ));
+  const repaired = {
+    ...gallery,
+    status: "editing",
+    selectionCompletedAt: gallery.selectionCompletedAt || latestPayment?.selectionCompletedAt || completionEvent?.createdAt || new Date().toISOString(),
+    selectionPaymentId: gallery.selectionPaymentId || latestPayment?.id || null,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeKvJson(env, privateGalleryKey(gallery.id), repaired);
+  return repaired;
+}
+
 async function savePrivateClient(env, input = {}) {
   if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
   const now = new Date().toISOString();
@@ -633,7 +672,11 @@ async function savePrivateClient(env, input = {}) {
 
 async function listPrivateGalleries(env) {
   const ids = await readKvJson(env, privateGalleriesIndexKey(), []);
-  const galleries = await Promise.all(ids.map((id) => readKvJson(env, privateGalleryKey(id), null)));
+  const galleries = await Promise.all(ids.map(async (id) => {
+    const gallery = await readKvJson(env, privateGalleryKey(id), null);
+    if (!gallery) return null;
+    return repairPrivateGalleryProgress(env, gallery, await getPrivateGalleryLatestPayment(env, gallery.id));
+  }));
   return galleries.filter(Boolean).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
@@ -779,7 +822,9 @@ async function deletePrivateGallery(env, galleryId) {
 async function getPrivateGalleryBySlug(env, slug = "") {
   const id = await readKvJson(env, privateGalleryBySlugKey(slugify(slug)), "");
   if (!id) return null;
-  return readKvJson(env, privateGalleryKey(id), null);
+  const gallery = await readKvJson(env, privateGalleryKey(id), null);
+  if (!gallery) return null;
+  return repairPrivateGalleryProgress(env, gallery, await getPrivateGalleryLatestPayment(env, gallery.id));
 }
 
 function getAlbumSlugFromPath(path = "") {
@@ -2745,11 +2790,12 @@ export default {
       const id = String(url.searchParams.get("id") || "").trim();
       if (!id) return errorJson("Missing id", 400);
 
-      const gallery = await readKvJson(env, privateGalleryKey(id), null);
+      let gallery = await readKvJson(env, privateGalleryKey(id), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
       const images = await readKvJson(env, privateGalleryImagesKey(id), []);
       const selection = await readKvJson(env, privateGallerySelectionKey(id), []);
       const events = await readKvJson(env, privateGalleryEventsKey(id), []);
+      gallery = await repairPrivateGalleryProgress(env, gallery, await getPrivateGalleryLatestPayment(env, gallery.id), events);
       return json({ gallery, images, selection, events: events.slice(0, 120) }, 200, { "Cache-Control": "no-store" });
     }
 

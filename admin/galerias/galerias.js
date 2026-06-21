@@ -65,6 +65,9 @@ const openGalleryBtn = $("#openGalleryBtn");
 const exportCsvBtn = $("#exportCsvBtn");
 const pruneUnselectedBtn = $("#pruneUnselectedBtn");
 const deleteGalleryBtn = $("#deleteGalleryBtn");
+const selectionLogPanel = $("#selectionLogPanel");
+const selectionLogSummary = $("#selectionLogSummary");
+const selectionLogList = $("#selectionLogList");
 const shareLink = $("#shareLink");
 const photoBulkActions = $("#photoBulkActions");
 const bulkCount = $("#bulkCount");
@@ -274,6 +277,69 @@ function formatDate(value) {
   });
 }
 
+function imageLabel(publicId = "") {
+  const image = state.images.find((item) => item.public_id === publicId);
+  return image?.filename || image?.display_name || String(publicId || "").split("/").pop() || "foto";
+}
+
+function isSelectionChangeEvent(event = {}) {
+  return [
+    "favoritar_foto",
+    "remover_favorito",
+    "selecionar_todas",
+    "concluir_selecao",
+    "pix_criado",
+    "pix_aprovado",
+  ].includes(event.action);
+}
+
+function selectionEventTitle(event = {}) {
+  const details = event.details || {};
+  if (event.action === "favoritar_foto") return details.wasSelectionCompleted ? "Foto adicionada após confirmação" : "Foto marcada";
+  if (event.action === "remover_favorito") return details.wasSelectionCompleted ? "Foto removida após confirmação" : "Foto removida";
+  if (event.action === "selecionar_todas") return "Cliente selecionou todas";
+  if (event.action === "concluir_selecao") return "Seleção concluída";
+  if (event.action === "pix_criado") return "Pix gerado para fotos extras";
+  if (event.action === "pix_aprovado") return "Pix aprovado";
+  return event.action || "Evento";
+}
+
+function selectionEventPhotoIds(event = {}) {
+  const details = event.details || {};
+  return [
+    ...(details.addedPublicIds || []),
+    ...(details.removedPublicIds || []),
+    ...(details.addedSinceLastConfirmation || []),
+    ...(details.removedSinceLastConfirmation || []),
+    details.publicId,
+  ].filter(Boolean);
+}
+
+function selectionEventDetail(event = {}) {
+  const details = event.details || {};
+  const added = [...new Set([...(details.addedPublicIds || []), ...(details.addedSinceLastConfirmation || [])])];
+  const removed = [...new Set([...(details.removedPublicIds || []), ...(details.removedSinceLastConfirmation || [])])];
+
+  if (event.action === "concluir_selecao") {
+    return `${Number(details.totalSelected || 0)} foto(s) confirmada(s).`;
+  }
+  if (event.action === "selecionar_todas") {
+    return `${Number(details.totalSelected || 0)} foto(s) selecionada(s).`;
+  }
+  if (event.action === "pix_criado" || event.action === "pix_aprovado") {
+    const amount = Number(details.amountCents || details.pricing?.totalCents || 0) / 100;
+    return amount ? `Valor: R$ ${amount.toFixed(2).replace(".", ",")}.` : "Pagamento relacionado à seleção.";
+  }
+  if (added.length || removed.length) {
+    const parts = [];
+    if (added.length) parts.push(`Adicionou: ${added.map(imageLabel).join(", ")}`);
+    if (removed.length) parts.push(`Removeu: ${removed.map(imageLabel).join(", ")}`);
+    return parts.join(" · ");
+  }
+  if (details.publicId) return imageLabel(details.publicId);
+  return "Alteração registrada.";
+}
+
 function showToast(message) {
   toastEl.textContent = message;
   toastEl.classList.add("show");
@@ -427,6 +493,9 @@ function renderSelectedGallery() {
     pruneUnselectedBtn.disabled = true;
     deleteGalleryBtn.classList.add("disabled");
     deleteGalleryBtn.disabled = true;
+    selectionLogPanel.hidden = true;
+    selectionLogSummary.textContent = "";
+    selectionLogList.innerHTML = "";
     shareLink.textContent = "Crie ou selecione uma galeria para gerar o link do cliente.";
     photoGrid.innerHTML = "";
     eventList.innerHTML = "";
@@ -476,6 +545,7 @@ function renderSelectedGallery() {
   shareLink.textContent = url;
 
   renderGalleries();
+  renderSelectionLog();
   renderPhotos();
   renderEvents();
 }
@@ -535,6 +605,58 @@ function renderEvents() {
       </div>
     `).join("")}
   `;
+}
+
+function renderSelectionLog() {
+  const entries = state.events.filter(isSelectionChangeEvent);
+  selectionLogPanel.hidden = !state.selectedGallery;
+
+  if (!state.selectedGallery) {
+    selectionLogSummary.textContent = "";
+    selectionLogList.innerHTML = "";
+    return;
+  }
+
+  const changedAfterConfirmation = entries.some((event) => {
+    const details = event.details || {};
+    return Boolean(details.wasSelectionCompleted) ||
+      (details.addedSinceLastConfirmation || []).length > 0 ||
+      (details.removedSinceLastConfirmation || []).length > 0;
+  });
+  selectionLogSummary.textContent = entries.length
+    ? `${entries.length} registro(s)${changedAfterConfirmation ? " · houve alteração após confirmação" : ""}`
+    : "Sem alterações registradas";
+
+  if (!entries.length) {
+    selectionLogList.innerHTML = `
+      <div class="selection-log-empty">
+        Nenhuma alteração de seleção registrada para esta galeria.
+      </div>
+    `;
+    return;
+  }
+
+  selectionLogList.innerHTML = entries.slice(0, 16).map((event) => {
+    const details = event.details || {};
+    const isRevision = Boolean(details.wasSelectionCompleted) ||
+      (details.addedSinceLastConfirmation || []).length > 0 ||
+      (details.removedSinceLastConfirmation || []).length > 0;
+    const photoIds = [...new Set(selectionEventPhotoIds(event))].slice(0, 8);
+    return `
+      <article class="selection-log-row${isRevision ? " is-revision" : ""}">
+        <div>
+          <strong>${escapeHtml(selectionEventTitle(event))}</strong>
+          <span>${escapeHtml(selectionEventDetail(event))}</span>
+          ${photoIds.length ? `
+            <div class="selection-log-files">
+              ${photoIds.map((publicId) => `<em>${escapeHtml(imageLabel(publicId))}</em>`).join("")}
+            </div>
+          ` : ""}
+        </div>
+        <small>${escapeHtml(formatDate(event.createdAt))}<br>${escapeHtml(event.actorEmail || event.actorName || "cliente")}</small>
+      </article>
+    `;
+  }).join("");
 }
 
 async function selectGallery(id) {
