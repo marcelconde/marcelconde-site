@@ -2,7 +2,7 @@ const CONFIG = {
   workerUrl: "https://api.marcelconde.com.br",
   tokenKey: "mc_admin_token",
   cloudinaryUploadLimit: 10 * 1024 * 1024,
-  cloudinaryUploadTarget: 9.5 * 1024 * 1024,
+  cloudinaryUploadTarget: 8.8 * 1024 * 1024,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -181,21 +181,46 @@ async function preparePhotoForCloudinary(file, onStatus = () => {}) {
   onStatus(`Arquivo com ${formatFileSize(file.size)}. Otimizando para caber no limite de 10 MB...`);
 
   const attempts = [
-    { maxEdge: 4200, quality: 0.88 },
-    { maxEdge: 3600, quality: 0.86 },
-    { maxEdge: 3200, quality: 0.84 },
-    { maxEdge: 2800, quality: 0.82 },
+    { maxEdge: 6400, quality: 0.92 },
+    { maxEdge: 6000, quality: 0.9 },
+    { maxEdge: 5600, quality: 0.9 },
+    { maxEdge: 5200, quality: 0.88 },
+    { maxEdge: 4800, quality: 0.88 },
+    { maxEdge: 4400, quality: 0.86 },
+    { maxEdge: 4000, quality: 0.84 },
+    { maxEdge: 3600, quality: 0.82 },
+    { maxEdge: 3200, quality: 0.8 },
+    { maxEdge: 2800, quality: 0.8 },
     { maxEdge: 2400, quality: 0.8 },
-    { maxEdge: 2100, quality: 0.78 },
-    { maxEdge: 1800, quality: 0.76 },
   ];
 
   let bestBlob = null;
   for (const attempt of attempts) {
     const blob = await compressImageFile(file, attempt.maxEdge, attempt.quality);
-    bestBlob = blob;
     if (blob.size <= CONFIG.cloudinaryUploadTarget) {
-      onStatus(`Reduzida para ${formatFileSize(blob.size)} antes do envio.`);
+      if (!bestBlob || blob.size > bestBlob.size) bestBlob = blob;
+      if (blob.size >= 8 * 1024 * 1024) {
+        onStatus(`Otimizada para ${formatFileSize(blob.size)} com ${Math.round(attempt.quality * 100)}% de qualidade.`);
+        return new File([blob], jpgFileName(file.name), {
+          type: "image/jpeg",
+          lastModified: file.lastModified,
+        });
+      }
+    }
+  }
+
+  if (bestBlob) {
+    onStatus(`Otimizada para ${formatFileSize(bestBlob.size)} com qualidade mínima de 80%.`);
+    return new File([bestBlob], jpgFileName(file.name), {
+      type: "image/jpeg",
+      lastModified: file.lastModified,
+    });
+  }
+
+  for (const attempt of attempts) {
+    const blob = await compressImageFile(file, attempt.maxEdge, attempt.quality);
+    if (blob.size <= CONFIG.cloudinaryUploadLimit) {
+      onStatus(`Otimizada para ${formatFileSize(blob.size)} com ${Math.round(attempt.quality * 100)}% de qualidade.`);
       return new File([blob], jpgFileName(file.name), {
         type: "image/jpeg",
         lastModified: file.lastModified,
@@ -203,15 +228,7 @@ async function preparePhotoForCloudinary(file, onStatus = () => {}) {
     }
   }
 
-  if (bestBlob && bestBlob.size <= CONFIG.cloudinaryUploadLimit) {
-    onStatus(`Reduzida para ${formatFileSize(bestBlob.size)} antes do envio.`);
-    return new File([bestBlob], jpgFileName(file.name), {
-      type: "image/jpeg",
-      lastModified: file.lastModified,
-    });
-  }
-
-  throw new Error(`${file.name} continua acima de 10 MB mesmo após otimização. Exporte em JPG menor ou use um plano maior no Cloudinary.`);
+  throw new Error(`${file.name} continua acima de 10 MB mesmo mantendo 80% de qualidade. Exporte em JPG menor ou use um limite maior no Cloudinary.`);
 }
 
 function formatPercent(value) {
@@ -592,18 +609,23 @@ function renderEvents() {
     return;
   }
   eventList.innerHTML = `
-    <div class="content-head">
-      <div>
-        <span class="eyebrow">Histórico</span>
-        <h1 style="font-size: 2.5rem;">Atividades</h1>
+    <details class="advanced-section">
+      <summary class="admin-section-head">
+        <span>
+          <span class="eyebrow">Histórico</span>
+          <strong>Atividades técnicas</strong>
+        </span>
+        <span>${state.events.length} registro(s)</span>
+      </summary>
+      <div class="event-list-inner">
+        ${state.events.slice(0, 20).map((event) => `
+          <div class="event-row">
+            <strong>${escapeHtml(event.action || "evento")}</strong>
+            <small>${escapeHtml(formatDate(event.createdAt))} · ${escapeHtml(event.actorEmail || "cliente")}</small>
+          </div>
+        `).join("")}
       </div>
-    </div>
-    ${state.events.slice(0, 20).map((event) => `
-      <div class="event-row">
-        <strong>${escapeHtml(event.action || "evento")}</strong>
-        <small>${escapeHtml(formatDate(event.createdAt))} · ${escapeHtml(event.actorEmail || "cliente")}</small>
-      </div>
-    `).join("")}
+    </details>
   `;
 }
 
@@ -822,7 +844,10 @@ galleryName.addEventListener("input", () => {
   if (!state.selectedGallery?.id || !gallerySlug.value.trim()) gallerySlug.value = slugify(galleryName.value);
 });
 
-galleryStatus.addEventListener("change", updateGalleryStatusUi);
+galleryStatus.addEventListener("change", () => {
+  updateGalleryStatusUi();
+  renderQueue();
+});
 
 extraPhotoPrice.addEventListener("blur", () => {
   extraPhotoPrice.value = centsToCurrencyInput(currencyInputToCents(extraPhotoPrice.value));
@@ -866,11 +891,12 @@ fileInput.addEventListener("change", renderQueue);
 
 function renderQueue() {
   uploadBtn.disabled = !state.selectedGallery || !fileInput.files.length;
+  const phaseLabel = galleryStatus.value === "final" ? "Entrega final" : "Seleção";
   uploadQueue.innerHTML = [...fileInput.files].map((file) => `
     <div class="queue-row" data-file="${escapeHtml(file.name)}">
       <div>
         <span>${escapeHtml(file.name)}</span>
-        <small>${escapeHtml(formatFileSize(file.size))}${file.size > CONFIG.cloudinaryUploadTarget ? " · será otimizada antes do envio" : ""}</small>
+        <small>${escapeHtml(phaseLabel)} · ${escapeHtml(formatFileSize(file.size))}${file.size > CONFIG.cloudinaryUploadTarget ? " · otimização até ~9 MB" : ""}</small>
       </div>
       <div class="queue-bar"><span></span></div>
     </div>
@@ -927,6 +953,7 @@ uploadBtn.addEventListener("click", async () => {
   uploadBtn.textContent = "Enviando...";
 
   try {
+    const phase = galleryStatus.value === "final" ? "final" : "selection";
     for (const [index, file] of files.entries()) {
       setQueueProgress(file.name, 12);
       const uploadFile = await preparePhotoForCloudinary(file, (message) => setQueueNote(file.name, message));
@@ -936,7 +963,7 @@ uploadBtn.addEventListener("click", async () => {
         body: JSON.stringify({
           galleryId: state.selectedGallery.id,
           displayName: fileBaseName(file.name),
-          phase: "selection",
+          phase,
         }),
       });
       setQueueProgress(file.name, 35);
@@ -952,7 +979,7 @@ uploadBtn.addEventListener("click", async () => {
           width: uploaded.width,
           height: uploaded.height,
           format: uploaded.format,
-          phase: "selection",
+          phase,
           useAsCover: firstAsCover.checked && index === 0,
         }),
       });

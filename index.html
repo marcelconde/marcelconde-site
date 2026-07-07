@@ -117,6 +117,17 @@
       --ease:        cubic-bezier(.22, 1, .36, 1);
     }
 
+    :root[data-theme="light"] {
+      --bg:          #f5f3ef;
+      --bg2:         #ede8df;
+      --bg3:         #ffffff;
+      --ink:         #181512;
+      --ink-dim:     rgba(24, 21, 18, 0.56);
+      --ink-faint:   rgba(24, 21, 18, 0.12);
+      --gold:        #a98255;
+      --gold-light:  #c59d6a;
+    }
+
     html {
       scroll-behavior: smooth;
     }
@@ -127,6 +138,10 @@
       color: var(--ink);
       overflow-x: hidden;
       cursor: none;
+    }
+
+    :root[data-theme="light"] body {
+      background: var(--bg);
     }
 
     /* =============================================
@@ -490,7 +505,7 @@
       font-weight: 700;
       line-height: .92;
       color: var(--ink);
-      letter-spacing: -.02em;
+      letter-spacing: 0;
       opacity: 0;
       animation: fadeUp 1s var(--ease) 0.6s forwards;
     }
@@ -1595,6 +1610,24 @@
         font-size: clamp(56px, 16vw, 120px);
       }
     }
+
+    .theme-toggle {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 10000;
+      min-height: 36px;
+      border: 1px solid var(--ink-faint);
+      background: color-mix(in srgb, var(--bg3) 88%, transparent);
+      color: var(--ink);
+      padding: 0 12px;
+      font: 800 0.74rem var(--sans);
+      letter-spacing: 0;
+      text-transform: uppercase;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.18);
+      backdrop-filter: blur(14px);
+      cursor: pointer;
+    }
   </style>
 </head>
 
@@ -2356,6 +2389,7 @@
     }
 
   </script>
+  <script src="/theme.js?v=20260706-01"></script>
 
 </body>
 </html>

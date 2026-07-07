@@ -12,6 +12,7 @@ const state = {
   likesByIndex: {},
   likesByAsset: {},
   coverPublicId: "",
+  deletedPublicIds: new Set(),
   currentUser: null,
   loading: false,
 };
@@ -58,6 +59,9 @@ const uploadQueue = $("#uploadQueue");
 const firstAsCover = $("#firstAsCover");
 const singleDisplayName = $("#singleDisplayName");
 const newAlbumName = $("#newAlbumName");
+const newAlbumParent = $("#newAlbumParent");
+const newAlbumTarget = $("#newAlbumTarget");
+const createAlbumBtn = $("#createAlbumBtn");
 const viewAlbumBtn = $("#viewAlbumBtn");
 const clearCacheBtn = $("#clearCacheBtn");
 const deleteAlbumBtn = $("#deleteAlbumBtn");
@@ -126,6 +130,30 @@ function safeAlbumName(value) {
     .replace(/\//g, "-")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function albumDepth(path) {
+  const parts = String(path || "").split("/").filter(Boolean);
+  return Math.max(parts.length - 2, 0);
+}
+
+function newAlbumParentPath() {
+  if (newAlbumParent?.value === "selected" && state.selectedPath) return state.selectedPath;
+  return "portfolio";
+}
+
+function updateNewAlbumTarget() {
+  if (!newAlbumParent || !newAlbumTarget) return;
+  const selectedOption = [...newAlbumParent.options].find((option) => option.value === "selected");
+  if (selectedOption) selectedOption.disabled = !state.selectedPath;
+  if (!state.selectedPath && newAlbumParent.value === "selected") newAlbumParent.value = "portfolio";
+  newAlbumTarget.textContent = `Destino: ${newAlbumParentPath()}`;
+}
+
+function effectiveCoverPublicId() {
+  const ids = new Set(state.images.map((image) => image.public_id).filter(Boolean));
+  if (state.coverPublicId && ids.has(state.coverPublicId)) return state.coverPublicId;
+  return state.images[0]?.public_id || "";
 }
 
 async function mapLimit(items, limit, mapper) {
@@ -419,20 +447,25 @@ async function fetchAlbumsAt(path) {
   return res.json();
 }
 
+async function fetchAlbumTree(path = "portfolio", depth = -1, parent = "") {
+  const folders = await fetchAlbumsAt(path);
+  const rows = await Promise.all(folders.map(async (album) => {
+    const current = { ...album, depth: depth + 1, parent };
+    const children = current.depth >= 5
+      ? []
+      : await fetchAlbumTree(album.path, current.depth, album.slug);
+    return [current, ...children];
+  }));
+  return rows.flat();
+}
+
 async function loadAlbums(forceRefresh = false) {
   albumList.innerHTML = `<div class="album-item"><strong>Carregando...</strong></div>`;
 
-  const top = await fetchAlbumsAt("portfolio");
-  const expanded = [];
-
-  await Promise.all(top.map(async (album) => {
-    expanded.push({ ...album, depth: 0 });
-    const children = await fetchAlbumsAt(album.path);
-    children.forEach((child) => expanded.push({ ...child, depth: 1, parent: album.slug }));
-  }));
-
-  state.albums = expanded.sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
+  state.albums = (await fetchAlbumTree("portfolio"))
+    .sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
   renderAlbumList();
+  updateNewAlbumTarget();
 
   if (!state.selectedPath && state.albums.length) {
     await selectAlbum(state.albums[0].path);
@@ -449,7 +482,7 @@ function renderAlbumList() {
 
   albumList.innerHTML = state.albums.map((album) => `
     <button class="album-item ${album.path === state.selectedPath ? "active" : ""}" data-path="${escapeHtml(album.path)}" type="button">
-      <span class="album-copy" style="padding-left:${album.depth ? 16 : 0}px">
+      <span class="album-copy" style="padding-left:${Math.min(album.depth || 0, 5) * 16}px">
         <strong>${escapeHtml(albumName(album.path))}</strong>
         <small>${escapeHtml(album.path)}</small>
       </span>
@@ -481,6 +514,7 @@ async function selectAlbum(path) {
   deleteAlbumBtn.disabled = !path || path === "portfolio";
   viewAlbumBtn.classList.remove("disabled");
   viewAlbumBtn.href = `/categoria.html?slug=${encodeURIComponent(state.selectedSlug)}`;
+  updateNewAlbumTarget();
 
   try {
     const [album, likes] = await Promise.all([
@@ -488,7 +522,9 @@ async function selectAlbum(path) {
       getJson(`/likes?album=${encodeURIComponent(state.selectedSlug)}`),
     ]);
 
-    state.images = (album.images || []).filter(Boolean);
+    state.images = (album.images || [])
+      .filter(Boolean)
+      .filter((image) => !state.deletedPublicIds.has(image.public_id));
     state.coverPublicId = album.cover_public_id || album.cover_debug?.public_id || "";
 
     if (likes._authorized) {
@@ -513,6 +549,7 @@ function totalLikesForImage(image, index) {
 
 function renderPhotos() {
   const totalLikes = state.images.reduce((sum, img, index) => sum + totalLikesForImage(img, index), 0);
+  const coverPublicId = effectiveCoverPublicId();
   albumMeta.textContent = `${state.images.length} foto${state.images.length === 1 ? "" : "s"} · ${totalLikes} curtida${totalLikes === 1 ? "" : "s"}`;
 
   emptyState.classList.toggle("hidden", state.images.length > 0);
@@ -520,9 +557,7 @@ function renderPhotos() {
   photoGrid.innerHTML = state.images.map((image, index) => {
     const likes = totalLikesForImage(image, index);
     const displayName = image.display_name || image.filename || `foto-${index + 1}`;
-    const isCover = state.coverPublicId
-      ? image.public_id === state.coverPublicId
-      : displayName.toLowerCase().startsWith("0_capa");
+    const isCover = image.public_id && image.public_id === coverPublicId;
     const src = cloudUrl(image.url, "f_auto,q_auto,w_520,h_390,c_fill");
     const safeName = escapeHtml(displayName);
     const safePublicId = escapeHtml(image.public_id || "");
@@ -571,20 +606,41 @@ function updateStats() {
 }
 
 $("#refreshAlbumsBtn").addEventListener("click", () => loadAlbums(true));
+newAlbumParent?.addEventListener("change", updateNewAlbumTarget);
 
-$("#createAlbumBtn").addEventListener("click", async () => {
+createAlbumBtn.addEventListener("click", async () => {
   const name = safeAlbumName(newAlbumName.value);
   if (!name) return;
 
-  const path = `portfolio/${name}`;
-  if (!state.albums.some((album) => album.path === path)) {
-    state.albums.push({ slug: name, path, depth: 0 });
-    renderAlbumList();
-  }
+  const parentPath = newAlbumParentPath();
+  const path = `${parentPath.replace(/\/+$/, "")}/${name}`;
+  createAlbumBtn.disabled = true;
+  createAlbumBtn.textContent = "Criando...";
 
-  newAlbumName.value = "";
-  await selectAlbum(path);
-  showToast("Álbum preparado. Envie fotos para criar no Cloudinary.");
+  try {
+    const res = await workerFetch("/admin/create-folder", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Falha ao criar álbum.");
+
+    if (!state.albums.some((album) => album.path === path)) {
+      state.albums.push({ slug: name, path, depth: albumDepth(path), parent: albumName(parentPath) });
+      state.albums.sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
+    }
+
+    renderAlbumList();
+    newAlbumName.value = "";
+    await selectAlbum(path);
+    showToast(data.existed ? "Álbum já existia." : "Álbum criado.");
+    await loadAlbums(true);
+  } catch (err) {
+    showToast(err.message || "Erro ao criar álbum.");
+  } finally {
+    createAlbumBtn.disabled = false;
+    createAlbumBtn.textContent = "Criar";
+  }
 });
 
 clearCacheBtn.addEventListener("click", async () => {
@@ -847,7 +903,17 @@ async function deleteImage(image) {
         albumPath: state.selectedPath,
       }),
     });
-    if (!res.ok) throw new Error("Falha ao excluir.");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Falha ao excluir.");
+
+    state.deletedPublicIds.add(image.public_id);
+    state.images = state.images.filter((item) => item.public_id !== image.public_id);
+    if (state.coverPublicId === image.public_id) {
+      state.coverPublicId = state.images[0]?.public_id || "";
+    }
+    renderPhotos();
+    updateStats();
+
     showToast("Imagem excluída.");
     await selectAlbum(state.selectedPath);
   } catch (err) {

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260620-01">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260706-01">
 </head>
 <body>
   <div class="admin-shell" id="adminShell">
@@ -75,74 +75,128 @@
             </div>
           </div>
 
-          <section class="selection-log-panel" id="selectionLogPanel" hidden>
-            <div class="selection-log-head">
-              <div>
+          <details class="selection-log-panel" id="selectionLogPanel" hidden>
+            <summary class="selection-log-head">
+              <span>
                 <span class="eyebrow">Log da seleção</span>
-                <h2>Alterações do cliente</h2>
-              </div>
+                <strong>Alterações do cliente</strong>
+              </span>
               <span id="selectionLogSummary"></span>
-            </div>
+            </summary>
             <div class="selection-log-list" id="selectionLogList"></div>
-          </section>
+          </details>
 
           <form class="private-form" id="galleryForm">
-            <div class="form-grid">
-              <label>
-                Cliente
-                <select id="galleryClient"></select>
-              </label>
-              <label>
-                Status
-                <select id="galleryStatus">
-                  <option value="selection">Seleção</option>
-                  <option value="editing">Em edição</option>
-                  <option value="final">Entrega final</option>
-                </select>
-              </label>
-              <label>
-                Título
-                <input id="galleryName" type="text" placeholder="Beatriz Formatura">
-              </label>
-              <label>
-                Slug
-                <input id="gallerySlug" type="text" placeholder="beatriz-formatura">
-              </label>
-              <label>
-                Subtítulo
-                <input id="gallerySubtitle" type="text" placeholder="Ensaio de formatura">
-              </label>
-              <label id="selectionLimitField">
-                Limite de seleção
-                <input id="selectionLimit" type="number" min="0" max="2000" value="15">
-              </label>
-              <label id="extraPhotoPriceField">
-                Valor por foto adicional
-                <input id="extraPhotoPrice" type="text" inputmode="decimal" placeholder="Ex: 25,00">
-              </label>
-              <label id="allPhotosDiscountField">
-                Desconto ao escolher todas (%)
-                <input id="allPhotosDiscount" type="number" min="0" max="95" step="0.1" value="0">
-              </label>
-              <div class="full discount-rule" id="quantityDiscountField">
-                <label class="check-field discount-toggle">
-                  <input id="quantityDiscountEnabled" type="checkbox">
-                  <span>Aplicar desconto por quantidade</span>
+            <section class="admin-section">
+              <div class="admin-section-head">
+                <div>
+                  <span class="eyebrow">Configuração</span>
+                  <h2>Dados da galeria</h2>
+                </div>
+                <button class="btn btn-primary" id="saveGalleryBtn" type="submit">Salvar galeria</button>
+              </div>
+              <div class="form-grid dense-form">
+                <label>
+                  Cliente
+                  <select id="galleryClient"></select>
                 </label>
                 <label>
-                  A partir de quantas fotos
-                  <input id="quantityDiscountMinPhotos" type="number" min="0" max="2000" value="0">
+                  Status
+                  <select id="galleryStatus">
+                    <option value="selection">Seleção</option>
+                    <option value="editing">Em edição</option>
+                    <option value="final">Entrega final</option>
+                  </select>
                 </label>
                 <label>
-                  Desconto por quantidade (%)
-                  <input id="quantityDiscountPercent" type="number" min="0" max="95" step="0.1" value="0">
+                  Título
+                  <input id="galleryName" type="text" placeholder="Beatriz Formatura">
+                </label>
+                <label>
+                  Slug
+                  <input id="gallerySlug" type="text" placeholder="beatriz-formatura">
+                </label>
+                <label>
+                  Subtítulo
+                  <input id="gallerySubtitle" type="text" placeholder="Ensaio de formatura">
+                </label>
+                <label id="selectionLimitField">
+                  Limite de seleção
+                  <input id="selectionLimit" type="number" min="0" max="2000" value="15">
+                </label>
+                <label class="full">
+                  Mensagem personalizada
+                  <textarea id="galleryMessage" placeholder="Olá Beatriz, selecione até 15 fotos para edição usando o coração exibido sobre cada imagem."></textarea>
                 </label>
               </div>
-              <label class="full">
-                Mensagem personalizada
-                <textarea id="galleryMessage" placeholder="Olá Beatriz, selecione até 15 fotos para edição usando o coração exibido sobre cada imagem."></textarea>
-              </label>
-              <section class="watermark-panel full" aria-label="Configurações da marca d'água">
+            </section>
+
+            <details class="admin-section advanced-section">
+              <summary class="admin-section-head">
+                <span>
+                  <span class="eyebrow">Venda extra</span>
+                  <strong>Preços e descontos</strong>
+                </span>
+                <span>opcional</span>
+              </summary>
+              <div class="form-grid dense-form">
+                <label id="extraPhotoPriceField">
+                  Valor por foto adicional
+                  <input id="extraPhotoPrice" type="text" inputmode="decimal" placeholder="Ex: 25,00">
+                </label>
+                <label id="allPhotosDiscountField">
+                  Desconto ao escolher todas (%)
+                  <input id="allPhotosDiscount" type="number" min="0" max="95" step="0.1" value="0">
+                </label>
+                <div class="full discount-rule" id="quantityDiscountField">
+                  <label class="check-field discount-toggle">
+                    <input id="quantityDiscountEnabled" type="checkbox">
+                    <span>Aplicar desconto por quantidade</span>
+                  </label>
+                  <label>
+                    A partir de quantas fotos
+                    <input id="quantityDiscountMinPhotos" type="number" min="0" max="2000" value="0">
+                  </label>
+                  <label>
+                    Desconto por quantidade (%)
+                    <input id="quantityDiscountPercent" type="number" min="0" max="95" step="0.1" value="0">
+                  </label>
+                </div>
+              </div>
+            </details>
+
+            <section class="upload-panel private-upload" id="uploadPanel">
+              <div class="upload-card upload-card-drop">
+                <div class="upload-card-head">
+                  <span class="eyebrow">Upload</span>
+                  <strong>Enviar fotos</strong>
+                </div>
+                <div class="dropzone" id="dropzone">
+                  <input id="fileInput" type="file" accept="image/*" multiple>
+                  <div>
+                    <strong>Arraste fotos aqui</strong>
+                    <span>ou clique para selecionar arquivos</span>
+                  </div>
+                </div>
+                <div class="upload-options">
+                  <label class="check-field">
+                    <input id="firstAsCover" type="checkbox" checked>
+                    <span>Primeira como capa</span>
+                  </label>
+                  <button class="btn btn-primary" id="uploadBtn" type="button" disabled>Enviar fotos</button>
+                </div>
+              </div>
+
+              <div class="upload-card upload-card-process">
+                <div class="upload-card-head">
+                  <span class="eyebrow">Processamento</span>
+                  <strong>Fila de envio</strong>
+                </div>
+                <p class="upload-note">Fotos acima de 9 MB são otimizadas com qualidade mínima de 80% antes do envio.</p>
+                <div class="queue" id="uploadQueue"></div>
+              </div>
+
+              <section class="watermark-panel upload-card" aria-label="Configurações da marca d'água">
                 <div class="watermark-head">
                   <div>
                     <span class="eyebrow">Proteção</span>
@@ -194,30 +248,8 @@
                   </div>
                 </div>
               </section>
-            </div>
-            <div class="content-actions">
-              <button class="btn btn-primary" id="saveGalleryBtn" type="submit">Salvar galeria</button>
-            </div>
+            </section>
           </form>
-
-          <section class="upload-panel private-upload" id="uploadPanel">
-            <div class="dropzone" id="dropzone">
-              <input id="fileInput" type="file" accept="image/*" multiple>
-              <div>
-                <strong>Arraste fotos da galeria aqui</strong>
-                <span>as fotos sobem para uma pasta privada no Cloudinary</span>
-              </div>
-            </div>
-
-            <div class="upload-options">
-              <label class="check-field">
-                <input id="firstAsCover" type="checkbox" checked>
-                <span>Usar primeira foto enviada como capa</span>
-              </label>
-              <button class="btn btn-primary" id="uploadBtn" type="button" disabled>Enviar fotos</button>
-            </div>
-            <div class="queue" id="uploadQueue"></div>
-          </section>
 
           <div class="private-copy" id="shareLink">Crie ou selecione uma galeria para gerar o link do cliente.</div>
           <div class="photo-bulk-actions" id="photoBulkActions" hidden>
@@ -236,6 +268,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/admin/galerias/galerias.js?v=20260620-01"></script>
+  <script src="/theme.js?v=20260706-01"></script>
+  <script src="/admin/galerias/galerias.js?v=20260706-01"></script>
 </body>
 </html>

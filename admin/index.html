@@ -114,10 +114,15 @@
 
           <div class="new-album">
             <label for="newAlbumName">Novo álbum</label>
-            <div class="inline-form">
+            <div class="inline-form new-album-form">
               <input id="newAlbumName" type="text" placeholder="Ex: Aniversário">
-              <button class="btn btn-small" id="createAlbumBtn" type="button">Usar</button>
+              <button class="btn btn-small" id="createAlbumBtn" type="button">Criar</button>
+              <select id="newAlbumParent" aria-label="Local do novo álbum">
+                <option value="portfolio">Portfólio principal</option>
+                <option value="selected">Dentro do selecionado</option>
+              </select>
             </div>
+            <small class="new-album-target" id="newAlbumTarget">Destino: portfolio</small>
           </div>
 
           <div class="album-list" id="albumList"></div>
@@ -239,6 +244,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="/admin/admin.js?v=20260615-01"></script>
+  <script src="/theme.js?v=20260706-01"></script>
+  <script src="/admin/admin.js?v=20260706-01"></script>
 </body>
 </html>

@@ -128,11 +128,45 @@ async function api(path, options = {}) {
 
 function watermarkStyle() {
   const wm = state.gallery?.watermark || {};
+  if (state.gallery?.allowDownload || state.gallery?.status === "final") return "";
   if (!wm.enabled || !wm.logoUrl) return "";
   return `
     <span class="watermark ${escapeHtml(wm.position || "center")}"
       style="background-image:url('${escapeHtml(wm.logoUrl)}');opacity:${Number(wm.opacity || 0.28)};background-size:${Number(wm.size || 180)}px auto"></span>
   `;
+}
+
+function renderHeroCarousel() {
+  if (!galleryHeroBg) return;
+  clearInterval(renderHeroCarousel.timer);
+  const sources = state.images
+    .map((image) => image.url)
+    .filter(Boolean)
+    .slice(0, 12);
+
+  if (!sources.length) {
+    galleryHeroBg.innerHTML = "";
+    galleryHeroBg.style.backgroundImage = state.gallery?.coverUrl
+      ? `url('${cloudUrl(state.gallery.coverUrl, "w_1800,q_auto,f_auto")}')`
+      : "";
+    return;
+  }
+
+  galleryHeroBg.style.backgroundImage = "";
+  galleryHeroBg.innerHTML = sources.map((src, index) => `
+    <span class="gallery-hero-slide${index === 0 ? " active" : ""}" style="background-image:url('${escapeHtml(cloudUrl(src, "w_1800,q_auto,f_auto"))}')"></span>
+  `).join("");
+
+  if (sources.length <= 1) return;
+
+  let current = 0;
+  renderHeroCarousel.timer = setInterval(() => {
+    const slides = galleryHeroBg.querySelectorAll(".gallery-hero-slide");
+    if (slides.length <= 1) return;
+    slides[current]?.classList.remove("active");
+    current = (current + 1) % slides.length;
+    slides[current]?.classList.add("active");
+  }, 4200);
 }
 
 function updateCounters() {
@@ -243,9 +277,7 @@ function renderHeader() {
   galleryTitle.textContent = gallery.title || "Galeria privada";
   gallerySubtitle.textContent = gallery.subtitle || "";
   galleryMessage.textContent = gallery.message || "";
-  if (gallery.coverUrl) {
-    galleryHeroBg.style.backgroundImage = `url('${cloudUrl(gallery.coverUrl, "w_1600,q_auto,f_auto")}')`;
-  }
+  renderHeroCarousel();
   completeBtn.classList.toggle("hidden", Boolean(gallery.allowDownload));
   selectAllBtn.classList.toggle("hidden", Boolean(gallery.allowDownload));
   downloadAllBtn.classList.toggle("hidden", !gallery.allowDownload);

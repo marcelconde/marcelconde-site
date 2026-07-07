@@ -587,3 +587,343 @@
     max-height: none;
   }
 }
+
+/* Gallery admin redesign */
+.private-admin {
+  width: min(1660px, calc(100% - 28px));
+  margin: 16px auto 56px;
+}
+
+.private-grid {
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.private-list {
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.private-list-item {
+  padding: 10px 11px;
+}
+
+.private-list-item strong {
+  margin-bottom: 2px;
+  font-size: 0.9rem;
+}
+
+.private-list-item small {
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.private-form {
+  gap: 12px;
+}
+
+.admin-section,
+.advanced-section {
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.024);
+  padding: 14px;
+}
+
+:root[data-theme="light"] .admin-section,
+:root[data-theme="light"] .advanced-section,
+:root[data-theme="light"] .selection-log-panel,
+:root[data-theme="light"] .private-copy,
+:root[data-theme="light"] .photo-bulk-actions {
+  background: rgba(255,255,255,0.78);
+}
+
+.admin-section-head,
+.advanced-section > summary,
+.selection-log-head,
+.upload-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-section-head h2,
+.admin-section-head strong,
+.advanced-section > summary strong,
+.selection-log-head strong,
+.upload-card-head strong {
+  display: block;
+  margin: 2px 0 0;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.advanced-section,
+.selection-log-panel {
+  padding: 0;
+}
+
+.advanced-section > summary,
+.selection-log-head {
+  list-style: none;
+  cursor: pointer;
+  padding: 12px 14px;
+}
+
+.advanced-section > summary::-webkit-details-marker,
+.selection-log-head::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-section > summary::after,
+.selection-log-head::after {
+  content: "+";
+  color: var(--gold);
+  font-weight: 900;
+  font-size: 1.1rem;
+}
+
+.advanced-section[open] > summary::after,
+.selection-log-panel[open] > .selection-log-head::after {
+  content: "-";
+}
+
+.advanced-section > .form-grid {
+  padding: 0 14px 14px;
+}
+
+.dense-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.dense-form .full {
+  grid-column: 1 / -1;
+}
+
+.private-form textarea {
+  min-height: 82px;
+  margin-top: 6px;
+  margin-bottom: 0;
+  padding: 10px;
+  font-size: 0.86rem;
+}
+
+.discount-rule {
+  grid-template-columns: minmax(210px, 0.9fr) repeat(2, minmax(140px, 0.55fr));
+  gap: 10px;
+}
+
+.watermark-panel {
+  padding: 12px;
+  background: rgba(255,255,255,0.022);
+}
+
+.watermark-head {
+  margin-bottom: 10px;
+}
+
+.watermark-head h3 {
+  font-size: 1.45rem;
+}
+
+.watermark-toggle {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.76rem;
+}
+
+.watermark-layout {
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.watermark-preview {
+  min-height: 160px;
+  padding: 12px;
+}
+
+.watermark-preview strong {
+  font-size: 1.2rem;
+}
+
+.watermark-preview small {
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.watermark-controls {
+  gap: 12px;
+}
+
+.position-grid {
+  width: 132px;
+  gap: 5px;
+  padding: 8px;
+}
+
+.position-grid button::before {
+  width: 7px;
+  height: 7px;
+}
+
+.range-field {
+  gap: 6px;
+}
+
+.private-upload {
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(260px, 0.9fr) minmax(360px, 1.3fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.upload-card {
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.022);
+  padding: 12px;
+}
+
+.upload-card-head {
+  margin-bottom: 10px;
+}
+
+.upload-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.upload-card-drop .dropzone {
+  min-height: 112px;
+}
+
+.upload-card-drop .upload-options {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.queue {
+  max-height: 176px;
+  overflow: auto;
+}
+
+.queue-row {
+  grid-template-columns: minmax(0, 1fr) 104px;
+  padding: 8px 9px;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.private-copy {
+  margin-top: 12px;
+  padding: 9px 10px;
+  font-size: 0.78rem;
+}
+
+.photo-bulk-actions {
+  margin-top: 10px;
+  padding: 9px 10px;
+  font-size: 0.82rem;
+}
+
+.selection-log-panel {
+  margin: 12px 0;
+  border-color: rgba(184,149,106,0.26);
+  background: rgba(184,149,106,0.045);
+}
+
+.selection-log-list {
+  max-height: 230px;
+  padding: 0 12px 12px;
+}
+
+.selection-log-row {
+  padding: 9px 10px;
+  font-size: 0.82rem;
+}
+
+.selection-log-files em {
+  font-size: 0.68rem;
+  padding: 3px 6px;
+}
+
+.gallery-photo-grid {
+  margin-top: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 9px;
+}
+
+.gallery-photo-body {
+  padding: 9px;
+}
+
+.gallery-photo-body strong {
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gallery-photo-body small {
+  font-size: 0.68rem;
+  line-height: 1.25;
+  max-height: 2.5em;
+  overflow: hidden;
+}
+
+.gallery-photo-body .btn {
+  width: 100%;
+  margin-top: 7px;
+}
+
+.event-list {
+  margin-top: 12px;
+}
+
+.event-list .advanced-section {
+  padding: 0;
+}
+
+.event-list-inner {
+  display: grid;
+  gap: 7px;
+  padding: 0 12px 12px;
+}
+
+.event-row {
+  padding: 9px 10px;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 1180px) {
+  .private-upload,
+  .dense-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .private-upload .watermark-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .private-admin {
+    width: calc(100% - 20px);
+  }
+
+  .private-grid,
+  .private-upload,
+  .dense-form,
+  .watermark-layout,
+  .discount-rule {
+    grid-template-columns: 1fr;
+  }
+}

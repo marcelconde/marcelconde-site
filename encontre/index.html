@@ -24,6 +24,11 @@
       color: #fff;
     }
 
+    :root[data-theme="light"] body {
+      background: #f5f3ef;
+      color: #181512;
+    }
+
     header {
       padding: 3rem 5%;
       text-align: center;
@@ -56,6 +61,12 @@
       cursor: pointer;
       transition: transform .4s ease, box-shadow .4s ease, background .4s ease;
       border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    :root[data-theme="light"] .card {
+      background: #fff;
+      border-color: rgba(24,21,18,0.12);
+      box-shadow: 0 16px 44px rgba(24,21,18,0.08);
     }
 
     .card:hover {
@@ -102,6 +113,33 @@
     .back:hover {
       color: #fff;
     }
+
+    :root[data-theme="light"] .back:hover {
+      color: #181512;
+    }
+
+    .theme-toggle {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      min-height: 36px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(17,17,17,0.88);
+      color: #fff;
+      padding: 0 12px;
+      font: 800 0.74rem system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.18);
+      backdrop-filter: blur(14px);
+    }
+
+    :root[data-theme="light"] .theme-toggle {
+      background: rgba(255,255,255,0.88);
+      color: #181512;
+      border-color: rgba(24,21,18,0.13);
+    }
   </style>
 </head>
 <body>
@@ -145,5 +183,6 @@
 
   <a class="back" href="/">&larr; Voltar para o site</a>
 
+  <script src="/theme.js?v=20260706-01"></script>
 </body>
 </html>

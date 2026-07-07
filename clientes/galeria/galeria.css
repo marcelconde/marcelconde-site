@@ -11,6 +11,17 @@
   --sans: "Inter", system-ui, sans-serif;
 }
 
+:root[data-theme="light"] {
+  --bg: #f5f3ef;
+  --panel: #ffffff;
+  --ink: #171512;
+  --muted: rgba(23,21,18,0.62);
+  --line: rgba(23,21,18,0.13);
+  --gold: #a98255;
+  --success: #227a47;
+  --danger: #b34854;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -19,6 +30,10 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--sans);
+}
+
+:root[data-theme="light"] body {
+  background: #f5f3ef;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -84,6 +99,21 @@ button { font: inherit; cursor: pointer; }
   filter: saturate(0.85);
 }
 
+.gallery-hero-slide {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  transform: scale(1.035);
+  transition: opacity 1.25s ease, transform 5.5s ease;
+}
+
+.gallery-hero-slide.active {
+  opacity: 1;
+  transform: scale(1);
+}
+
 .gallery-hero::after {
   content: "";
   position: absolute;
@@ -91,6 +121,12 @@ button { font: inherit; cursor: pointer; }
   background:
     linear-gradient(to top, var(--bg) 0%, rgba(8,8,8,0.78) 22%, transparent 62%),
     linear-gradient(to right, rgba(8,8,8,0.86), rgba(8,8,8,0.24));
+}
+
+:root[data-theme="light"] .gallery-hero::after {
+  background:
+    linear-gradient(to top, var(--bg) 0%, rgba(245,243,239,0.78) 22%, transparent 62%),
+    linear-gradient(to right, rgba(245,243,239,0.86), rgba(245,243,239,0.18));
 }
 
 .gallery-hero-content {
@@ -148,7 +184,7 @@ h1 {
   border-color: var(--gold);
   color: #080808;
   font-weight: 900;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -596,4 +632,33 @@ body.selection-processing .workflow-status {
     display: grid;
     gap: 4px;
   }
+}
+
+.theme-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 140;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  color: var(--ink);
+  padding: 0 12px;
+  font: 800 0.74rem var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.18);
+  backdrop-filter: blur(14px);
+}
+
+:root[data-theme="light"] .client-topbar {
+  background: linear-gradient(to bottom, rgba(245,243,239,0.92), rgba(245,243,239,0.62), transparent);
+}
+
+:root[data-theme="light"] .selection-counter,
+:root[data-theme="light"] .pricing-summary,
+:root[data-theme="light"] .workflow-status,
+:root[data-theme="light"] .photo-card,
+:root[data-theme="light"] .payment-card {
+  background: rgba(255,255,255,0.82);
 }

@@ -37,6 +37,17 @@
       --sans: 'Inter', system-ui, sans-serif;
     }
 
+    :root[data-theme="light"] {
+      --bg: #f5f3ef;
+      --bg2: #ede8df;
+      --bg3: #ffffff;
+      --ink: #181512;
+      --ink-dim: rgba(24,21,18,0.56);
+      --ink-faint: rgba(24,21,18,0.12);
+      --gold: #a98255;
+      --gold-light: #c59d6a;
+    }
+
     body {
       min-height: 100vh;
       font-family: var(--sans);
@@ -45,6 +56,13 @@
         radial-gradient(circle at 88% 80%, rgba(184,149,106,0.04), transparent 30%),
         var(--bg);
       color: var(--ink);
+    }
+
+    :root[data-theme="light"] body {
+      background:
+        radial-gradient(circle at 16% 20%, rgba(169,130,85,0.12), transparent 34%),
+        radial-gradient(circle at 88% 80%, rgba(169,130,85,0.06), transparent 30%),
+        var(--bg);
     }
 
     .page-link {
@@ -85,7 +103,7 @@
       color: var(--ink);
       line-height: 0.98;
       margin-bottom: 2.2rem;
-      letter-spacing: -.03em;
+      letter-spacing: 0;
     }
 
     .contact-headline em {
@@ -264,6 +282,23 @@
         grid-template-columns: 1fr;
       }
     }
+
+    .theme-toggle {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      min-height: 36px;
+      border: 1px solid var(--ink-faint);
+      background: color-mix(in srgb, var(--bg3) 88%, transparent);
+      color: var(--ink);
+      padding: 0 12px;
+      font: 800 0.74rem var(--sans);
+      letter-spacing: 0;
+      text-transform: uppercase;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.18);
+      backdrop-filter: blur(14px);
+    }
   </style>
 </head>
 <body>
@@ -379,5 +414,6 @@
       el.addEventListener('input', () => el.classList.remove('field-error'));
     });
   </script>
+  <script src="/theme.js?v=20260706-01"></script>
 </body>
 </html>

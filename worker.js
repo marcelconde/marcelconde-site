@@ -77,6 +77,10 @@ function albumCoverKey(path = "") {
   return `album_cover:${path}`;
 }
 
+function deletedAssetsKey(path = "") {
+  return `album_deleted_assets:${path}`;
+}
+
 async function getStoredCover(env, path = "") {
   if (!env.LIKES_KV || !path) return null;
   return env.LIKES_KV.get(albumCoverKey(path), "json");
@@ -94,6 +98,24 @@ async function saveStoredCover(env, path = "", publicId = "") {
 
   await env.LIKES_KV.put(albumCoverKey(path), JSON.stringify(cover));
   return cover;
+}
+
+async function getDeletedAssets(env, path = "") {
+  if (!env.LIKES_KV || !path) return new Set();
+  const deleted = await env.LIKES_KV.get(deletedAssetsKey(path), "json");
+  const ids = Array.isArray(deleted) ? deleted : Object.keys(deleted || {});
+  return new Set(ids.map(sanitizePublicId).filter(Boolean));
+}
+
+async function rememberDeletedAsset(env, path = "", publicId = "") {
+  if (!env.LIKES_KV || !path || !publicId) return;
+  const cleanPublicId = sanitizePublicId(publicId);
+  if (!cleanPublicId) return;
+
+  const key = deletedAssetsKey(path);
+  const deleted = (await env.LIKES_KV.get(key, "json")) || {};
+  deleted[cleanPublicId] = new Date().toISOString();
+  await env.LIKES_KV.put(key, JSON.stringify(deleted), { expirationTtl: 7 * 24 * 60 * 60 });
 }
 
 function userIndexKey() {
@@ -996,6 +1018,28 @@ async function deleteCloudinaryFolder(cloudName, auth, path) {
   }
 }
 
+async function createCloudinaryFolder(cloudName, auth, path) {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const res = await fetchWithTimeout(
+    `https://api.cloudinary.com/v1_1/${cloudName}/folders/${encodedPath}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Basic ${auth}` },
+    },
+    12000
+  );
+
+  const text = await res.text();
+  if (res.status === 409) return { existed: true };
+  if (!res.ok) throw new Error(`Cloudinary create folder ${res.status}: ${text}`);
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
 async function deleteAlbumRecursive(env, request, path, stats = { folders: 0, images: 0 }) {
   const cloudName = env.CLOUDINARY_CLOUD_NAME;
   const apiKey    = env.CLOUDINARY_API_KEY;
@@ -1022,6 +1066,7 @@ async function deleteAlbumRecursive(env, request, path, stats = { folders: 0, im
     const slug = getAlbumSlugFromPath(path);
     await Promise.allSettled([
       env.LIKES_KV.delete(albumCoverKey(path)),
+      env.LIKES_KV.delete(deletedAssetsKey(path)),
       env.LIKES_KV.delete(`likes:${slug}`),
       env.LIKES_KV.delete(`asset_likes:${slug}`),
     ]);
@@ -1032,17 +1077,25 @@ async function deleteAlbumRecursive(env, request, path, stats = { folders: 0, im
 }
 
 async function clearWorkerCache(cache, request, path = "") {
-  const origin = new URL(request.url).origin;
+  const requestUrl = new URL(request.url);
+  const origins = new Set([
+    requestUrl.origin,
+    "https://api.marcelconde.com.br",
+    "https://cloudinary.marcel-conde.workers.dev",
+  ]);
   const urls = new Set([
-    `${origin}/albums`,
   ]);
 
-  if (path) {
-    urls.add(`${origin}/album?path=${encodeURIComponent(path)}`);
+  for (const origin of origins) {
+    urls.add(`${origin}/albums`);
 
-    const parts = path.split("/").filter(Boolean);
-    for (let i = 1; i <= parts.length; i++) {
-      urls.add(`${origin}/albums?path=${encodeURIComponent(parts.slice(0, i).join("/"))}`);
+    if (path) {
+      urls.add(`${origin}/album?path=${encodeURIComponent(path)}`);
+
+      const parts = path.split("/").filter(Boolean);
+      for (let i = 1; i <= parts.length; i++) {
+        urls.add(`${origin}/albums?path=${encodeURIComponent(parts.slice(0, i).join("/"))}`);
+      }
     }
   }
 
@@ -3463,6 +3516,7 @@ export default {
           const assetLikes = (await env.LIKES_KV.get(assetLikesKey, "json")) || {};
           delete assetLikes[publicId];
           await env.LIKES_KV.put(assetLikesKey, JSON.stringify(assetLikes));
+          await rememberDeletedAsset(env, albumPath, publicId);
 
           const storedCover = await getStoredCover(env, albumPath);
           if (storedCover?.public_id === publicId) {
@@ -3559,6 +3613,44 @@ export default {
         path: albumPath,
         cover_public_id: cover.public_id,
       });
+    }
+
+    if (url.pathname === "/admin/create-folder" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const path = String(body.path || "").replace(/\/+/g, "/").trim();
+      const parts = path.split("/").filter(Boolean);
+
+      if (
+        !path ||
+        path === "portfolio" ||
+        !path.startsWith("portfolio/") ||
+        !isAllowedAssetPath(path) ||
+        parts.length < 2 ||
+        parts.some((part) => part === "." || part === "..")
+      ) {
+        return errorJson("Invalid folder path", 400);
+      }
+
+      const auth = btoa(`${apiKey}:${apiSecret}`);
+      const created = await createCloudinaryFolder(cloudName, auth, path);
+      const parentPath = parts.slice(0, -1).join("/") || "portfolio";
+
+      await clearWorkerCache(caches.default, request, path);
+      await clearWorkerCache(caches.default, request, parentPath);
+      await appendAuditLog(env, request, user, "criar_album", "album", {
+        path,
+        existed: !!created.existed,
+      });
+
+      return json({ ok: true, path, existed: !!created.existed }, created.existed ? 200 : 201);
     }
 
     if (url.pathname === "/admin/clear-cache" && request.method === "POST") {
@@ -3750,6 +3842,10 @@ export default {
           display_name: r.display_name || "", filename: r.filename || "",
           width: r.width, height: r.height, format: r.format,
         }));
+        const deletedAssets = await getDeletedAssets(env, path);
+        if (deletedAssets.size) {
+          images = images.filter((image) => !deletedAssets.has(sanitizePublicId(image.public_id)));
+        }
         images.sort((a, b) => {
           const na = getAssetName(a), nb = getAssetName(b);
           return na < nb ? -1 : na > nb ? 1 : 0;
