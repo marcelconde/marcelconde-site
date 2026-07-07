@@ -6,6 +6,9 @@ const CONFIG = {
 };
 
 const $ = (selector) => document.querySelector(selector);
+const params = new URLSearchParams(location.search);
+const detailGalleryId = params.get("id") || "";
+const galleryListUrl = "/admin/galerias/";
 
 const state = {
   clients: [],
@@ -82,6 +85,8 @@ const uploadQueue = $("#uploadQueue");
 const photoGrid = $("#photoGrid");
 const eventList = $("#eventList");
 const toastEl = $("#toast");
+const detailNavButtons = document.querySelectorAll("[data-detail-section]");
+const detailSections = document.querySelectorAll(".detail-section");
 
 function getToken() {
   return sessionStorage.getItem(CONFIG.tokenKey) || "";
@@ -364,6 +369,16 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toastEl.classList.remove("show"), 3200);
 }
 
+function activateDetailSection(sectionId) {
+  if (!detailSections.length) return;
+  detailSections.forEach((section) => {
+    section.hidden = section.id !== sectionId;
+  });
+  detailNavButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.detailSection === sectionId);
+  });
+}
+
 function clearGalleryMediaState() {
   state.images = [];
   state.selection = [];
@@ -464,6 +479,7 @@ function updateGalleryStatusUi() {
 
 function renderGalleries() {
   renderStats();
+  if (!galleryList) return;
   if (!state.galleries.length) {
     galleryList.innerHTML = `<div class="empty-state"><span>Nenhuma galeria privada criada.</span></div>`;
     return;
@@ -482,7 +498,9 @@ function renderGalleries() {
   }).join("");
 
   galleryList.querySelectorAll("[data-gallery-id]").forEach((button) => {
-    button.addEventListener("click", () => selectGallery(button.dataset.galleryId));
+    button.addEventListener("click", () => {
+      location.href = `/admin/galerias/detalhe/?id=${encodeURIComponent(button.dataset.galleryId)}`;
+    });
   });
 }
 
@@ -605,27 +623,18 @@ function renderPhotos() {
 
 function renderEvents() {
   if (!state.events.length) {
-    eventList.innerHTML = "";
+    eventList.innerHTML = `<div class="empty-state"><span>Nenhuma atividade registrada.</span></div>`;
     return;
   }
   eventList.innerHTML = `
-    <details class="advanced-section">
-      <summary class="admin-section-head">
-        <span>
-          <span class="eyebrow">Histórico</span>
-          <strong>Atividades técnicas</strong>
-        </span>
-        <span>${state.events.length} registro(s)</span>
-      </summary>
-      <div class="event-list-inner">
-        ${state.events.slice(0, 20).map((event) => `
-          <div class="event-row">
-            <strong>${escapeHtml(event.action || "evento")}</strong>
-            <small>${escapeHtml(formatDate(event.createdAt))} · ${escapeHtml(event.actorEmail || "cliente")}</small>
-          </div>
-        `).join("")}
-      </div>
-    </details>
+    <div class="event-list-inner">
+      ${state.events.slice(0, 40).map((event) => `
+        <div class="event-row">
+          <strong>${escapeHtml(event.action || "evento")}</strong>
+          <small>${escapeHtml(formatDate(event.createdAt))} · ${escapeHtml(event.actorEmail || "cliente")}</small>
+        </div>
+      `).join("")}
+    </div>
   `;
 }
 
@@ -712,12 +721,22 @@ async function loadData() {
   renderClientOptions();
   renderGalleries();
 
-  if (!state.selectedGallery && state.galleries[0]) {
-    await selectGallery(state.galleries[0].id);
+  if (detailGalleryId) {
+    const exists = state.galleries.some((gallery) => gallery.id === detailGalleryId);
+    if (!exists) {
+      state.selectedGallery = null;
+      clearGalleryMediaState();
+      renderSelectedGallery();
+      galleryTitle.textContent = "Galeria não encontrada";
+      galleryMeta.textContent = "Volte para a lista de galerias e selecione uma galeria válida.";
+      showToast("Galeria não encontrada.");
+      return;
+    }
+    await selectGallery(detailGalleryId);
   } else if (state.selectedGallery) {
     await selectGallery(state.selectedGallery.id);
   } else {
-    renderSelectedGallery();
+    location.href = galleryListUrl;
   }
 }
 
@@ -764,7 +783,7 @@ function currentGalleryPayload() {
   };
 }
 
-quickCreateBtn.addEventListener("click", async () => {
+quickCreateBtn?.addEventListener("click", async () => {
   const title = quickTitle.value.trim();
   if (!title) return showToast("Digite um título para a galeria.");
   quickCreateBtn.disabled = true;
@@ -1102,7 +1121,7 @@ deleteGalleryBtn.addEventListener("click", async () => {
     state.galleries = state.galleries.filter((gallery) => gallery.id !== deletedId);
     state.selectedGallery = null;
     clearGalleryMediaState();
-    await loadData();
+    location.href = galleryListUrl;
 
     const failed = Array.isArray(data.failedImages) ? data.failedImages.length : 0;
     showToast(failed
@@ -1112,11 +1131,11 @@ deleteGalleryBtn.addEventListener("click", async () => {
     showToast(err.message || "Erro ao apagar galeria.");
   } finally {
     deleteGalleryBtn.textContent = "Apagar galeria";
-    renderSelectedGallery();
+    if (state.selectedGallery) renderSelectedGallery();
   }
 });
 
-refreshBtn.addEventListener("click", loadData);
+refreshBtn?.addEventListener("click", loadData);
 
 exportCsvBtn.addEventListener("click", async (event) => {
   event.preventDefault();
@@ -1219,6 +1238,10 @@ pruneUnselectedBtn.addEventListener("click", async () => {
     pruneUnselectedBtn.disabled = false;
     renderSelectedGallery();
   }
+});
+
+detailNavButtons.forEach((button) => {
+  button.addEventListener("click", () => activateDetailSection(button.dataset.detailSection));
 });
 
 loadData().catch((err) => {

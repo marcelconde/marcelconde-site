@@ -10,9 +10,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260706-01">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260707-01">
 </head>
-<body>
+<body class="gallery-index-page">
   <div class="admin-shell" id="adminShell">
     <header class="topbar">
       <a class="brand" href="/admin/" aria-label="Voltar para o admin">
@@ -37,238 +37,33 @@
       <a class="tab active" href="/admin/galerias/">Galerias</a>
     </nav>
 
-    <main class="private-admin">
-      <section class="private-grid">
-        <aside class="panel sidebar">
-          <div class="panel-head">
-            <div>
-              <span class="eyebrow">Entrega privada</span>
-              <h2>Galerias</h2>
-            </div>
-            <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar">↻</button>
-          </div>
-
-          <div class="new-album">
-            <label for="quickTitle">Nova galeria</label>
-            <div class="inline-form">
-              <input id="quickTitle" type="text" placeholder="Ex: Beatriz Formatura">
-              <button class="btn btn-small" id="quickCreateBtn" type="button">Criar</button>
-            </div>
-          </div>
-
-          <div class="private-list" id="galleryList"></div>
-        </aside>
-
-        <section class="content">
-          <div class="content-head">
-            <div>
-              <span class="eyebrow" id="gallerySlugLabel">clientes</span>
-              <h1 id="galleryTitle">Selecione uma galeria</h1>
-              <p id="galleryMeta">Crie ou escolha uma galeria privada para enviar fotos e acompanhar a seleção.</p>
-            </div>
-            <div class="content-actions">
-              <button class="btn btn-primary disabled" id="publishGalleryBtn" type="button">Publicar e enviar</button>
-              <a class="btn btn-ghost disabled" id="openGalleryBtn" href="#" target="_blank" rel="noopener">Abrir galeria</a>
-              <a class="btn btn-ghost disabled" id="exportCsvBtn" href="#">Exportar CSV</a>
-              <button class="btn btn-danger disabled" id="pruneUnselectedBtn" type="button">Remover não selecionadas</button>
-              <button class="btn btn-danger disabled" id="deleteGalleryBtn" type="button">Apagar galeria</button>
-            </div>
-          </div>
-
-          <details class="selection-log-panel" id="selectionLogPanel" hidden>
-            <summary class="selection-log-head">
-              <span>
-                <span class="eyebrow">Log da seleção</span>
-                <strong>Alterações do cliente</strong>
-              </span>
-              <span id="selectionLogSummary"></span>
-            </summary>
-            <div class="selection-log-list" id="selectionLogList"></div>
-          </details>
-
-          <form class="private-form" id="galleryForm">
-            <section class="admin-section">
-              <div class="admin-section-head">
-                <div>
-                  <span class="eyebrow">Configuração</span>
-                  <h2>Dados da galeria</h2>
-                </div>
-                <button class="btn btn-primary" id="saveGalleryBtn" type="submit">Salvar galeria</button>
-              </div>
-              <div class="form-grid dense-form">
-                <label>
-                  Cliente
-                  <select id="galleryClient"></select>
-                </label>
-                <label>
-                  Status
-                  <select id="galleryStatus">
-                    <option value="selection">Seleção</option>
-                    <option value="editing">Em edição</option>
-                    <option value="final">Entrega final</option>
-                  </select>
-                </label>
-                <label>
-                  Título
-                  <input id="galleryName" type="text" placeholder="Beatriz Formatura">
-                </label>
-                <label>
-                  Slug
-                  <input id="gallerySlug" type="text" placeholder="beatriz-formatura">
-                </label>
-                <label>
-                  Subtítulo
-                  <input id="gallerySubtitle" type="text" placeholder="Ensaio de formatura">
-                </label>
-                <label id="selectionLimitField">
-                  Limite de seleção
-                  <input id="selectionLimit" type="number" min="0" max="2000" value="15">
-                </label>
-                <label class="full">
-                  Mensagem personalizada
-                  <textarea id="galleryMessage" placeholder="Olá Beatriz, selecione até 15 fotos para edição usando o coração exibido sobre cada imagem."></textarea>
-                </label>
-              </div>
-            </section>
-
-            <details class="admin-section advanced-section">
-              <summary class="admin-section-head">
-                <span>
-                  <span class="eyebrow">Venda extra</span>
-                  <strong>Preços e descontos</strong>
-                </span>
-                <span>opcional</span>
-              </summary>
-              <div class="form-grid dense-form">
-                <label id="extraPhotoPriceField">
-                  Valor por foto adicional
-                  <input id="extraPhotoPrice" type="text" inputmode="decimal" placeholder="Ex: 25,00">
-                </label>
-                <label id="allPhotosDiscountField">
-                  Desconto ao escolher todas (%)
-                  <input id="allPhotosDiscount" type="number" min="0" max="95" step="0.1" value="0">
-                </label>
-                <div class="full discount-rule" id="quantityDiscountField">
-                  <label class="check-field discount-toggle">
-                    <input id="quantityDiscountEnabled" type="checkbox">
-                    <span>Aplicar desconto por quantidade</span>
-                  </label>
-                  <label>
-                    A partir de quantas fotos
-                    <input id="quantityDiscountMinPhotos" type="number" min="0" max="2000" value="0">
-                  </label>
-                  <label>
-                    Desconto por quantidade (%)
-                    <input id="quantityDiscountPercent" type="number" min="0" max="95" step="0.1" value="0">
-                  </label>
-                </div>
-              </div>
-            </details>
-
-            <section class="upload-panel private-upload" id="uploadPanel">
-              <div class="upload-card upload-card-drop">
-                <div class="upload-card-head">
-                  <span class="eyebrow">Upload</span>
-                  <strong>Enviar fotos</strong>
-                </div>
-                <div class="dropzone" id="dropzone">
-                  <input id="fileInput" type="file" accept="image/*" multiple>
-                  <div>
-                    <strong>Arraste fotos aqui</strong>
-                    <span>ou clique para selecionar arquivos</span>
-                  </div>
-                </div>
-                <div class="upload-options">
-                  <label class="check-field">
-                    <input id="firstAsCover" type="checkbox" checked>
-                    <span>Primeira como capa</span>
-                  </label>
-                  <button class="btn btn-primary" id="uploadBtn" type="button" disabled>Enviar fotos</button>
-                </div>
-              </div>
-
-              <div class="upload-card upload-card-process">
-                <div class="upload-card-head">
-                  <span class="eyebrow">Processamento</span>
-                  <strong>Fila de envio</strong>
-                </div>
-                <p class="upload-note">Fotos acima de 9 MB são otimizadas com qualidade mínima de 80% antes do envio.</p>
-                <div class="queue" id="uploadQueue"></div>
-              </div>
-
-              <section class="watermark-panel upload-card" aria-label="Configurações da marca d'água">
-                <div class="watermark-head">
-                  <div>
-                    <span class="eyebrow">Proteção</span>
-                    <h3>Marca d'água</h3>
-                  </div>
-                  <label class="watermark-toggle">
-                    <input id="watermarkEnabled" type="checkbox" checked>
-                    <span>Exibir durante a seleção</span>
-                  </label>
-                </div>
-
-                <div class="watermark-layout">
-                  <div class="watermark-uploader">
-                    <button class="watermark-preview" id="watermarkUploadBtn" type="button">
-                      <span id="watermarkPreview" class="watermark-preview-img"></span>
-                      <strong id="watermarkPreviewText">Subir marca d'água</strong>
-                      <small id="watermarkStatus">PNG ou JPG, de preferência com fundo transparente.</small>
-                    </button>
-                    <input id="watermarkFile" type="file" accept="image/png,image/jpeg,image/webp">
-                    <input id="watermarkLogo" type="hidden">
-                  </div>
-
-                  <div class="watermark-controls">
-                    <div class="control-block">
-                      <span class="control-label">Posição</span>
-                      <input id="watermarkPosition" type="hidden" value="center">
-                      <div class="position-grid" id="watermarkPositionGrid" aria-label="Posição da marca d'água">
-                        <button type="button" data-watermark-position="top-left" aria-label="Superior esquerda"></button>
-                        <button type="button" data-watermark-position="top" aria-label="Superior centro"></button>
-                        <button type="button" data-watermark-position="top-right" aria-label="Superior direita"></button>
-                        <button type="button" data-watermark-position="left" aria-label="Centro esquerda"></button>
-                        <button type="button" data-watermark-position="center" aria-label="Centro"></button>
-                        <button type="button" data-watermark-position="right" aria-label="Centro direita"></button>
-                        <button type="button" data-watermark-position="bottom-left" aria-label="Inferior esquerda"></button>
-                        <button type="button" data-watermark-position="bottom" aria-label="Inferior centro"></button>
-                        <button type="button" data-watermark-position="bottom-right" aria-label="Inferior direita"></button>
-                      </div>
-                    </div>
-
-                    <label class="range-field">
-                      <span>Opacidade <output id="watermarkOpacityValue">28%</output></span>
-                      <input id="watermarkOpacity" type="range" min="0.05" max="0.85" step="0.05" value="0.28">
-                    </label>
-
-                    <label class="range-field">
-                      <span>Tamanho <output id="watermarkSizeValue">180px</output></span>
-                      <input id="watermarkSize" type="range" min="80" max="520" step="10" value="180">
-                    </label>
-                  </div>
-                </div>
-              </section>
-            </section>
-          </form>
-
-          <div class="private-copy" id="shareLink">Crie ou selecione uma galeria para gerar o link do cliente.</div>
-          <div class="photo-bulk-actions" id="photoBulkActions" hidden>
-            <span id="bulkCount">Selecione fotos para excluir em lote.</span>
-            <div>
-              <button class="btn btn-ghost btn-small" id="selectAllPhotosBtn" type="button">Selecionar todas</button>
-              <button class="btn btn-ghost btn-small" id="clearSelectedPhotosBtn" type="button" disabled>Limpar seleção</button>
-              <button class="btn btn-danger btn-small" id="deleteSelectedPhotosBtn" type="button" disabled>Excluir selecionadas</button>
-            </div>
-          </div>
-          <div class="gallery-photo-grid" id="photoGrid"></div>
-          <div class="event-list" id="eventList"></div>
-        </section>
+    <main class="private-admin gallery-library">
+      <section class="library-hero">
+        <div>
+          <span class="eyebrow">Entrega privada</span>
+          <h1>Galerias</h1>
+          <p>Escolha uma galeria para abrir o painel de fotos, upload, preços e configurações.</p>
+        </div>
+        <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar">↻</button>
       </section>
+
+      <section class="library-toolbar" aria-label="Criar galeria">
+        <label for="quickTitle">
+          Nova galeria
+          <span>Crie a galeria aqui; os detalhes serão editados na próxima página.</span>
+        </label>
+        <div class="inline-form">
+          <input id="quickTitle" type="text" placeholder="Ex: Beatriz Formatura">
+          <button class="btn btn-primary" id="quickCreateBtn" type="button">Criar galeria</button>
+        </div>
+      </section>
+
+      <section class="gallery-card-grid" id="galleryList" aria-label="Galerias disponíveis"></section>
     </main>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260706-01"></script>
-  <script src="/admin/galerias/galerias.js?v=20260706-01"></script>
+  <script src="/admin/galerias/lista.js?v=20260707-01"></script>
 </body>
 </html>
