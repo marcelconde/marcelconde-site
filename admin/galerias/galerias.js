@@ -464,13 +464,9 @@ function renderStats() {
 
 function updateGalleryStatusUi() {
   const isSelection = galleryStatus.value === "selection";
-  [
-    selectionLimitField,
-    extraPhotoPriceField,
-    allPhotosDiscountField,
-    quantityDiscountField,
-  ].forEach((field) => {
-    if (field) field.hidden = !isSelection;
+  if (selectionLimitField) selectionLimitField.hidden = !isSelection;
+  [extraPhotoPriceField, allPhotosDiscountField, quantityDiscountField].forEach((field) => {
+    if (field) field.hidden = false;
   });
   publishGalleryBtn.textContent = galleryStatus.value === "final"
     ? "Enviar entrega final"
