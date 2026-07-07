@@ -993,67 +993,71 @@ select:focus {
 
 /* Compact admin shell */
 .topbar {
-  height: 58px;
-  padding-inline: 24px;
+  height: 52px;
+  padding-inline: 20px;
 }
 
 .brand span {
-  width: 34px;
-  height: 34px;
-  font-size: 1rem;
+  width: 30px;
+  height: 30px;
+  font-size: 0.92rem;
 }
 
 .brand strong {
-  font-size: 1.35rem;
+  font-size: 1.18rem;
 }
 
 .stats div {
-  min-width: 92px;
-  padding: 7px 14px;
+  min-width: 82px;
+  padding: 6px 12px;
 }
 
 .stats strong {
-  font-size: 1.25rem;
+  font-size: 1.08rem;
+}
+
+.stats span {
+  font-size: 0.6rem;
 }
 
 .btn,
 .icon-btn {
-  min-height: 36px;
-  padding: 0 14px;
-  font-size: 0.86rem;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 0.8rem;
 }
 
 .icon-btn {
-  width: 36px;
+  width: 34px;
 }
 
 .btn-small {
-  min-height: 32px;
-  font-size: 0.76rem;
+  min-height: 30px;
+  font-size: 0.72rem;
 }
 
 input,
 select {
-  min-height: 38px;
+  min-height: 34px;
   margin-top: 6px;
   margin-bottom: 10px;
-  padding: 0 11px;
-  font-size: 0.86rem;
+  padding: 0 10px;
+  font-size: 0.8rem;
 }
 
 label {
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   letter-spacing: 0;
 }
 
 .tabs {
-  padding-top: 12px;
+  padding: 10px 14px 0;
 }
 
 .tab {
-  min-height: 36px;
-  min-width: 118px;
-  font-size: 0.84rem;
+  min-height: 32px;
+  min-width: 108px;
+  font-size: 0.78rem;
 }
 
 .admin-main {
@@ -1067,9 +1071,9 @@ label {
 }
 
 .sidebar {
-  top: 76px;
+  top: 66px;
   padding: 14px;
-  max-height: calc(100vh - 92px);
+  max-height: calc(100vh - 82px);
 }
 
 .content {
