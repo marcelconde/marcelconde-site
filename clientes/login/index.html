@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Área do cliente | Marcel Conde Fotografia</title>
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/clientes/auth.css?v=20260706-01">
+</head>
+<body>
+  <main class="client-shell">
+    <header class="client-top">
+      <a class="brand" href="/">
+        <span>MC</span>
+        <strong>Marcel Conde</strong>
+      </a>
+      <a class="btn btn-back" href="/encontre/">Voltar</a>
+    </header>
+
+    <section class="auth-grid">
+      <div>
+        <span class="eyebrow" id="modeLabel">Área do cliente</span>
+        <h1 id="pageTitle">Acesse sua galeria</h1>
+        <p id="pageCopy">Entre com o e-mail e senha cadastrados para ver suas galerias privadas, acompanhar seleções e baixar fotos liberadas.</p>
+      </div>
+
+      <form class="panel form" id="authForm">
+        <label>
+          E-mail
+          <input id="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
+        </label>
+        <label>
+          Senha
+          <input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+        </label>
+        <label class="setup-only" hidden>
+          Confirmar senha
+          <input id="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repita a senha">
+        </label>
+        <button class="btn btn-primary" id="submitBtn" type="submit">Entrar</button>
+        <a class="muted-link" href="/clientes/dashboard/" id="dashboardLink">Ver minhas galerias</a>
+        <div class="status" id="statusText"></div>
+      </form>
+    </section>
+  </main>
+
+  <script src="/theme.js?v=20260706-01"></script>
+  <script src="/clientes/login/login.js?v=20260706-01"></script>
+</body>
+</html>

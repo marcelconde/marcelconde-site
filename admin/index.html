@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Admin — Marcel Conde Fotografia</title>
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <section class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <span class="eyebrow">Painel Administrativo</span>
+      <h1>Marcel Conde</h1>
+      <p>Gerencie portfólios, fotos, capas e curtidas do site.</p>
+
+      <form id="loginForm">
+        <label for="loginEmail">E-mail</label>
+        <input id="loginEmail" name="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
+
+        <label for="loginPassword">Senha</label>
+        <div class="password-wrap">
+          <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+          <button class="toggle-password" id="togglePassword" type="button" aria-label="Mostrar senha">Mostrar</button>
+        </div>
+
+        <button class="btn btn-primary" id="loginBtn" type="submit">Entrar</button>
+        <span class="form-msg" id="loginMsg"></span>
+        <button class="text-link" id="forgotLink" type="button">Esqueci minha senha</button>
+      </form>
+
+      <form class="hidden" id="forgotForm">
+        <p class="reset-copy">Digite o e-mail cadastrado para receber o link de redefinição.</p>
+        <label for="forgotEmail">E-mail</label>
+        <input id="forgotEmail" name="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
+
+        <button class="btn btn-primary" id="forgotBtn" type="submit">Enviar link</button>
+        <span class="form-msg" id="forgotMsg"></span>
+        <button class="text-link" id="backToLogin" type="button">Voltar para login</button>
+      </form>
+
+      <form class="hidden" id="resetForm">
+        <label for="resetPassword">Nova senha</label>
+        <input id="resetPassword" name="password" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" required>
+
+        <label for="resetPasswordConfirm">Confirmar senha</label>
+        <input id="resetPasswordConfirm" name="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repita a senha" required>
+
+        <button class="btn btn-primary" id="resetBtn" type="submit">Salvar nova senha</button>
+        <span class="form-msg" id="resetMsg"></span>
+      </form>
+
+      <form class="hidden" id="inviteAcceptForm">
+        <p class="reset-copy" id="inviteAcceptCopy">Crie sua senha para acessar o painel.</p>
+
+        <label for="inviteName">Nome</label>
+        <input id="inviteName" name="name" type="text" autocomplete="name" placeholder="Seu nome" required>
+
+        <label for="invitePassword">Senha</label>
+        <input id="invitePassword" name="password" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" required>
+
+        <label for="invitePasswordConfirm">Confirmar senha</label>
+        <input id="invitePasswordConfirm" name="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repita a senha" required>
+
+        <button class="btn btn-primary" id="inviteAcceptBtn" type="submit">Criar acesso</button>
+        <span class="form-msg" id="inviteAcceptMsg"></span>
+      </form>
+    </div>
+  </section>
+
+  <div class="admin-shell hidden" id="adminShell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Voltar para o site">
+        <span>MC</span>
+        <strong>Admin</strong>
+      </a>
+
+      <div class="stats">
+        <div><strong id="statAlbums">0</strong><span>Álbuns</span></div>
+        <div><strong id="statPhotos">0</strong><span>Fotos</span></div>
+        <div><strong id="statLikes">0</strong><span>Curtidas</span></div>
+      </div>
+
+      <div class="top-actions">
+        <span class="user-pill" id="currentUserLabel"></span>
+        <a class="btn btn-ghost" href="/" target="_blank" rel="noopener">Ver site</a>
+        <button class="btn btn-ghost" id="logoutBtn" type="button">Sair</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Seções do admin">
+      <button class="tab active" data-view="albumsView" type="button">Portfólios</button>
+      <button class="tab" data-view="likesView" type="button">Curtidas</button>
+      <a class="tab" href="/admin/clientes/">Clientes</a>
+      <a class="tab" href="/admin/galerias/">Galerias</a>
+      <button class="tab" data-view="usersView" data-admin-only="true" type="button">Usuários</button>
+      <button class="tab" data-view="auditView" data-admin-only="true" type="button">Auditoria</button>
+    </nav>
+
+    <main class="admin-main">
+      <section class="view grid-view" id="albumsView">
+        <aside class="panel sidebar">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Biblioteca</span>
+              <h2>Álbuns</h2>
+            </div>
+            <button class="icon-btn" id="refreshAlbumsBtn" type="button" title="Atualizar">↻</button>
+          </div>
+
+          <div class="new-album">
+            <label for="newAlbumName">Novo álbum</label>
+            <div class="inline-form new-album-form">
+              <input id="newAlbumName" type="text" placeholder="Ex: Aniversário">
+              <button class="btn btn-small" id="createAlbumBtn" type="button">Criar</button>
+              <select id="newAlbumParent" aria-label="Local do novo álbum">
+                <option value="portfolio">Portfólio principal</option>
+                <option value="selected">Dentro do selecionado</option>
+              </select>
+            </div>
+            <small class="new-album-target" id="newAlbumTarget">Destino: portfolio</small>
+          </div>
+
+          <div class="album-list" id="albumList"></div>
+        </aside>
+
+        <section class="content">
+          <div class="content-head">
+            <div>
+              <span class="eyebrow" id="albumPathLabel">portfolio</span>
+              <h1 id="albumTitle">Selecione um álbum</h1>
+              <p id="albumMeta">Escolha um portfólio à esquerda para ver e editar as fotos.</p>
+            </div>
+            <div class="content-actions">
+              <a class="btn btn-ghost disabled" id="viewAlbumBtn" href="#" target="_blank" rel="noopener">Abrir álbum</a>
+              <button class="btn btn-ghost" id="clearCacheBtn" type="button" disabled>Limpar cache</button>
+              <button class="btn btn-danger" id="deleteAlbumBtn" type="button" disabled>Apagar álbum</button>
+            </div>
+          </div>
+
+          <section class="upload-panel" id="uploadPanel">
+            <div class="dropzone" id="dropzone">
+              <input id="fileInput" type="file" accept="image/*" multiple>
+              <div>
+                <strong>Arraste fotos aqui</strong>
+                <span>ou clique para selecionar arquivos</span>
+              </div>
+            </div>
+
+            <div class="upload-options">
+              <label class="text-field">
+                Nome exibido
+                <input id="singleDisplayName" type="text" placeholder="Opcional para 1 foto. Ex: IMG_2048">
+              </label>
+              <label class="check-field">
+                <input id="firstAsCover" type="checkbox" checked>
+                <span>Usar primeira foto enviada como capa</span>
+              </label>
+              <button class="btn btn-primary" id="uploadBtn" type="button" disabled>Enviar fotos</button>
+            </div>
+
+            <div class="queue" id="uploadQueue"></div>
+          </section>
+
+          <div class="empty-state" id="emptyState">
+            <strong>Nenhuma foto carregada neste álbum.</strong>
+            <span>Envie imagens pelo painel acima para criar ou preencher o portfólio.</span>
+          </div>
+
+          <div class="photo-grid" id="photoGrid"></div>
+        </section>
+      </section>
+
+      <section class="view hidden" id="likesView">
+        <div class="content-head likes-head">
+          <div>
+            <span class="eyebrow">Interações</span>
+            <h1>Fotos curtidas</h1>
+            <p>Lista privada das fotos que receberam curtidas dentro dos álbuns.</p>
+          </div>
+          <button class="btn btn-primary" id="refreshLikesBtn" type="button">Atualizar curtidas</button>
+        </div>
+
+        <div class="liked-grid" id="likedGrid"></div>
+      </section>
+
+      <section class="view hidden" id="usersView" data-admin-only="true">
+        <div class="content-head likes-head">
+          <div>
+            <span class="eyebrow">Acessos</span>
+            <h1>Usuários</h1>
+            <p>Convide pessoas para acessar o painel e acompanhe os convites pendentes.</p>
+          </div>
+          <button class="btn btn-primary" id="refreshUsersBtn" type="button">Atualizar usuários</button>
+        </div>
+
+        <section class="admin-card-panel">
+          <h2>Convidar pessoa</h2>
+          <p>Ela receberá um e-mail para criar a própria senha de acesso.</p>
+          <div class="invite-row">
+            <input id="inviteEmail" type="email" placeholder="email@exemplo.com">
+            <select id="inviteRole" aria-label="Tipo de acesso">
+              <option value="editor">Editor</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <button class="btn btn-primary" id="inviteBtn" type="button">Enviar convite</button>
+          </div>
+          <span class="form-msg" id="inviteMsg"></span>
+        </section>
+
+        <div class="admin-lists">
+          <section class="admin-card-panel">
+            <h2>Usuários ativos</h2>
+            <div class="admin-list" id="usersList"></div>
+          </section>
+
+          <section class="admin-card-panel">
+            <h2>Convites enviados</h2>
+            <div class="admin-list" id="invitesList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view hidden" id="auditView" data-admin-only="true">
+        <div class="content-head likes-head">
+          <div>
+            <span class="eyebrow">Registro</span>
+            <h1>Auditoria</h1>
+            <p>Logs das atividades feitas por cada pessoa com acesso ao admin.</p>
+          </div>
+          <button class="btn btn-primary" id="refreshAuditBtn" type="button">Atualizar logs</button>
+        </div>
+
+        <div class="admin-card-panel">
+          <div class="admin-list audit-list" id="auditList"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="/theme.js?v=20260706-01"></script>
+  <script src="/admin/admin.js?v=20260706-01"></script>
+</body>
+</html>

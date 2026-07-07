@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Clientes — Admin Marcel Conde</title>
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260706-01">
+</head>
+<body>
+  <div class="admin-shell" id="adminShell">
+    <header class="topbar">
+      <a class="brand" href="/admin/" aria-label="Voltar para o admin">
+        <span>MC</span>
+        <strong>Clientes</strong>
+      </a>
+      <div class="stats">
+        <div><strong id="statClients">0</strong><span>Clientes</span></div>
+        <div><strong id="statGalleries">0</strong><span>Galerias</span></div>
+      </div>
+      <div class="top-actions">
+        <span class="user-pill" id="currentUserLabel"></span>
+        <a class="btn btn-ghost" href="/admin/galerias/">Galerias</a>
+        <a class="btn btn-ghost" href="/admin/">Admin</a>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Seções do admin">
+      <a class="tab" href="/admin/">Portfólios</a>
+      <a class="tab active" href="/admin/clientes/">Clientes</a>
+      <a class="tab" href="/admin/galerias/">Galerias</a>
+    </nav>
+
+    <main class="private-admin">
+      <section class="private-grid">
+        <aside class="panel sidebar">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Módulo privado</span>
+              <h2>Clientes</h2>
+            </div>
+            <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar">↻</button>
+          </div>
+          <div class="private-list" id="clientList"></div>
+        </aside>
+
+        <section class="content">
+          <div class="content-head">
+            <div>
+              <span class="eyebrow">Cadastro</span>
+              <h1 id="formTitle">Novo cliente</h1>
+              <p>Cadastre clientes que terão galerias privadas independentes do portfólio público.</p>
+            </div>
+            <div class="content-actions">
+              <button class="btn btn-ghost" id="newClientBtn" type="button">Novo cliente</button>
+              <button class="btn btn-danger" id="deleteClientBtn" type="button" disabled>Apagar cliente</button>
+            </div>
+          </div>
+
+          <form class="private-form" id="clientForm">
+            <div class="form-grid">
+              <label>
+                Nome
+                <input id="clientName" type="text" placeholder="Ex: Beatriz" required>
+              </label>
+              <label>
+                E-mail
+                <input id="clientEmail" type="email" placeholder="cliente@email.com">
+              </label>
+              <label>
+                Telefone / WhatsApp
+                <input id="clientPhone" type="text" placeholder="(81) 9 0000-0000">
+              </label>
+              <label class="full">
+                Observações internas
+                <textarea id="clientNotes" placeholder="Preferências, tipo de trabalho, detalhes do atendimento..."></textarea>
+              </label>
+            </div>
+            <div class="content-actions">
+              <button class="btn btn-primary" id="saveClientBtn" type="submit">Salvar cliente</button>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/theme.js?v=20260706-01"></script>
+  <script src="/admin/clientes/clientes.js?v=20260706-01"></script>
+</body>
+</html>

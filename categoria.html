@@ -15,6 +15,15 @@
   <meta property="og:image" content="https://marcelconde.com.br/images/og-image.jpg">
   <meta property="og:site_name" content="Marcel Conde Fotografia">
 
+  <!-- Google Analytics / Google tag -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-R8TFN8B8YY');
+  </script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -22,8 +31,13 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
       margin: 0;
       padding: 24px;
-      background: #f4f4f4;
-      color: #111;
+      background: #111315;
+      color: #f5f5f5;
+    }
+
+    :root[data-theme="light"] body {
+      background: #f5f3ef;
+      color: #181512;
     }
 
     h1 {
@@ -43,26 +57,65 @@
       top: 0;
       z-index: 20;
       padding: 10px 0 20px;
-      background: linear-gradient(to bottom, rgba(244,244,244,0.97) 60%, rgba(244,244,244,0));
+      background: linear-gradient(to bottom, rgba(17,19,21,0.97) 60%, rgba(17,19,21,0));
       backdrop-filter: blur(8px);
     }
 
     .back-btn {
       appearance: none;
-      border: 1px solid #ddd;
-      background: #fff;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: #1b1d21;
+      color: #f5f5f5;
       padding: 10px 16px;
       border-radius: 999px;
       font-size: .9rem;
       font-weight: 600;
       cursor: pointer;
       white-space: nowrap;
-      transition: transform .15s ease, box-shadow .15s ease;
+      transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease;
     }
 
     .back-btn:hover {
       transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(0,0,0,.09);
+      background: #22252a;
+      border-color: rgba(255,255,255,0.18);
+      box-shadow: 0 8px 22px rgba(0,0,0,.28);
+    }
+
+    :root[data-theme="light"] .topbar {
+      background: linear-gradient(to bottom, rgba(245,243,239,0.97) 60%, rgba(245,243,239,0));
+    }
+
+    :root[data-theme="light"] .back-btn,
+    :root[data-theme="light"] .img-wrap,
+    :root[data-theme="light"] .folder-card {
+      background: #ffffff;
+      color: #181512;
+      border-color: rgba(24,21,18,0.12);
+      box-shadow: 0 10px 28px rgba(24,21,18,0.10);
+    }
+
+    .theme-toggle {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 100;
+      min-height: 36px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(27,29,33,0.88);
+      color: #f5f5f5;
+      padding: 0 12px;
+      font: 800 0.74rem system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.18);
+      backdrop-filter: blur(14px);
+    }
+
+    :root[data-theme="light"] .theme-toggle {
+      background: rgba(255,255,255,0.88);
+      color: #181512;
+      border-color: rgba(24,21,18,0.13);
     }
 
     /* ─── MASONRY GRID (CSS columns) ─── */
@@ -77,15 +130,16 @@
       margin-bottom: 14px;
       border-radius: 6px;
       overflow: hidden;
-      background: #e4e4e4;
+      background: #181a1d;
       cursor: pointer;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      position: relative;
+      box-shadow: 0 10px 32px rgba(0,0,0,0.28);
       transition: transform .4s cubic-bezier(.22,1,.36,1), box-shadow .4s ease;
     }
 
     .img-wrap:hover {
       transform: translateY(-5px) scale(1.012);
-      box-shadow: 0 18px 52px rgba(0,0,0,0.15);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.42);
     }
 
     .img-wrap img {
@@ -100,6 +154,53 @@
       filter: saturate(1.08) brightness(1.02);
     }
 
+    /* ─── OVERLAY SOCIAL NAS FOTOS ─── */
+    .photo-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.06) 48%, transparent 70%);
+      display: flex;
+      align-items: flex-end;
+      padding: 10px 12px;
+      opacity: 0;
+      transition: opacity 0.35s ease;
+    }
+
+    .img-wrap:hover .photo-overlay { opacity: 1; }
+
+    .photo-overlay-btns { display: flex; gap: 6px; align-items: center; }
+
+    .photo-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      transition: background 0.2s ease, transform 0.2s ease;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .photo-btn:hover { background: rgba(255,255,255,0.32); transform: scale(1.12); }
+    .photo-heart:hover { background: rgba(220,50,50,0.45); }
+    .photo-heart.liked { background: rgba(220,50,50,0.75); }
+    .photo-heart.liked svg { fill: #fff; stroke: none; }
+
+    .like-count {
+      color: #fff;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .03em;
+      min-width: 16px;
+      display: none;
+    }
+
     /* ─── FOLDER CARDS ─── */
     .folder-card {
       break-inside: avoid;
@@ -107,17 +208,17 @@
       margin-bottom: 14px;
       border-radius: 6px;
       overflow: hidden;
-      background: #e4e4e4;
+      background: #181a1d;
       cursor: pointer;
       text-decoration: none;
-      color: #111;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      color: #f5f5f5;
+      box-shadow: 0 10px 32px rgba(0,0,0,0.28);
       transition: transform .4s cubic-bezier(.22,1,.36,1), box-shadow .4s ease;
     }
 
     .folder-card:hover {
       transform: translateY(-5px) scale(1.012);
-      box-shadow: 0 18px 52px rgba(0,0,0,0.15);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.42);
     }
 
     .folder-card img {
@@ -137,8 +238,9 @@
       padding: 11px 14px;
       font-weight: 600;
       font-size: .88rem;
-      background: #fff;
-      border-top: 1px solid rgba(0,0,0,0.06);
+      background: #181a1d;
+      color: #f5f5f5;
+      border-top: 1px solid rgba(255,255,255,0.07);
     }
 
     /* ─── FULLSCREEN SCROLL VIEWER ─── */
@@ -259,12 +361,13 @@
 
     /* The image itself animates in when its parent becomes visible */
     .lightbox-item img {
-      max-width: min(92vw, 1500px);
-      max-height: 84vh;
+      max-width: min(96vw, 1800px);
+      max-height: 92vh;
       width: auto;
       height: auto;
       display: block;
       border-radius: 8px;
+      object-fit: contain;
       box-shadow: 0 32px 90px rgba(0,0,0,0.55);
       /* Initial (hidden) state */
       opacity: 0;
@@ -333,6 +436,192 @@
       50%       { opacity: 0.9;  transform: translateY(4px);  }
     }
 
+    /* ─── SOCIAL SHARE BAR ─── */
+    .social-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      /* Rompe o padding do body para ir borda a borda */
+      margin: -14px -24px 32px;
+      padding: 11px 24px;
+      background: #0d0d0d;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .social-bar-label {
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.28);
+      margin-right: 6px;
+    }
+
+    .social-bar-divider {
+      width: 1px;
+      height: 14px;
+      background: rgba(255,255,255,0.10);
+      margin: 0 4px;
+    }
+
+    .social-bar-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.09);
+      background: transparent;
+      color: rgba(255,255,255,0.55);
+      text-decoration: none;
+      cursor: pointer;
+      transition: background .2s ease, border-color .2s ease, color .2s ease;
+    }
+
+    .social-bar-btn:hover { color: #fff; border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.07); }
+    .social-bar-btn svg { width: 17px; height: 17px; flex-shrink: 0; }
+
+    .social-bar-btn.whatsapp:hover  { color: #25d366; border-color: rgba(37,211,102,0.35); background: rgba(37,211,102,0.08); }
+    .social-bar-btn.instagram:hover { color: #e1306c; border-color: rgba(225,48,108,0.35); background: rgba(225,48,108,0.08); }
+    .social-bar-btn.pinterest:hover { color: #e60023; border-color: rgba(230,0,35,0.35);   background: rgba(230,0,35,0.08); }
+
+    /* ─── BOTÃO FLUTUANTE DE ORÇAMENTO ─── */
+    .quote-fab {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 13px 20px;
+      background: #161616;
+      color: #f5f5f5;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 3px;
+      font-size: .82rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 8px 36px rgba(0,0,0,0.55);
+      transition: background .2s, box-shadow .2s, transform .2s;
+    }
+    .quote-fab:hover {
+      background: #202020;
+      transform: translateY(-2px);
+      box-shadow: 0 14px 48px rgba(0,0,0,0.65);
+    }
+    .quote-fab svg { width: 18px; height: 18px; flex-shrink: 0; color: #25d366; }
+
+    /* ─── POPUP DE ORÇAMENTO ─── */
+    .quote-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 600;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 0 28px 96px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s ease;
+    }
+    .quote-overlay.open { opacity: 1; pointer-events: all; }
+
+    .quote-popup {
+      width: 320px;
+      background: #141414;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 4px;
+      overflow: hidden;
+      transform: translateY(16px);
+      transition: transform .28s cubic-bezier(.22,1,.36,1);
+      box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+    }
+    .quote-overlay.open .quote-popup { transform: none; }
+
+    .quote-popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: #0d0d0d;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .quote-popup-header span {
+      font-size: .8rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+    }
+    .quote-close {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.38);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+      transition: color .15s;
+    }
+    .quote-close:hover { color: #fff; }
+
+    .quote-popup-body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .quote-popup-msg {
+      font-size: .8rem;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.5;
+      margin-bottom: 2px;
+    }
+    .quote-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #1c1c1c;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 3px;
+      color: #f5f5f5;
+      font-size: .82rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s;
+      box-sizing: border-box;
+    }
+    .quote-input:focus { border-color: rgba(255,255,255,0.28); }
+    .quote-input::placeholder { color: rgba(255,255,255,0.22); }
+    textarea.quote-input { resize: none; height: 76px; }
+
+    .quote-submit {
+      width: 100%;
+      padding: 12px;
+      background: #1a1a1a;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 3px;
+      color: #f5f5f5;
+      font-size: .82rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background .2s;
+      margin-top: 2px;
+    }
+    .quote-submit:hover { background: #252525; }
+    .quote-submit svg { width: 16px; height: 16px; color: #25d366; }
+
     /* ─── RESPONSIVE ─── */
     @media (max-width: 1200px) {
       .grid { columns: 3; }
@@ -340,12 +629,19 @@
 
     @media (max-width: 800px) {
       body { padding: 16px; }
+      .social-bar { margin: -14px -16px 24px; }
+      .quote-fab { bottom: 18px; right: 18px; padding: 11px 16px; font-size: .76rem; }
+      .quote-overlay { padding: 0 18px 80px; }
+      .quote-popup { width: 290px; }
       .grid { columns: 2; column-gap: 10px; }
       .img-wrap, .folder-card { margin-bottom: 10px; }
       .lightbox-bg-inner { grid-template-columns: repeat(4, 1fr); }
       .lightbox-scroll { height: 100dvh; }
       .lightbox-item { height: 100dvh; padding: 60px 12px; }
-      .lightbox-item img { max-width: 96vw; max-height: 74dvh; }
+      .lightbox-item img {
+        max-width: 98vw;
+        max-height: 88dvh;
+      }
       .lightbox-close { top: 14px; right: 14px; width: 42px; height: 42px; font-size: 22px; }
       .lightbox-counter { top: 16px; left: 14px; font-size: .78rem; padding: 7px 12px; }
     }
@@ -356,7 +652,10 @@
 
     @media (orientation: landscape) and (max-height: 500px) {
       .lightbox-item { padding: 50px 60px; height: 100vh; }
-      .lightbox-item img { max-height: 82vh; max-width: 70vw; }
+      .lightbox-item img {
+        max-height: 90vh;
+        max-width: 88vw;
+      }
       .lightbox-bg-inner { grid-template-columns: repeat(8, 1fr); }
     }
   </style>
@@ -367,6 +666,48 @@
   <div class="topbar">
     <button class="back-btn" type="button" onclick="history.back()">← Voltar</button>
     <h1 id="title">Carregando...</h1>
+  </div>
+
+  <!-- Barra de compartilhamento -->
+  <div class="social-bar">
+    <span class="social-bar-label">Compartilhe</span>
+    <div class="social-bar-divider"></div>
+    <a id="whatsapp-btn" class="social-bar-btn whatsapp" href="#" target="_blank" rel="noopener noreferrer" title="Compartilhar no WhatsApp">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.86L.057 23.428a.75.75 0 0 0 .915.914l5.677-1.474A11.953 11.953 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.71 9.71 0 0 1-4.952-1.355l-.355-.211-3.67.952.975-3.566-.232-.368A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>
+    </a>
+    <a class="social-bar-btn instagram" href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" title="Instagram">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><circle cx="17.5" cy="6.5" r=".5" fill="currentColor" stroke="none"/></svg>
+    </a>
+    <a class="social-bar-btn pinterest" href="https://br.pinterest.com/marcelconde/" target="_blank" rel="noopener noreferrer" title="Pinterest">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>
+    </a>
+  </div>
+
+  <!-- Botão flutuante de orçamento -->
+  <button class="quote-fab" id="quote-fab" type="button">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.86L.057 23.428a.75.75 0 0 0 .915.914l5.677-1.474A11.953 11.953 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.71 9.71 0 0 1-4.952-1.355l-.355-.211-3.67.952.975-3.566-.232-.368A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>
+    Pedir Orçamento
+  </button>
+
+  <!-- Popup de orçamento -->
+  <div class="quote-overlay" id="quote-overlay">
+    <div class="quote-popup">
+      <div class="quote-popup-header">
+        <span>Solicitar Orçamento</span>
+        <button class="quote-close" id="quote-close" type="button">×</button>
+      </div>
+      <div class="quote-popup-body">
+        <p class="quote-popup-msg">Preencha os dados e te retorno com o orçamento pelo WhatsApp 😊</p>
+        <input class="quote-input" id="q-nome"      type="text"  placeholder="Nome *" required />
+        <input class="quote-input" id="q-telefone"  type="tel"   placeholder="Telefone / WhatsApp *" required />
+        <input class="quote-input" id="q-email"     type="email" placeholder="E-mail" />
+        <textarea class="quote-input" id="q-msg"    placeholder="Sobre o trabalho (evento, data, local...)"></textarea>
+        <button class="quote-submit" id="quote-submit" type="button">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.533 5.86L.057 23.428a.75.75 0 0 0 .915.914l5.677-1.474A11.953 11.953 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.75a9.71 9.71 0 0 1-4.952-1.355l-.355-.211-3.67.952.975-3.566-.232-.368A9.712 9.712 0 0 1 2.25 12C2.25 6.615 6.615 2.25 12 2.25S21.75 6.615 21.75 12 17.385 21.75 12 21.75z"/></svg>
+          Enviar via WhatsApp
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="grid" id="grid"></div>
@@ -392,10 +733,55 @@
   <script>
     const titleEl  = document.getElementById("title");
     const gridEl   = document.getElementById("grid");
-    const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
+    const WORKER_BASE = "https://api.marcelconde.com.br";
 
-    const params = new URLSearchParams(location.search);
-    const slug   = params.get("slug");
+    const params      = new URLSearchParams(location.search);
+    const slug        = params.get("slug");
+    // adminToken é opaco para o front-end — o Worker valida contra a secret criptografada
+    const adminToken  = params.get("admin") || "";
+
+    // Monta o link de compartilhamento do WhatsApp com a URL limpa do álbum (sem ?admin=)
+    const shareUrl = new URL(location.href);
+    shareUrl.searchParams.delete("admin");
+    const whatsappBtn = document.getElementById("whatsapp-btn");
+    if (whatsappBtn) {
+      whatsappBtn.href = `https://wa.me/?text=${encodeURIComponent("Veja esse álbum de fotos! " + shareUrl.toString())}`;
+    }
+
+    // ─── Popup de orçamento ───
+    const quoteFab     = document.getElementById("quote-fab");
+    const quoteOverlay = document.getElementById("quote-overlay");
+    const quoteClose   = document.getElementById("quote-close");
+    const quoteSubmit  = document.getElementById("quote-submit");
+
+    quoteFab.addEventListener("click", () => quoteOverlay.classList.add("open"));
+    quoteClose.addEventListener("click", () => quoteOverlay.classList.remove("open"));
+    quoteOverlay.addEventListener("click", (e) => {
+      if (e.target === quoteOverlay) quoteOverlay.classList.remove("open");
+    });
+
+    quoteSubmit.addEventListener("click", () => {
+      const nome     = document.getElementById("q-nome").value.trim();
+      const telefone = document.getElementById("q-telefone").value.trim();
+      const email    = document.getElementById("q-email").value.trim();
+      const msg      = document.getElementById("q-msg").value.trim();
+
+      if (!nome || !telefone) {
+        document.getElementById("q-nome").style.borderColor     = nome     ? "" : "rgba(220,50,50,0.6)";
+        document.getElementById("q-telefone").style.borderColor = telefone ? "" : "rgba(220,50,50,0.6)";
+        return;
+      }
+
+      const albumAtual = document.getElementById("title").textContent || "portfólio";
+      let texto = `Olá Marcel! Vi o álbum "${albumAtual}" e gostaria de um orçamento.\n\n`;
+      texto += `Nome: ${nome}\n`;
+      texto += `Telefone: ${telefone}\n`;
+      if (email)    texto += `E-mail: ${email}\n`;
+      if (msg)      texto += `\nDetalhes: ${msg}`;
+
+      window.open(`https://wa.me/5581984094212?text=${encodeURIComponent(texto)}`, "_blank", "noopener,noreferrer");
+      quoteOverlay.classList.remove("open");
+    });
 
     if (!slug) {
       titleEl.textContent = "Álbum não informado (?slug=nome-do-album)";
@@ -585,8 +971,8 @@
       // 1) Check if this path has sub-folders
       try {
         const foldersRes = await fetch(
-          `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}`,
-          {}
+          `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}&refresh=1`,
+          { cache: "no-store" }
         );
 
         if (foldersRes.ok) {
@@ -604,8 +990,8 @@
               let thumb = null;
               try {
                 const albumRes = await fetch(
-                  `${WORKER_BASE}/album?path=${encodeURIComponent(folderPath)}`,
-                  {}
+                  `${WORKER_BASE}/album?path=${encodeURIComponent(folderPath)}&refresh=1`,
+                  { cache: "no-store" }
                 );
                 if (albumRes.ok) {
                   const albumData = await albumRes.json();
@@ -641,8 +1027,8 @@
 
       // 2) No sub-folders — load as photo album
       const res = await fetch(
-        `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}`,
-        {}
+        `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}&refresh=1`,
+        { cache: "no-store" }
       );
       if (!res.ok) throw new Error(`Worker /album ${res.status}`);
 
@@ -651,12 +1037,13 @@
       const slugTitle = slugDecoded.split("/").filter(Boolean).pop() || slugDecoded;
       titleEl.textContent = data.title || slugTitle;
 
-      const images = (data.images || [])
-        .map(i => (typeof i === "object" ? i.url : i))
-        .filter(Boolean);
+      const imageItems = (data.images || [])
+        .map(i => (typeof i === "object" ? i : { url: i }))
+        .filter(i => i && i.url);
 
-      const list  = images.length ? images : [data.thumbnail].filter(Boolean);
-      currentList = list;
+      const fallbackItems = data.thumbnail ? [{ url: data.thumbnail, public_id: "", display_name: "" }] : [];
+      const list  = imageItems.length ? imageItems : fallbackItems;
+      currentList = list.map(item => item.url);
 
       gridEl.innerHTML = "";
 
@@ -665,20 +1052,101 @@
         return;
       }
 
-      list.forEach((src, index) => {
+      list.forEach((item, index) => {
+        const src = item.url;
+        const publicId = item.public_id || "";
         const wrap = document.createElement("div");
         wrap.className = "img-wrap";
 
-        const img       = document.createElement("img");
-        img.src         = cloudUrl(src, 'f_auto,q_auto,w_900');
-        img.loading     = index < 4 ? "eager" : "lazy";
-        img.decoding    = "async";
-        img.alt         = `${slugTitle} ${index + 1}`;
+        const img    = document.createElement("img");
+        img.src      = cloudUrl(src, 'f_auto,q_auto,w_900');
+        img.loading  = index < 4 ? "eager" : "lazy";
+        img.decoding = "async";
+        img.alt      = `${slugTitle} ${index + 1}`;
+
+        // Overlay com botões sociais
+        const overlay = document.createElement("div");
+        overlay.className = "photo-overlay";
+        overlay.innerHTML = `
+          <div class="photo-overlay-btns">
+            <button class="photo-btn photo-social" data-url="https://www.instagram.com/mconde.foto/" aria-label="Instagram">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><circle cx="17.5" cy="6.5" r=".5" fill="currentColor"/></svg>
+            </button>
+            <button class="photo-btn photo-social" data-url="https://br.pinterest.com/marcelconde/" aria-label="Pinterest">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>
+            </button>
+            <button class="photo-btn photo-heart" aria-label="Curtir">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            </button>
+            <span class="like-count" id="lc-${index}"></span>
+          </div>`;
+
+        const likedKey = `liked:${slugDecoded}:${publicId || index}`;
+        const alreadyLiked = localStorage.getItem(likedKey) === '1';
+        const heartBtn = overlay.querySelector(".photo-heart");
+        const countEl  = overlay.querySelector(".like-count");
+        if (alreadyLiked) heartBtn.classList.add("liked");
+
+        overlay.querySelectorAll(".photo-social").forEach(btn => {
+          btn.addEventListener("click", e => {
+            e.stopPropagation();
+            window.open(btn.dataset.url, "_blank", "noopener,noreferrer");
+          });
+        });
+
+        heartBtn.addEventListener("click", async e => {
+          e.stopPropagation();
+          if (localStorage.getItem(likedKey) === '1') {
+            // Já curtiu: só alterna visual, não decrementa backend
+            heartBtn.classList.toggle("liked");
+            return;
+          }
+          // Primeira curtida: salva localmente e manda pro servidor
+          heartBtn.classList.add("liked");
+          localStorage.setItem(likedKey, '1');
+          try {
+            const headers = { 'content-type': 'application/json' };
+            if (adminToken) headers['X-Admin-Token'] = adminToken;
+            const r = await fetch(`${WORKER_BASE}/like`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ album: slugDecoded, albumName: titleEl.textContent, index, publicId })
+            });
+            if (r.ok) {
+              const { likes, isAdmin: adminConfirmed } = await r.json();
+              // Só exibe contagem se o Worker confirmou que o token é válido
+              if (adminConfirmed && countEl && likes > 0) { countEl.textContent = likes; countEl.style.display = 'inline'; }
+            }
+          } catch {}
+        });
 
         wrap.addEventListener("click", () => openLightboxAt(index));
         wrap.appendChild(img);
+        wrap.appendChild(overlay);
         gridEl.appendChild(wrap);
       });
+
+      // Busca curtidas — token enviado via header; Worker decide se é admin válido
+      if (adminToken) {
+        fetch(`${WORKER_BASE}/likes?album=${encodeURIComponent(slugDecoded)}`, {
+          headers: { 'X-Admin-Token': adminToken }
+        })
+          .then(r => r.ok ? r.json() : {})
+          .then(({ _authorized, _byAsset = {}, ...counts }) => {
+            if (!_authorized) return; // token inválido — Worker rejeitou
+            list.forEach((item, idx) => {
+              const count = Math.max(
+                Number(item.public_id ? _byAsset[item.public_id] || 0 : 0),
+                Number(counts[String(idx)] || 0)
+              );
+              if (count > 0) {
+                const el = document.getElementById(`lc-${idx}`);
+                if (el) { el.textContent = count; el.style.display = 'inline'; }
+              }
+            });
+          })
+          .catch(() => {});
+      }
     }
 
     load().catch(err => {
@@ -686,7 +1154,9 @@
       titleEl.textContent = "Erro ao carregar o álbum";
     });
   </script>
+  <script src="/theme.js?v=20260706-01"></script>
 
 </body>
 
 </html>
+`

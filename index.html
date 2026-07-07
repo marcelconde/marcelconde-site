@@ -11,6 +11,7 @@
   <meta name="geo.region" content="BR-PE">
   <meta name="geo.placename" content="Recife">
   <link rel="canonical" href="https://marcelconde.com.br/">
+
   <!-- Open Graph / redes sociais -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://marcelconde.com.br/">
@@ -25,15 +26,22 @@
   <meta name="twitter:title" content="Marcel Conde — Fotógrafo Profissional em Recife-PE">
   <meta name="twitter:description" content="Especialista em casamentos, aniversários, eventos corporativos, pré-wedding e drone em Recife.">
   <meta name="twitter:image" content="https://marcelconde.com.br/images/og-image.jpg">
+
   <!-- Performance hints -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://res.cloudinary.com" crossorigin>
   <link rel="dns-prefetch" href="//res.cloudinary.com">
-  <link rel="preconnect" href="https://cloudinary.marcel-conde.workers.dev" crossorigin>
-  <link rel="dns-prefetch" href="//cloudinary.marcel-conde.workers.dev">
+  <link rel="preconnect" href="https://api.marcelconde.com.br" crossorigin>
+  <link rel="dns-prefetch" href="//api.marcelconde.com.br">
   <link rel="preconnect" href="https://www.googletagmanager.com" crossorigin>
   <link rel="dns-prefetch" href="//www.googletagmanager.com">
   <link rel="icon" href="/images/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/images/favicon.png">
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
   <!-- Schema.org structured data -->
   <script type="application/ld+json">
   {
@@ -58,7 +66,8 @@
       "longitude": -34.877
     },
     "sameAs": [
-      "https://www.instagram.com/mconde.foto/"
+      "https://www.instagram.com/mconde.foto/",
+      "https://br.pinterest.com/marcelconde/"
     ],
     "hasOfferCatalog": {
       "@type": "OfferCatalog",
@@ -74,6 +83,7 @@
     }
   }
   </script>
+
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY"></script>
   <script>
@@ -84,183 +94,290 @@
   </script>
 
   <style>
-    * {
+    /* =============================================
+       RESET & CUSTOM PROPERTIES
+       ============================================= */
+    *, *::before, *::after {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
     :root {
-      --primary: #000;
-      --secondary: #fff;
-      --accent: #d4a574;
-      --accent-dark: #b08d5e;
-      --accent-light: #e8c9a0;
+      --bg:          #080808;
+      --bg2:         #0d0c0b;
+      --bg3:         #141210;
+      --ink:         #f0ece3;
+      --ink-dim:     rgba(240, 236, 227, 0.42);
+      --ink-faint:   rgba(240, 236, 227, 0.09);
+      --gold:        #b8956a;
+      --gold-light:  #d4b48a;
+      --serif:       'Cormorant Garamond', Georgia, serif;
+      --sans:        'Inter', system-ui, sans-serif;
+      --ease:        cubic-bezier(.22, 1, .36, 1);
+    }
+
+    :root[data-theme="light"] {
+      --bg:          #f5f3ef;
+      --bg2:         #ede8df;
+      --bg3:         #ffffff;
+      --ink:         #181512;
+      --ink-dim:     rgba(24, 21, 18, 0.56);
+      --ink-faint:   rgba(24, 21, 18, 0.12);
+      --gold:        #a98255;
+      --gold-light:  #c59d6a;
+    }
+
+    html {
+      scroll-behavior: smooth;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      color: var(--primary);
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
       overflow-x: hidden;
-      background: var(--secondary);
+      cursor: none;
     }
 
-    /* NUVENS NO FUNDO - NÃO INTERFERE NO CONTEÚDO */
-    .clouds-background {
+    :root[data-theme="light"] body {
+      background: var(--bg);
+    }
+
+    /* =============================================
+       CUSTOM CURSOR
+       ============================================= */
+    .cursor {
+      position: fixed;
+      width: 8px;
+      height: 8px;
+      background: var(--gold);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9999;
+      transform: translate(-50%, -50%);
+      transition: transform 0.1s var(--ease);
+    }
+
+    .cursor-ring {
+      position: fixed;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--gold);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 9998;
+      transform: translate(-50%, -50%);
+      transition: left 0.08s var(--ease), top 0.08s var(--ease);
+    }
+
+    @media (pointer: coarse) {
+      .cursor, .cursor-ring { display: none; }
+      body { cursor: auto; }
+    }
+
+    /* =============================================
+       KEYFRAMES
+       ============================================= */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(32px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes marqueeScroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    @keyframes scrollLine {
+      0%   { transform: scaleY(0); transform-origin: top; opacity: 1; }
+      50%  { transform: scaleY(1); transform-origin: top; opacity: 1; }
+      51%  { transform: scaleY(1); transform-origin: bottom; }
+      100% { transform: scaleY(0); transform-origin: bottom; opacity: 0; }
+    }
+
+    @keyframes revealIn {
+      from { opacity: 0; transform: translateY(40px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* =============================================
+       REVEAL ANIMATION (IntersectionObserver)
+       ============================================= */
+    .reveal {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.9s var(--ease), transform 0.9s var(--ease);
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
+    .reveal-delay-4 { transition-delay: 0.4s; }
+    .reveal-delay-5 { transition-delay: 0.5s; }
+
+    /* =============================================
+       NAVIGATION
+       ============================================= */
+    nav {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 0;
-      overflow: hidden;
-    }
-
-    .cloud-bg {
-      position: absolute;
-      background: radial-gradient(ellipse at center, rgba(212, 165, 116, 0.08) 0%, transparent 70%);
-      border-radius: 50%;
-      filter: blur(80px);
-      opacity: 0;
-      animation: cloudFloat 20s ease-in-out infinite;
-      will-change: transform, opacity;
-    }
-
-    .cloud-bg:nth-child(1) {
-      width: 600px;
-      height: 600px;
-      top: -300px;
-      left: -200px;
-      animation-delay: 0s;
-    }
-
-    .cloud-bg:nth-child(2) {
-      width: 500px;
-      height: 500px;
-      top: 20%;
-      right: -150px;
-      animation-delay: 2s;
-    }
-
-    .cloud-bg:nth-child(3) {
-      width: 700px;
-      height: 700px;
-      bottom: -200px;
-      left: 10%;
-      animation-delay: 4s;
-    }
-
-    .cloud-bg:nth-child(4) {
-      width: 550px;
-      height: 550px;
-      top: 40%;
-      right: 10%;
-      animation-delay: 6s;
-    }
-
-    @keyframes cloudFloat {
-      0%, 100% {
-        transform: translate(0, 0) scale(1);
-        opacity: 0;
-      }
-      10% { opacity: 1; }
-      50% {
-        transform: translate(50px, 30px) scale(1.1);
-        opacity: 0.8;
-      }
-      90% { opacity: 1; }
-    }
-
-    /* Menu Fixo */
-    nav {
-      position: fixed;
-      top: 0;
-      width: 100%;
       z-index: 1600;
-      padding: 2rem 5%;
+      padding: 2.2rem 8%;
       display: flex;
       justify-content: space-between;
       align-items: center;
       background: transparent;
-      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease, background 0.4s ease, padding 0.4s ease, box-shadow 0.4s ease;
-      opacity: 1;
-    }
-
-    /* Quando quiser forçar fade via classe */
-    nav.nav-faded {
-      opacity: 0.15;
-      pointer-events: none;
+      transition: background 0.4s var(--ease),
+                  padding 0.4s var(--ease),
+                  border-color 0.4s var(--ease),
+                  transform 0.35s var(--ease),
+                  opacity 0.35s ease;
+      border-bottom: 1px solid transparent;
     }
 
     nav.scrolled {
-      background: rgba(255, 255, 255, 0.98);
-      backdrop-filter: blur(30px) saturate(180%);
-      padding: 1.2rem 5%;
-      box-shadow: 0 4px 40px rgba(0, 0, 0, 0.08);
+      background: rgba(8, 8, 8, 0.96);
+      border-bottom-color: var(--ink-faint);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 1.4rem 8%;
     }
 
-    .logo-container {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      opacity: 0;
-      animation: fadeInDown 1s ease forwards;
-    }
-
-    .logo-img {
-      height: 60px;
-      width: auto;
-      object-fit: contain;
-      transition: transform 0.4s ease, filter 0.4s ease;
-      filter: brightness(0) invert(1);
-    }
-
-    nav.scrolled .logo-img {
-      filter: brightness(1) invert(0);
-    }
-
-    .logo-img:hover {
-      transform: scale(1.05);
-    }
-
-    .menu {
-      display: flex;
-      gap: 3rem;
-      list-style: none;
-    }
-
-    /* === HAMBURGER (mobile) === */
-    .nav-toggle {
-      display: none;
-      border: 0;
-      background: transparent;
-      color: var(--secondary);
-      font-size: 1.7rem;
-      line-height: 1;
-      padding: 0.4rem 0.6rem;
-      cursor: pointer;
-    }
-
-    nav.scrolled .nav-toggle {
-      color: var(--primary);
-    }
-
-    /* Estado aberto */
     nav.menu-open {
       opacity: 1 !important;
       pointer-events: auto !important;
-      visibility: visible !important;
-      z-index: 1600;
     }
 
-    /* Overlay do menu no mobile */
+    /* Logo */
+    .nav-logo {
+      font-family: var(--serif);
+      font-size: 1.35rem;
+      font-weight: 400;
+      letter-spacing: .04em;
+      color: var(--ink);
+      text-decoration: none;
+      opacity: 0;
+      animation: fadeInDown 0.8s var(--ease) 0.2s forwards;
+    }
+
+    .nav-logo .dot {
+      color: var(--gold);
+    }
+
+    /* Nav links */
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2.8rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      font-family: var(--sans);
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      text-decoration: none;
+      transition: color 0.25s ease;
+      opacity: 0;
+      animation: fadeInDown 0.8s var(--ease) forwards;
+    }
+
+    .nav-links li:nth-child(1) a { animation-delay: 0.25s; }
+    .nav-links li:nth-child(2) a { animation-delay: 0.32s; }
+    .nav-links li:nth-child(3) a { animation-delay: 0.39s; }
+    .nav-links li:nth-child(4) a { animation-delay: 0.46s; }
+    .nav-links li:nth-child(5) a { animation-delay: 0.53s; }
+
+    .nav-links a:hover {
+      color: var(--ink);
+    }
+
+    .nav-links .nav-find {
+      color: var(--gold);
+    }
+
+    .nav-links .nav-find:hover {
+      color: var(--gold-light);
+    }
+
+    /* Reservar button */
+    .nav-cta {
+      font-family: var(--sans);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      background: var(--gold);
+      color: var(--bg);
+      text-decoration: none;
+      padding: 0.65rem 1.5rem;
+      border-radius: 0;
+      transition: background 0.25s ease;
+      opacity: 0;
+      animation: fadeInDown 0.8s var(--ease) 0.6s forwards;
+    }
+
+    .nav-cta:hover {
+      background: var(--gold-light);
+    }
+
+    /* Hamburger */
+    .nav-toggle {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      padding: 0.4rem;
+    }
+
+    .nav-toggle span {
+      display: block;
+      width: 26px;
+      height: 1px;
+      background: var(--ink);
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    nav.menu-open .nav-toggle span:nth-child(1) {
+      transform: translateY(6px) rotate(45deg);
+    }
+    nav.menu-open .nav-toggle span:nth-child(2) {
+      opacity: 0;
+    }
+    nav.menu-open .nav-toggle span:nth-child(3) {
+      transform: translateY(-6px) rotate(-45deg);
+    }
+
+    /* Menu overlay */
     .menu-overlay {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.55);
-      z-index: 1500; /* stays below nav (nav is 1600) */
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 1500;
       opacity: 0;
       transition: opacity 0.25s ease;
     }
@@ -270,597 +387,989 @@
       opacity: 1;
     }
 
-    .menu a {
-      color: var(--secondary);
-      text-decoration: none;
-      font-size: 0.9rem;
-      font-weight: 600;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      position: relative;
-      transition: all 0.3s ease;
-      opacity: 0;
-      animation: fadeInDown 1s ease forwards;
-    }
-
-    nav.scrolled .menu a {
-      color: var(--primary);
-    }
-
-    .menu li:nth-child(1) a { animation-delay: 0.1s; }
-    .menu li:nth-child(2) a { animation-delay: 0.2s; }
-    .menu li:nth-child(3) a { animation-delay: 0.3s; }
-    .menu li:nth-child(4) a { animation-delay: 0.4s; }
-    .menu li:nth-child(5) a { animation-delay: 0.5s; }
-
-    .menu a::after {
-      content: '';
-      position: absolute;
-      bottom: -8px;
-      left: 0;
-      width: 100%;
-      height: 3px;
-      background: var(--accent);
-      transform: scaleX(0);
-      transform-origin: left;
-      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .menu a:hover {
-      color: var(--accent);
-      transform: translateY(-2px);
-    }
-
-    .menu a:hover::after {
-      transform: scaleX(1);
-    }
-
-    /* Hero Section */
+    /* =============================================
+       HERO
+       ============================================= */
     .hero {
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       position: relative;
+      height: 100vh;
+      min-height: 600px;
+      display: grid;
+      grid-template-rows: 1fr auto;
       overflow: hidden;
-      background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #000 100%);
+      background: var(--bg);
     }
 
-    /* === Partículas reais (movimento aleatório por partícula) === */
-    .hero-particles {
+    /* Grain texture */
+    .hero::before {
+      content: '';
       position: absolute;
       inset: 0;
       z-index: 1;
       pointer-events: none;
-      overflow: hidden;
-      opacity: 0.55;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+      opacity: .035;
+      mix-blend-mode: overlay;
     }
 
-    .hero-particles span {
+    /* Atmospheric glow */
+    .hero::after {
+      content: '';
       position: absolute;
-      left: var(--x);
-      top: var(--y);
-      width: var(--size);
-      height: var(--size);
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.95);
-      opacity: var(--alpha);
-      transform: translate3d(0, 0, 0);
-      filter: blur(0.2px);
-      animation: floatParticle var(--dur) linear infinite;
-      animation-delay: var(--delay);
-      will-change: transform;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse 80% 60% at 30% 60%, rgba(184, 149, 106, 0.06) 0%, transparent 70%);
     }
 
-    @keyframes floatParticle {
-      0% {
-        transform: translate3d(0, 0, 0);
-      }
-      100% {
-        transform: translate3d(var(--dx), var(--dy), 0);
-      }
-    }
-
-    @media (max-width: 768px) {
-      .hero-particles {
-        opacity: 0.45;
-      }
-    }
-
-    .hero-content {
-      text-align: center;
-      z-index: 2;
-      color: var(--secondary);
-      max-width: 1200px;
-      padding: 2rem;
+    .hero-inner {
+      grid-row: 1;
       position: relative;
+      z-index: 2;
+      padding: 0 8%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      max-width: 64vw; /* texto não invade a foto completamente */
     }
 
-    .hero h1 {
-      font-size: clamp(3.5rem, 10vw, 9rem);
-      font-weight: 900;
-      letter-spacing: -4px;
-      line-height: 0.9;
+    /* ─── HERO PHOTO REEL ─── */
+    .hero-photo-reel {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    /* gradiente suave: escuro à esquerda, foto aparece à direita */
+    .hero-photo-reel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to right,
+        var(--bg)            0%,
+        var(--bg)            28%,
+        rgba(8,8,8,0.88)     42%,
+        rgba(8,8,8,0.55)     56%,
+        rgba(8,8,8,0.18)     72%,
+        transparent          100%
+      );
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    /* gradiente topo + base */
+    .hero-photo-reel::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(to bottom, var(--bg) 0%, transparent 16%),
+        linear-gradient(to top,    rgba(8,8,8,0.80) 0%, transparent 28%);
+      z-index: 3;
+      pointer-events: none;
+    }
+
+    .hero-reel-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 72% center;
+      opacity: 0;
+      transition: opacity 1.6s ease;
+      filter: brightness(0.82) saturate(0.88);
+    }
+
+    .hero-reel-img.active {
+      opacity: 1;
+    }
+
+    .hero-eyebrow {
+      font-family: var(--sans);
+      font-size: 0.65rem;
+      font-weight: 500;
+      letter-spacing: .3em;
+      text-transform: uppercase;
+      color: var(--gold);
       margin-bottom: 2rem;
       opacity: 0;
-      transform: translateY(60px) scale(0.9);
-      animation: heroReveal 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards 0.5s;
-      text-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      animation: fadeUp 0.9s var(--ease) 0.4s forwards;
     }
 
-    @keyframes heroReveal {
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-
-    .hero-subtitle {
-      font-size: clamp(1.2rem, 2.5vw, 2rem);
-      font-weight: 300;
-      letter-spacing: 10px;
-      text-transform: uppercase;
+    .hero-name {
+      font-family: var(--serif);
+      font-size: clamp(72px, 12vw, 160px);
+      font-weight: 700;
+      line-height: .92;
+      color: var(--ink);
+      letter-spacing: 0;
       opacity: 0;
-      transform: translateY(30px);
-      animation: fadeInUp 1s ease forwards 0.9s;
-      color: var(--accent-light);
-      text-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      animation: fadeUp 1s var(--ease) 0.6s forwards;
     }
 
-    .hero-cta {
-      margin-top: 3rem;
-      opacity: 0;
-      animation: fadeInUp 1s ease forwards 1.2s;
-    }
-
-    .scroll-indicator {
-      position: absolute;
-      bottom: 5%;
-      left: 50%;
-      transform: translateX(-50%);
-      opacity: 0;
-      animation: fadeIn 1s ease forwards 1.8s, bounce 2s ease infinite 2.5s;
-    }
-
-    .scroll-indicator::before {
-      content: '';
-      width: 2px;
-      height: 70px;
-      background: linear-gradient(to bottom, transparent, var(--accent));
+    .hero-divider {
       display: block;
-      margin: 0 auto 10px;
+      width: 80px;
+      height: 1px;
+      background: var(--gold);
+      margin: 2.5rem 0;
+      opacity: 0;
+      animation: fadeUp 0.8s var(--ease) 0.85s forwards;
     }
 
-    .scroll-indicator span {
-      color: var(--secondary);
-      font-size: 0.7rem;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      opacity: 0.7;
+    .hero-tagline {
+      font-family: var(--sans);
+      font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+      font-weight: 300;
+      color: var(--ink-dim);
+      max-width: 440px;
+      line-height: 1.7;
+      opacity: 0;
+      animation: fadeUp 0.8s var(--ease) 1s forwards;
     }
 
-    @keyframes bounce {
-      0%, 100% { transform: translateX(-50%) translateY(0); }
-      50% { transform: translateX(-50%) translateY(-15px); }
-    }
-
-    /* Seções */
-    .section {
-      min-height: 100vh;
+    .hero-actions {
       display: flex;
       align-items: center;
-      padding: 10rem 5%;
+      gap: 2.5rem;
+      margin-top: 2.8rem;
+      opacity: 0;
+      animation: fadeUp 0.8s var(--ease) 1.15s forwards;
+    }
+
+    /* Primary CTA */
+    .btn-primary {
+      font-family: var(--sans);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      background: var(--gold);
+      color: var(--bg);
+      text-decoration: none;
+      padding: 1rem 2.2rem;
+      border-radius: 0;
+      border: none;
+      cursor: pointer;
+      display: inline-block;
+      transition: background 0.25s ease;
+    }
+
+    .btn-primary:hover {
+      background: var(--gold-light);
+    }
+
+    /* Ghost CTA */
+    .btn-ghost {
+      font-family: var(--sans);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      text-decoration: none;
       position: relative;
-      z-index: 1;
+      transition: color 0.25s ease;
     }
 
-    .section-dark { background: var(--primary); color: var(--secondary); }
-    .section-light { background: var(--secondary); color: var(--primary); }
-    .section-accent {
-      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
-      color: var(--primary);
+    .btn-ghost::after {
+      content: '';
+      position: absolute;
+      bottom: -3px;
+      left: 0;
+      width: 0;
+      height: 1px;
+      background: var(--gold);
+      transition: width 0.35s var(--ease);
     }
 
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
+    .btn-ghost:hover {
+      color: var(--ink);
+    }
+
+    .btn-ghost:hover::after {
       width: 100%;
     }
 
-    .split-section {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6rem;
+    /* Scroll indicator */
+    .hero-scroll {
+      position: absolute;
+      right: 3.5%;
+      bottom: 12%;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
       align-items: center;
-    }
-
-    /* === ANIMAÇÕES DE ENTRADA (agora pega h2, p, h3 e links dentro do .text-content) === */
-    .text-content h2 {
-      font-size: clamp(3rem, 6vw, 6rem);
-      font-weight: 900;
-      letter-spacing: -3px;
-      line-height: 0.95;
-      margin-bottom: 2.5rem;
+      gap: 0.8rem;
       opacity: 0;
-      transform: translateX(-100px);
-      transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: fadeIn 1s ease 1.5s forwards;
     }
 
-    .text-content p {
-      font-size: 1.3rem;
-      line-height: 1.9;
+    .hero-scroll-text {
+      font-family: var(--sans);
+      font-size: 0.58rem;
+      font-weight: 500;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      writing-mode: vertical-rl;
+    }
+
+    .hero-scroll-line {
+      width: 1px;
+      height: 60px;
+      background: var(--ink-faint);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .hero-scroll-line::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--gold);
+      animation: scrollLine 2.4s ease-in-out infinite;
+    }
+
+    /* Hero Marquee */
+    .hero-marquee {
+      grid-row: 2;
+      position: relative;
+      z-index: 4; /* acima da foto */
+      overflow: hidden;
+      border-top: 1px solid rgba(240,236,227,0.12);
+      padding: 0.9rem 0;
+      background: rgba(8,8,8,0.55);
+      backdrop-filter: blur(4px);
+    }
+
+    .marquee-track {
+      display: flex;
+      white-space: nowrap;
+      animation: marqueeScroll 22s linear infinite;
+    }
+
+    .marquee-track span {
+      font-family: var(--sans);
+      font-size: 0.6rem;
+      font-weight: 500;
+      letter-spacing: .25em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      padding-right: 0;
+    }
+
+    /* =============================================
+       SECTION LAYOUT
+       ============================================= */
+    .section-number {
+      font-family: var(--serif);
+      font-size: clamp(4rem, 8vw, 8rem);
+      font-weight: 300;
+      color: var(--ink-faint);
+      line-height: 1;
+      user-select: none;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 1.2rem;
+      margin-bottom: 5rem;
+    }
+
+    .section-title {
+      font-family: var(--serif);
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.1;
+    }
+
+    /* =============================================
+       MANIFESTO
+       ============================================= */
+    .manifesto {
+      padding: 10rem 8%;
+      border-bottom: 1px solid var(--ink-faint);
+    }
+
+    .manifesto-grid {
+      display: grid;
+      grid-template-columns: 180px 1fr 340px;
+      gap: 4rem;
+      align-items: center;
+      max-width: 1300px;
+    }
+
+    .manifesto-photo {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .manifesto-photo img {
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      object-fit: cover;
+      object-position: center top;
+      display: block;
+      filter: grayscale(18%) brightness(0.92);
+      transition: filter 0.5s ease;
+    }
+
+    .manifesto-photo img:hover {
+      filter: grayscale(0%) brightness(1);
+    }
+
+    .manifesto-photo::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 1px solid rgba(184,149,106,0.25);
+      pointer-events: none;
+    }
+
+    .manifesto-label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      padding-top: 0.6rem;
+    }
+
+    .manifesto-label-dash {
+      display: block;
+      width: 24px;
+      height: 1px;
+      background: var(--gold);
+      margin-bottom: 0.5rem;
+    }
+
+    .manifesto-label-text {
+      font-family: var(--sans);
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    .manifesto-text {
+      font-family: var(--serif);
+      font-size: clamp(1.5rem, 2.5vw, 2.2rem);
+      font-weight: 300;
+      font-style: italic;
+      color: var(--ink);
+      line-height: 1.6;
+    }
+
+    /* =============================================
+       SERVICES
+       ============================================= */
+    .services {
+      padding: 8rem 8%;
+    }
+
+    .services-list {
+      list-style: none;
+    }
+
+    .service-row {
+      display: grid;
+      grid-template-columns: 60px 1fr auto;
+      align-items: center;
+      gap: 2rem;
+      padding: 2rem 0;
+      border-bottom: 1px solid var(--ink-faint);
+      transition: background 0.25s ease, padding-left 0.25s ease;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .service-row:first-child {
+      border-top: 1px solid var(--ink-faint);
+    }
+
+    .service-row:hover {
+      background: rgba(240, 236, 227, 0.02);
+      padding-left: 1rem;
+    }
+
+    .service-index {
+      font-family: var(--sans);
+      font-size: 0.62rem;
+      font-weight: 500;
+      letter-spacing: .15em;
+      color: var(--gold);
+    }
+
+    .service-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .service-name {
+      font-family: var(--serif);
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.1;
+    }
+
+    .service-desc {
+      font-family: var(--sans);
+      font-size: 0.8rem;
+      font-weight: 300;
+      color: var(--ink-dim);
+      line-height: 1.6;
+    }
+
+    .service-arrow {
+      font-size: 1.2rem;
+      color: var(--gold);
       opacity: 0;
-      transform: translateX(-100px);
-      transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
-      margin-bottom: 1.5rem;
+      transition: opacity 0.25s ease, transform 0.25s var(--ease);
     }
 
-    .text-content h3,
-    .text-content a {
-      opacity: 0;
-      transform: translateX(-100px);
-      transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1) 0.3s;
-    }
-
-    .text-content h3 {
-      font-size: clamp(1.5rem, 3vw, 2.5rem);
-      font-weight: 700;
-      margin-bottom: 1.5rem;
-      color: var(--accent);
-    }
-
-    .text-content.visible h2,
-    .text-content.visible p,
-    .text-content.visible h3,
-    .text-content.visible a {
+    .service-row:hover .service-arrow {
       opacity: 1;
-      transform: translateX(0);
+      transform: translateX(4px);
     }
 
-    /* Instagram Feed */
+    /* =============================================
+       PORTFOLIO
+       ============================================= */
+    .portfolio {
+      padding: 8rem 8%;
+    }
+
+    .portfolio-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+
+    .portfolio-subtitle {
+      font-family: var(--sans);
+      font-size: 0.7rem;
+      font-weight: 400;
+      letter-spacing: .1em;
+      color: var(--ink-dim);
+      padding-bottom: 0.3rem;
+    }
+
     .instagram-feed {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 2rem;
-      margin-top: 4rem;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 3px;
+      margin-top: 1.5rem;
     }
 
     .insta-post {
       position: relative;
       aspect-ratio: 1;
       overflow: hidden;
-      border-radius: 8px;
       cursor: pointer;
-      opacity: 0;
-      transform: scale(0.8) translateY(50px) rotateX(10deg);
-      transition: all 0.9s cubic-bezier(0.4, 0, 0.2, 1);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
     }
-
-    .insta-post.visible {
-      opacity: 1;
-      transform: scale(1) translateY(0) rotateX(0);
-    }
-
-    .insta-post:nth-child(1) { transition-delay: 0s; }
-    .insta-post:nth-child(2) { transition-delay: 0.15s; }
-    .insta-post:nth-child(3) { transition-delay: 0.3s; }
-    .insta-post:nth-child(4) { transition-delay: 0.45s; }
-    .insta-post:nth-child(5) { transition-delay: 0.6s; }
-    .insta-post:nth-child(6) { transition-delay: 0.75s; }
 
     .insta-post img {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1), filter 0.5s ease;
+      transition: transform 0.8s var(--ease);
     }
 
     .insta-post:hover img {
-      transform: scale(1.15) rotate(2deg);
-      filter: brightness(1.1);
+      transform: scale(1.07);
     }
 
     .insta-overlay {
       position: absolute;
       inset: 0;
-      background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, transparent 50%);
+      background: linear-gradient(to top, rgba(8,8,8,0.80) 0%, rgba(8,8,8,0.1) 50%, transparent 75%);
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      padding: 2rem;
-      opacity: 0;
-      transition: opacity 0.5s ease;
-    }
-
-    .insta-post:hover .insta-overlay { opacity: 1; }
-
-    .insta-overlay span {
-      color: var(--secondary);
-      font-size: 1.1rem;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      margin-bottom: 0.5rem;
-    }
-
-    /* CTA Button */
-    .cta-button {
-      display: inline-block;
-      padding: 1.8rem 5rem;
-      background: var(--accent);
-      color: var(--primary);
-      text-decoration: none;
-      font-weight: 700;
-      font-size: 1.1rem;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      position: relative;
-      overflow: hidden;
-      transition: all 0.5s ease;
-      border-radius: 4px;
-      box-shadow: 0 10px 40px rgba(212, 165, 116, 0.3);
-    }
-
-    .cta-button::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: var(--accent-dark);
-      transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: -1;
-    }
-
-    .cta-button:hover::before { left: 0; }
-
-    .cta-button:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 20px 60px rgba(212, 165, 116, 0.5);
-      color: var(--secondary);
-    }
-
-    .cta-button-outline {
-      background: transparent;
-      border: 3px solid var(--accent);
-      color: var(--secondary);
-    }
-
-    .cta-button-outline:hover {
-      background: var(--accent);
-      color: var(--primary);
-    }
-
-    .cta-button-outline::before { display: none; }
-
-    /* Serviços */
-    .services-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 3rem;
-      margin-top: 4rem;
-    }
-
-    .service-card {
-      padding: 3rem;
-      background: rgba(255, 255, 255, 0.05);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(212, 165, 116, 0.2);
-      border-radius: 8px;
-      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-      opacity: 0;
-      transform: translateY(50px);
-    }
-
-    .service-card.visible {
+      padding: 1.4rem 1.6rem;
       opacity: 1;
-      transform: translateY(0);
     }
 
-    .service-card:hover {
-      transform: translateY(-10px);
-      background: rgba(212, 165, 116, 0.1);
-      border-color: var(--accent);
-      box-shadow: 0 20px 60px rgba(212, 165, 116, 0.2);
+    .insta-post:hover .insta-overlay {
+      background: linear-gradient(to top, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.18) 55%, transparent 78%);
     }
 
-    .service-card h3 {
-      font-size: 1.8rem;
-      margin-bottom: 1rem;
-      color: var(--accent);
+    .overlay-title {
+      font-family: var(--serif);
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--ink);
+      display: block;
+      margin-bottom: 0.8rem;
     }
 
-    .service-card p {
-      line-height: 1.8;
-      opacity: 0.9;
+    .overlay-socials {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
     }
 
-    /* Animações */
-    @keyframes fadeInDown { to { opacity: 1; transform: translateY(0); } }
-    @keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
-    @keyframes fadeIn { to { opacity: 1; } }
-
-    /* Responsivo */
-    @media (max-width: 1024px) {
-      .split-section { grid-template-columns: 1fr; gap: 4rem; }
-      .menu { gap: 2rem; }
+    .overlay-social-btn,
+    .overlay-heart {
+      width: 34px;
+      height: 34px;
+      border-radius: 2px;
+      border: 1px solid rgba(240, 236, 227, 0.2);
+      background: rgba(8,8,8,0.45);
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+      backdrop-filter: blur(6px);
+      padding: 0;
+      flex-shrink: 0;
     }
 
-    @media (max-width: 768px) {
-      /* Tipografia geral menor no celular */
-      html { font-size: 15px; }
-      body { font-size: 1rem; }
-
-      /* Navbar: evita logo espremida e menu cortado */
-      nav {
-        padding: 1rem 4%;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.75rem;
-      }
-
-      .logo-container {
-        width: 100%;
-        justify-content: center;
-      }
-
-      .logo-img {
-        height: 44px;
-        width: auto;
-      }
-
-      .menu {
-        width: 100%;
-        display: none; /* escondido por padrao */
-        flex-direction: column;
-        align-items: stretch;
-        gap: 0.25rem;
-        overflow: visible;
-        padding: 0.75rem 0;
-      }
-
-      nav.menu-open .menu {
-        display: flex;
-      }
-
-      .menu li {
-        width: 100%;
-      }
-
-      .menu a {
-        font-size: 0.85rem;
-        padding: 0.9rem 0.6rem;
-        letter-spacing: 1px;
-        white-space: nowrap;
-        text-align: center;
-      }
-
-      /* Botao hamburguer aparece no mobile */
-      .nav-toggle {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-left: auto;
-      }
-
-      .menu::-webkit-scrollbar {
-        display: none;
-      }
-
-      .hero h1 { letter-spacing: -2px; }
-      .hero-subtitle { letter-spacing: 5px; }
-      .section { padding: 6rem 5%; }
-      .instagram-feed { grid-template-columns: 1fr; gap: 1.5rem; }
-      .services-grid { grid-template-columns: 1fr; }
-
-      #backToTop {
-        right: 14px;
-        bottom: 14px;
-        width: 44px;
-        height: 44px;
-      }
+    .overlay-social-btn:hover {
+      background: rgba(184, 149, 106, 0.25);
+      border-color: var(--gold);
     }
 
-    /* === FOTO SOBRE (BORDA ARREDONDADA) === */
-    .about-image {
-      max-width: 450px;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.25);
+    .overlay-heart:hover {
+      background: rgba(220, 50, 50, 0.35);
+      border-color: rgba(220, 50, 50, 0.6);
     }
 
-    .about-image img {
-      width: 100%;
-      height: auto;
+    .overlay-heart.liked {
+      background: rgba(220, 50, 50, 0.65);
+    }
+
+    .overlay-heart.liked svg { fill: var(--ink); stroke: none; }
+
+    .portfolio-more {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 1.5rem;
+    }
+
+    .portfolio-more a {
+      font-family: var(--sans);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+      text-decoration: none;
+      transition: color 0.25s ease;
+    }
+
+    .portfolio-more a:hover {
+      color: var(--gold);
+    }
+
+    /* =============================================
+       TESTIMONIALS
+       ============================================= */
+    .testimonials {
+      padding: 8rem 8%;
+      background: var(--bg2);
+    }
+
+    .slider-wrapper {
+      position: relative;
+      margin-top: 3rem;
+    }
+
+    .testimonial-slide {
+      display: none;
+    }
+
+    .testimonial-slide.active {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 5rem;
+      align-items: start;
+    }
+
+    .slide-meta {
+      padding-top: 0.5rem;
+    }
+
+    .slide-quote-mark {
+      font-family: var(--serif);
+      font-size: 7rem;
+      font-weight: 400;
+      color: var(--gold);
+      opacity: 0.28;
+      line-height: 0.8;
+      margin-bottom: 1.5rem;
       display: block;
     }
 
-    /* === DEPOIMENTOS === */
-    .testimonials-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 2.4rem;
+    .slide-name {
+      font-family: var(--serif);
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--ink);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+
+    .slide-event {
+      font-family: var(--sans);
+      font-size: 0.6rem;
+      font-weight: 500;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      display: block;
+      margin-bottom: 0.8rem;
+    }
+
+    .slide-stars {
+      color: var(--gold);
+      font-size: 1rem;
+      letter-spacing: 2px;
+    }
+
+    .slide-text {
+      font-family: var(--serif);
+      font-size: clamp(1.3rem, 2vw, 1.8rem);
+      font-weight: 300;
+      font-style: italic;
+      color: var(--ink);
+      line-height: 1.65;
+      padding-top: 0.8rem;
+    }
+
+    .slider-controls {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
       margin-top: 3rem;
     }
-    .testimonial-card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 2.4rem;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+
+    .slider-btn {
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--ink-faint);
+      background: transparent;
+      color: var(--ink-dim);
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0;
+      transition: border-color 0.25s ease, color 0.25s ease, background 0.25s ease;
+    }
+
+    .slider-btn:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .slider-dots {
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    .slider-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ink-faint);
+      border: none;
+      cursor: pointer;
+      transition: background 0.25s ease, transform 0.25s ease;
+      padding: 0;
+    }
+
+    .slider-dot.active {
+      background: var(--gold);
+      transform: scale(1.3);
+    }
+
+    /* =============================================
+       CONTACT
+       ============================================= */
+    .contact {
+      padding: 8rem 8%;
+    }
+
+    .contact-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7rem;
+      align-items: start;
+    }
+
+    .contact-headline {
+      font-family: var(--serif);
+      font-size: clamp(2.5rem, 5vw, 4.5rem);
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.1;
+      margin-bottom: 1.8rem;
+    }
+
+    .contact-headline em {
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .contact-description {
+      font-family: var(--sans);
+      font-size: 0.88rem;
+      font-weight: 300;
+      color: var(--ink-dim);
+      line-height: 1.8;
+      max-width: 380px;
+      margin-bottom: 3rem;
+    }
+
+    .contact-links {
+      list-style: none;
       display: flex;
       flex-direction: column;
-      gap: 1.2rem;
-      opacity: 0;
-      transform: translateY(30px);
-      transition: opacity 0.6s ease, transform 0.6s ease;
+      gap: 1.5rem;
     }
-    .testimonial-card.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    .testimonial-stars { color: #c9a96e; font-size: 1.3rem; letter-spacing: 2px; }
-    .testimonial-card p { font-size: 1.1rem; line-height: 1.8; color: #444; font-style: italic; flex: 1; }
-    .testimonial-author strong { display: block; font-size: 1rem; color: #111; }
-    .testimonial-author span { font-size: 0.9rem; color: #888; }
-    @media (max-width: 900px) { .testimonials-grid { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 600px) { .testimonials-grid { grid-template-columns: 1fr; } }
 
-    /* === FORMULÁRIO DE CONTATO === */
+    .contact-link-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .contact-link-label {
+      font-family: var(--sans);
+      font-size: 0.58rem;
+      font-weight: 500;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
+    .contact-link-value {
+      font-family: var(--sans);
+      font-size: 0.9rem;
+      font-weight: 400;
+      color: var(--ink);
+      text-decoration: none;
+      transition: color 0.25s ease;
+    }
+
+    .contact-link-value:hover {
+      color: var(--gold);
+    }
+
+    .contact-location {
+      margin-top: 2.5rem;
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      font-weight: 300;
+      color: var(--ink-dim);
+      letter-spacing: .06em;
+    }
+
+    /* Contact form */
     .contact-form {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 16px;
-      padding: 3rem;
       display: flex;
       flex-direction: column;
       gap: 1.4rem;
     }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
-    .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
-    .form-group label { font-size: 0.9rem; color: rgba(255,255,255,0.7); letter-spacing: 0.05em; text-transform: uppercase; }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.4rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .form-group label {
+      font-family: var(--sans);
+      font-size: 0.6rem;
+      font-weight: 500;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+
     .form-group input,
     .form-group select,
     .form-group textarea {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 8px;
-      padding: 0.9rem 1.2rem;
-      color: #fff;
-      font-size: 1rem;
-      font-family: inherit;
-      transition: border-color 0.3s ease, background 0.3s ease;
+      background: var(--bg3);
+      border: 1px solid var(--ink-faint);
+      border-radius: 0;
+      padding: 0.85rem 1rem;
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 0.88rem;
+      font-weight: 300;
+      transition: border-color 0.25s ease;
       outline: none;
+      appearance: none;
     }
+
     .form-group input::placeholder,
-    .form-group textarea::placeholder { color: rgba(255,255,255,0.35); }
+    .form-group textarea::placeholder {
+      color: rgba(240, 236, 227, 0.22);
+    }
+
     .form-group input:focus,
     .form-group select:focus,
     .form-group textarea:focus {
-      border-color: var(--accent);
-      background: rgba(255,255,255,0.12);
+      border-color: var(--gold);
     }
-    .form-group select option { background: #1a1a1a; color: #fff; }
-    .form-group textarea { resize: vertical; min-height: 120px; }
-    @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } .contact-form { padding: 2rem; } }
 
+    .form-group select {
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(240,236,227,0.42)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      padding-right: 2.5rem;
+    }
 
-    /* === BOTAO VOLTAR AO TOPO === */
+    .form-group select option {
+      background: var(--bg3);
+      color: var(--ink);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .btn-submit {
+      font-family: var(--sans);
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      background: var(--gold);
+      color: var(--bg);
+      border: none;
+      cursor: pointer;
+      padding: 1rem 2.2rem;
+      border-radius: 0;
+      align-self: flex-start;
+      transition: background 0.25s ease;
+    }
+
+    .btn-submit:hover {
+      background: var(--gold-light);
+    }
+
+    .form-input.field-error,
+    .contact-form input.field-error,
+    .contact-form textarea.field-error {
+      border-color: rgba(220, 60, 60, 0.7);
+    }
+
+    /* =============================================
+       FOOTER
+       ============================================= */
+    footer {
+      background: var(--bg);
+      border-top: 1px solid var(--ink-faint);
+      padding: 2.5rem 8%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .footer-logo {
+      font-family: var(--serif);
+      font-size: 1.1rem;
+      font-weight: 400;
+      color: var(--ink-dim);
+      text-decoration: none;
+    }
+
+    .footer-logo .dot {
+      color: var(--gold);
+    }
+
+    .footer-logo span {
+      font-family: var(--sans);
+      font-size: 0.7rem;
+      font-weight: 300;
+      color: rgba(240, 236, 227, 0.25);
+      margin-left: 0.8rem;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      font-family: var(--sans);
+      font-size: 0.68rem;
+      font-weight: 400;
+      letter-spacing: .06em;
+      color: rgba(240, 236, 227, 0.28);
+      text-decoration: none;
+      transition: color 0.25s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--ink-dim);
+    }
+
+    .footer-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      align-items: flex-end;
+    }
+
+    .footer-location,
+    .footer-cnpj {
+      font-family: var(--sans);
+      font-size: 0.68rem;
+      font-weight: 300;
+      letter-spacing: .08em;
+      color: rgba(240, 236, 227, 0.22);
+    }
+
+    /* =============================================
+       BACK TO TOP
+       ============================================= */
     #backToTop {
       position: fixed;
-      right: 20px;
-      bottom: 20px;
-      width: 48px;
-      height: 48px;
-      border: none;
-      border-radius: 999px;
-      background: var(--accent);
-      color: var(--primary);
+      right: 24px;
+      bottom: 24px;
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--ink-faint);
+      border-radius: 0;
+      background: var(--bg3);
+      color: var(--ink-dim);
       display: grid;
       place-items: center;
       cursor: pointer;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
       opacity: 0;
       transform: translateY(12px);
       pointer-events: none;
-      transition: opacity 0.25s ease, transform 0.25s ease;
+      transition: opacity 0.25s ease, transform 0.25s ease, border-color 0.25s ease, color 0.25s ease;
       z-index: 2000;
     }
 
@@ -871,310 +1380,505 @@
     }
 
     #backToTop:hover {
-      transform: translateY(-2px);
-    }
-
-    #backToTop:focus-visible {
-      outline: 3px solid var(--accent-light);
-      outline-offset: 3px;
+      border-color: var(--gold);
+      color: var(--gold);
     }
 
     #backToTop svg {
-      width: 22px;
-      height: 22px;
+      width: 18px;
+      height: 18px;
     }
 
-    @media (max-width: 768px) {
-      #backToTop {
-        right: 14px;
-        bottom: 14px;
-        width: 44px;
-        height: 44px;
+    /* =============================================
+       HERO PARTICLES (retained for option)
+       ============================================= */
+    .hero-particles {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: 0.3;
+    }
+
+    .hero-particles span {
+      position: absolute;
+      left: var(--x);
+      top: var(--y);
+      width: var(--size);
+      height: var(--size);
+      border-radius: 999px;
+      background: rgba(184, 149, 106, 0.9);
+      opacity: var(--alpha);
+      transform: translate3d(0, 0, 0);
+      animation: floatParticle var(--dur) linear infinite;
+      animation-delay: var(--delay);
+    }
+
+    @keyframes floatParticle {
+      0%   { transform: translate3d(0, 0, 0); }
+      100% { transform: translate3d(var(--dx), var(--dy), 0); }
+    }
+
+    /* =============================================
+       RESPONSIVE
+       ============================================= */
+    @media (max-width: 1100px) {
+      .instagram-feed {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 900px) {
+      .testimonial-slide.active {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      .contact-grid {
+        grid-template-columns: 1fr;
+        gap: 4rem;
+      }
+
+      .manifesto-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
       }
     }
 
     @media (max-width: 768px) {
+      .hero {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+
+      .hero-inner { grid-column: 1; }
+
+      .hero-photo-reel {
+        display: block;
+        z-index: 0;
+      }
+
+      .hero-photo-reel::before {
+        background:
+          linear-gradient(to bottom, rgba(8,8,8,0.55) 0%, rgba(8,8,8,0.28) 35%, rgba(8,8,8,0.78) 100%),
+          linear-gradient(to right, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.58) 58%, rgba(8,8,8,0.82) 100%);
+      }
+
+      .hero-photo-reel::after {
+        background:
+          radial-gradient(circle at 74% 28%, rgba(184,149,106,0.12) 0%, transparent 42%),
+          linear-gradient(to top, var(--bg) 0%, transparent 24%);
+      }
+
+      .hero-reel-img {
+        object-position: center center;
+        filter: brightness(0.58) saturate(0.76) contrast(0.98) blur(1px);
+        transform: scale(1.04);
+      }
+
+      .hero-reel-img.active {
+        opacity: 0.52;
+      }
+
+      nav {
+        padding: 1.4rem 5%;
+      }
+
       nav.scrolled {
-        padding: 0.85rem 4%;
+        padding: 1.1rem 5%;
       }
+
+      .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: rgba(8, 8, 8, 0.98);
+        border-bottom: 1px solid var(--ink-faint);
+        flex-direction: column;
+        gap: 0;
+        padding: 1rem 0;
+        backdrop-filter: blur(12px);
+      }
+
+      nav.menu-open .nav-links {
+        display: flex;
+      }
+
+      .nav-links li {
+        width: 100%;
+      }
+
+      .nav-links a {
+        display: block;
+        padding: 1rem 5%;
+        font-size: 0.72rem;
+        animation: none;
+        opacity: 1;
+        border-bottom: 1px solid var(--ink-faint);
+      }
+
+      .nav-cta {
+        display: none;
+      }
+
+      .nav-toggle {
+        display: flex;
+      }
+
+      .hero-inner {
+        padding: 0 5%;
+      }
+
+      .hero-scroll {
+        display: none;
+      }
+
+      .manifesto {
+        padding: 6rem 5%;
+      }
+
+      .manifesto-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+
+      .manifesto-photo {
+        max-width: 280px;
+        margin: 0 auto;
+      }
+
+      .services {
+        padding: 6rem 5%;
+      }
+
+      .portfolio {
+        padding: 6rem 5%;
+      }
+
+      .instagram-feed {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .testimonials {
+        padding: 6rem 5%;
+      }
+
+      .contact {
+        padding: 6rem 5%;
+      }
+
+      .contact-grid {
+        grid-template-columns: 1fr;
+        gap: 3.5rem;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      footer {
+        padding: 2rem 5%;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1.2rem;
+      }
+
+      .service-row {
+        grid-template-columns: 50px 1fr auto;
+        gap: 1rem;
+      }
+
+      .section-header {
+        margin-bottom: 3rem;
+      }
+
+      #backToTop {
+        right: 16px;
+        bottom: 16px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .instagram-feed {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .hero-name {
+        font-size: clamp(56px, 16vw, 120px);
+      }
+    }
+
+    .theme-toggle {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 10000;
+      min-height: 36px;
+      border: 1px solid var(--ink-faint);
+      background: color-mix(in srgb, var(--bg3) 88%, transparent);
+      color: var(--ink);
+      padding: 0 12px;
+      font: 800 0.74rem var(--sans);
+      letter-spacing: 0;
+      text-transform: uppercase;
+      box-shadow: 0 14px 34px rgba(0,0,0,0.18);
+      backdrop-filter: blur(14px);
+      cursor: pointer;
     }
   </style>
 </head>
 
 <body>
-  <!-- Nuvens no Fundo -->
-  <div class="clouds-background">
-    <div class="cloud-bg"></div>
-    <div class="cloud-bg"></div>
-    <div class="cloud-bg"></div>
-    <div class="cloud-bg"></div>
-  </div>
 
-  <!-- Menu -->
-  <nav id="navbar">
-    <div class="logo-container">
-      <img src="images/logo.png" alt="Marcel Conde Photography" class="logo-img" width="240" height="60" decoding="async" fetchpriority="high">
-    </div>
-    <button class="nav-toggle" id="navToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="siteMenu">≡</button>
-    <!-- ✅ MENU CORRIGIDO (IDs certos + nova página) -->
-    <ul class="menu" id="siteMenu">
-      <li><a href="/encontre.html">Encontre suas fotos</a></li>
-      <li><a href="#sobre">Sobre</a></li>
-      <li><a href="#servicos">Serviços</a></li>
-      <li><a href="#portfolio">Portfólio</a></li>
-      <li><a href="#contato">Contato</a></li>
-    </ul>
-  </nav>
+  <!-- Custom Cursor -->
+  <div class="cursor" aria-hidden="true"></div>
+  <div class="cursor-ring" aria-hidden="true"></div>
+
+  <!-- Mobile Menu Overlay -->
   <div class="menu-overlay" id="menuOverlay" aria-hidden="true"></div>
 
-  <!-- Hero -->
-  <section class="hero" id="home">
+  <!-- ============================================================
+       NAVIGATION
+       ============================================================ -->
+  <nav id="navbar">
+    <a href="/" class="nav-logo" aria-label="Marcel Conde — Início">
+      Marcel<span class="dot">·</span>Conde
+    </a>
+
+    <button class="nav-toggle" id="navToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="siteMenu">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <ul class="nav-links" id="siteMenu">
+      <li><a href="#servicos">Serviços</a></li>
+      <li><a href="#portfolio">Portfólio</a></li>
+      <li><a href="#depoimentos">Depoimentos</a></li>
+      <li><a href="/contato/">Contato</a></li>
+      <li><a href="/encontre/" class="nav-find">Encontre suas fotos</a></li>
+    </ul>
+
+    <a href="/contato/" class="nav-cta">Reservar</a>
+  </nav>
+
+  <!-- ============================================================
+       HERO
+       ============================================================ -->
+  <section class="hero" id="home" aria-label="Apresentação">
+    <!-- Floating particles (subtle, gold-tinted) -->
     <div class="hero-particles" aria-hidden="true"></div>
-    <div class="hero-content">
-      <h1>MARCEL<br>CONDE</h1>
-      <div class="hero-subtitle">Fotografia Premium</div>
-      <div class="hero-cta">
-        <a href="#contato" class="cta-button">Vamos Conversar</a>
+
+    <div class="hero-inner">
+      <p class="hero-eyebrow">Fotógrafo Profissional · Recife, Pernambuco</p>
+
+      <h1 class="hero-name">
+        MARCEL<br>CONDE
+      </h1>
+
+      <span class="hero-divider" aria-hidden="true"></span>
+
+      <p class="hero-tagline">
+        Eternizando os momentos que nunca mais se repetem.
+      </p>
+
+      <div class="hero-actions">
+        <a href="#portfolio" class="btn-primary">Ver Portfólio</a>
+        <a href="/contato/" class="btn-ghost">Falar Comigo</a>
       </div>
     </div>
-    <div class="scroll-indicator">
-      <span>Scroll</span>
+
+    <!-- Photo reel (right side) -->
+    <div class="hero-photo-reel" id="hero-reel" aria-hidden="true"></div>
+
+    <!-- Scroll indicator -->
+    <div class="hero-scroll" aria-hidden="true">
+      <span class="hero-scroll-text">Scroll</span>
+      <div class="hero-scroll-line"></div>
+    </div>
+
+    <!-- Marquee -->
+    <div class="hero-marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>CASAMENTO &nbsp;·&nbsp; ENSAIO &nbsp;·&nbsp; FAMÍLIA &nbsp;·&nbsp; EVENTOS &nbsp;·&nbsp; CORPORATIVO &nbsp;·&nbsp; DRONE &nbsp;·&nbsp; PRÉ-WEDDING &nbsp;·&nbsp; CHÁ REVELAÇÃO &nbsp;·&nbsp; BATIZADO &nbsp;·&nbsp; SHOWS &nbsp;·&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        <span>CASAMENTO &nbsp;·&nbsp; ENSAIO &nbsp;·&nbsp; FAMÍLIA &nbsp;·&nbsp; EVENTOS &nbsp;·&nbsp; CORPORATIVO &nbsp;·&nbsp; DRONE &nbsp;·&nbsp; PRÉ-WEDDING &nbsp;·&nbsp; CHÁ REVELAÇÃO &nbsp;·&nbsp; BATIZADO &nbsp;·&nbsp; SHOWS &nbsp;·&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        <span>CASAMENTO &nbsp;·&nbsp; ENSAIO &nbsp;·&nbsp; FAMÍLIA &nbsp;·&nbsp; EVENTOS &nbsp;·&nbsp; CORPORATIVO &nbsp;·&nbsp; DRONE &nbsp;·&nbsp; PRÉ-WEDDING &nbsp;·&nbsp; CHÁ REVELAÇÃO &nbsp;·&nbsp; BATIZADO &nbsp;·&nbsp; SHOWS &nbsp;·&nbsp;&nbsp;&nbsp;&nbsp;</span>
+        <span>CASAMENTO &nbsp;·&nbsp; ENSAIO &nbsp;·&nbsp; FAMÍLIA &nbsp;·&nbsp; EVENTOS &nbsp;·&nbsp; CORPORATIVO &nbsp;·&nbsp; DRONE &nbsp;·&nbsp; PRÉ-WEDDING &nbsp;·&nbsp; CHÁ REVELAÇÃO &nbsp;·&nbsp; BATIZADO &nbsp;·&nbsp; SHOWS &nbsp;·&nbsp;&nbsp;&nbsp;&nbsp;</span>
+      </div>
     </div>
   </section>
 
-  <!-- Botao voltar ao topo -->
+  <!-- ============================================================
+       MANIFESTO
+       ============================================================ -->
+  <section class="manifesto" aria-label="Sobre Marcel Conde">
+    <div class="manifesto-grid reveal">
+      <div class="manifesto-label">
+        <span class="manifesto-label-dash" aria-hidden="true"></span>
+        <span class="manifesto-label-text">Sobre</span>
+      </div>
+      <p class="manifesto-text">
+        Cada clique é uma decisão consciente. Cada luz, uma escolha deliberada. Trabalho com casamentos, ensaios e eventos capturando o instante único que nunca mais vai se repetir — e transformando em memórias que duram para sempre.
+      </p>
+      <div class="manifesto-photo reveal">
+        <img id="about-photo" src="/images/marcelconde.JPG" alt="Marcel Conde — fotógrafo profissional em Recife" loading="lazy">
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SERVICES
+       ============================================================ -->
+  <section class="services" id="servicos" aria-label="Serviços de Fotografia">
+    <div class="section-header reveal">
+      <span class="section-number" aria-hidden="true">01</span>
+      <h2 class="section-title">Serviços</h2>
+    </div>
+
+    <ul class="services-list" aria-label="Lista de serviços">
+      <li><a href="/contato/" class="service-row reveal reveal-delay-1"><span class="service-index" aria-hidden="true">001</span><div class="service-info"><span class="service-name">Casamentos</span><span class="service-desc">Cobertura completa do seu grande dia, do making of à festa, com narrativa visual única.</span></div><span class="service-arrow" aria-hidden="true">→</span></a></li>
+      <li><a href="/contato/" class="service-row reveal reveal-delay-2"><span class="service-index" aria-hidden="true">002</span><div class="service-info"><span class="service-name">Aniversários</span><span class="service-desc">Registros especiais de festas infantis, debutantes e celebrações, capturando alegria e emoção.</span></div><span class="service-arrow" aria-hidden="true">→</span></a></li>
+      <li><a href="/contato/" class="service-row reveal reveal-delay-3"><span class="service-index" aria-hidden="true">003</span><div class="service-info"><span class="service-name">Corporativo</span><span class="service-desc">Eventos empresariais, convenções e palestras com profissionalismo e discrição.</span></div><span class="service-arrow" aria-hidden="true">→</span></a></li>
+      <li><a href="/contato/" class="service-row reveal reveal-delay-4"><span class="service-index" aria-hidden="true">004</span><div class="service-info"><span class="service-name">Shows</span><span class="service-desc">Fotografia de eventos musicais, teatro e apresentações — energia e emoção do palco.</span></div><span class="service-arrow" aria-hidden="true">→</span></a></li>
+      <li><a href="/contato/" class="service-row reveal reveal-delay-5"><span class="service-index" aria-hidden="true">005</span><div class="service-info"><span class="service-name">Drone</span><span class="service-desc">Imagens aéreas espetaculares com perspectiva cinematográfica única sobre o seu evento.</span></div><span class="service-arrow" aria-hidden="true">→</span></a></li>
+      <li><a href="/contato/" class="service-row reveal reveal-delay-1"><span class="service-index" aria-hidden="true">006</span><div class="service-info"><span class="service-name">Batizados</span><span class="service-desc">Momentos religiosos eternizados com sensibilidade e respeito, preservando a emoção familiar.</span></div><span class="service-arrow" aria-hidden="true">→</span></a></li>
+      <li><a href="/contato/" class="service-row reveal reveal-delay-2"><span class="service-index" aria-hidden="true">007</span><div class="service-info"><span class="service-name">Pré-Wedding</span><span class="service-desc">Ensaio do casal antes do casamento em locações que refletem sua personalidade e história.</span></div><span class="service-arrow" aria-hidden="true">→</span></a></li>
+      <li><a href="/contato/" class="service-row reveal reveal-delay-3"><span class="service-index" aria-hidden="true">008</span><div class="service-info"><span class="service-name">Chá Revelação</span><span class="service-desc">O momento mágico da descoberta registrado em detalhes, com toda emoção e alegria da família.</span></div><span class="service-arrow" aria-hidden="true">→</span></a></li>
+    </ul>
+  </section>
+
+  <!-- ============================================================
+       PORTFOLIO
+       ============================================================ -->
+  <section class="portfolio" id="portfolio" aria-label="Portfólio">
+    <div class="portfolio-header">
+      <div class="section-header reveal" style="margin-bottom: 0;">
+        <span class="section-number" aria-hidden="true">02</span>
+        <h2 class="section-title">Portfólio</h2>
+      </div>
+      <p class="portfolio-subtitle reveal">Selecione um álbum para explorar</p>
+    </div>
+
+    <!-- Portfolio grid — populated by loadPortfolio() -->
+    <div class="instagram-feed" aria-label="Álbuns fotográficos"></div>
+
+    <div class="portfolio-more reveal">
+      <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer">
+        Ver mais no Instagram →
+      </a>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       TESTIMONIALS
+       ============================================================ -->
+  <section class="testimonials" id="depoimentos" aria-label="Depoimentos">
+    <div class="section-header reveal">
+      <span class="section-number" aria-hidden="true">03</span>
+      <h2 class="section-title">Depoimentos</h2>
+    </div>
+
+    <div class="slider-wrapper reveal">
+      <!-- Slide 1 -->
+      <div class="testimonial-slide active" role="group" aria-label="Depoimento 1 de 3">
+        <div class="slide-meta">
+          <span class="slide-quote-mark" aria-hidden="true">"</span>
+          <span class="slide-name">Ana Paula S.</span>
+          <span class="slide-event">Aniversário</span>
+          <div class="slide-stars" aria-label="5 estrelas">★★★★★</div>
+        </div>
+        <p class="slide-text">
+          "Marcel capturou nossa festa de aniversário de forma incrível. Cada foto conta uma história e transmite exatamente o que vivemos naquele dia. Super recomendo!"
+        </p>
+      </div>
+
+      <!-- Slide 2 -->
+      <div class="testimonial-slide" role="group" aria-label="Depoimento 2 de 3">
+        <div class="slide-meta">
+          <span class="slide-quote-mark" aria-hidden="true">"</span>
+          <span class="slide-name">Carla e Rafael M.</span>
+          <span class="slide-event">Casamento</span>
+          <div class="slide-stars" aria-label="5 estrelas">★★★★★</div>
+        </div>
+        <p class="slide-text">
+          "Contratamos o Marcel para o nosso casamento e foi a melhor decisão. As fotos ficaram lindas, cheias de emoção. Ele é muito atencioso e profissional."
+        </p>
+      </div>
+
+      <!-- Slide 3 -->
+      <div class="testimonial-slide" role="group" aria-label="Depoimento 3 de 3">
+        <div class="slide-meta">
+          <span class="slide-quote-mark" aria-hidden="true">"</span>
+          <span class="slide-name">Ricardo T.</span>
+          <span class="slide-event">Evento Corporativo</span>
+          <div class="slide-stars" aria-label="5 estrelas">★★★★★</div>
+        </div>
+        <p class="slide-text">
+          "As fotos do nosso evento corporativo ficaram impecáveis. Marcel entendeu perfeitamente o que precisávamos e entregou muito além do esperado."
+        </p>
+      </div>
+
+      <!-- Controls -->
+      <div class="slider-controls" aria-label="Controles do slider">
+        <button class="slider-btn" id="slider-prev" aria-label="Depoimento anterior">←</button>
+        <button class="slider-btn" id="slider-next" aria-label="Próximo depoimento">→</button>
+        <div class="slider-dots" role="tablist" aria-label="Navegar depoimentos">
+          <button class="slider-dot active" role="tab" aria-label="Depoimento 1" aria-selected="true"></button>
+          <button class="slider-dot" role="tab" aria-label="Depoimento 2" aria-selected="false"></button>
+          <button class="slider-dot" role="tab" aria-label="Depoimento 3" aria-selected="false"></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       FOOTER
+       ============================================================ -->
+  <footer>
+    <a href="/" class="footer-logo" aria-label="Marcel Conde — Início">
+      Marcel<span class="dot">·</span>Conde
+      <span>© <span id="footer-year"></span></span>
+    </a>
+
+    <div class="footer-links" role="navigation" aria-label="Links do rodapé">
+      <a href="#portfolio">Portfólio</a>
+      <a href="/contato/">Contato</a>
+      <a href="/encontre/">Encontre suas fotos</a>
+      <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer">Instagram</a>
+      <a href="https://br.pinterest.com/marcelconde/" target="_blank" rel="noopener noreferrer">Pinterest</a>
+    </div>
+
+    <div class="footer-meta">
+      <span class="footer-location">Recife, PE — Brasil</span>
+      <span class="footer-cnpj">Marcel Conde | Photography · CNPJ 67.096.533/0001-90</span>
+    </div>
+  </footer>
+
+  <!-- Back to Top -->
   <button id="backToTop" aria-label="Voltar ao topo" title="Voltar ao topo">
     <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path d="M12 5l7 7-1.4 1.4L13 8.8V19h-2V8.8L6.4 13.4 5 12l7-7z" fill="currentColor"/>
     </svg>
   </button>
 
-  <!-- Sobre -->
-  <section class="section section-light" id="sobre">
-    <div class="container">
-      <div class="split-section">
-        <div class="text-content">
-          <h2>Eternizando<br>Momentos</h2>
-          <p>Fotógrafo profissional especializado em eventos, com mais de 500 trabalhos realizados em Recife e região.</p>
-          <p>Utilizando equipamento de ponta e técnicas avançadas, incluindo fotografia aérea com drone, capturo a essência de cada momento especial.</p>
-          <a href="#portfolio" class="cta-button">Ver Portfólio</a>
-        </div>
-
-        <div class="about-image">
-          <img
-            src="https://res.cloudinary.com/djv98mqfz/image/upload/f_auto,q_auto,w_600/site/about/profile"
-            srcset="
-              https://res.cloudinary.com/djv98mqfz/image/upload/f_auto,q_auto,w_400/site/about/profile 400w,
-              https://res.cloudinary.com/djv98mqfz/image/upload/f_auto,q_auto,w_600/site/about/profile 600w,
-              https://res.cloudinary.com/djv98mqfz/image/upload/f_auto,q_auto,w_800/site/about/profile 800w
-            "
-            sizes="(max-width: 768px) 90vw, 450px"
-            alt="Marcel Conde"
-            fetchpriority="high"
-          />
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Serviços -->
-  <section class="section section-dark" id="servicos">
-    <div class="container">
-      <div class="text-content" style="text-align: center; margin-bottom: 5rem;">
-        <h2>Serviços</h2>
-      </div>
-
-      <div class="services-grid">
-        <div class="service-card">
-          <h3>Casamentos</h3>
-          <p>Cobertura completa do seu grande dia, do making of à festa, com fotos e vídeos que contam sua história única.</p>
-        </div>
-        <div class="service-card">
-          <h3>Aniversários</h3>
-          <p>Registros especiais de festas infantis, debutantes e celebrações, capturando a alegria e emoção de cada momento.</p>
-        </div>
-        <div class="service-card">
-          <h3>Corporativo</h3>
-          <p>Eventos empresariais, confraternizações, palestras e convenções com profissionalismo e discrição.</p>
-        </div>
-        <div class="service-card">
-          <h3>Shows</h3>
-          <p>Fotografia de eventos musicais, teatro e apresentações, capturando a energia e emoção do palco.</p>
-        </div>
-        <div class="service-card">
-          <h3>Drone</h3>
-          <p>Imagens aéreas espetaculares que agregam uma perspectiva única e cinematográfica ao seu evento.</p>
-        </div>
-        <div class="service-card">
-          <h3>Batizados</h3>
-          <p>Momentos religiosos eternizados com sensibilidade e respeito, preservando as emoções da família.</p>
-        </div>
-        <div class="service-card">
-          <h3>Pré-Wedding</h3>
-          <p>Ensaio fotográfico do casal antes do casamento, em locações especiais que refletem a personalidade e história de vocês.</p>
-        </div>
-        <div class="service-card">
-          <h3>Chá Revelação</h3>
-          <p>O momento mágico da descoberta do sexo do bebê registrado em detalhes, com toda a emoção e alegria da família.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Chamada para Ação -->
-  <section class="section section-accent">
-    <div class="container">
-      <div style="text-align: center; max-width: 900px; margin: 0 auto;">
-        <h2 style="margin-bottom: 2rem; opacity: 1; transform: none;">Pronto para eternizar seus momentos?</h2>
-        <p style="font-size: 1.4rem; line-height: 1.8; margin-bottom: 3rem; opacity: 1; transform: none;">
-          Cada evento é único e merece ser capturado com profissionalismo e criatividade.
-          Entre em contato e vamos criar juntos memórias que durarão para sempre.
-        </p>
-        <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
-          <a href="https://wa.me/5581984094212?text=Olá!%20Gostaria%20de%20solicitar%20um%20orçamento" class="cta-button" target="_blank" rel="noopener noreferrer">
-            Solicitar Orçamento
-          </a>
-          <a href="#portfolio" class="cta-button cta-button-outline">
-            Ver Trabalhos
-          </a>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Portfolio -->
-  <section class="section section-light" id="portfolio">
-    <div class="container">
-      <div class="text-content" style="text-align: center;">
-        <h2>Momentos eternizados</h2>
-        <p>Confira alguns dos momentos eternizados</p>
-      </div>
-
-      <div class="instagram-feed"></div>
-
-      <div style="text-align: center; margin-top: 4rem;">
-        <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" class="cta-button">Ver Mais no Instagram</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- Depoimentos -->
-  <section class="section section-light" id="depoimentos">
-    <div class="container">
-      <div class="text-content" style="text-align: center; margin-bottom: 1rem;">
-        <h2>O que dizem os clientes</h2>
-        <p>Histórias reais de momentos eternizados</p>
-      </div>
-      <div class="testimonials-grid">
-        <div class="testimonial-card">
-          <div class="testimonial-stars">★★★★★</div>
-          <p>"Marcel capturou nossa festa de aniversário de forma incrível. Cada foto conta uma história e transmite exatamente o que vivemos naquele dia. Super recomendo!"</p>
-          <div class="testimonial-author">
-            <strong>Ana Paula S.</strong>
-            <span>Aniversário</span>
-          </div>
-        </div>
-        <div class="testimonial-card">
-          <div class="testimonial-stars">★★★★★</div>
-          <p>"Contratamos o Marcel para o nosso casamento e foi a melhor decisão. As fotos ficaram lindas, cheias de emoção. Ele é muito atencioso e profissional."</p>
-          <div class="testimonial-author">
-            <strong>Carla e Rafael M.</strong>
-            <span>Casamento</span>
-          </div>
-        </div>
-        <div class="testimonial-card">
-          <div class="testimonial-stars">★★★★★</div>
-          <p>"As fotos do nosso evento corporativo ficaram impecáveis. Marcel entendeu perfeitamente o que precisávamos e entregou muito além do esperado."</p>
-          <div class="testimonial-author">
-            <strong>Ricardo T.</strong>
-            <span>Evento Corporativo</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Contato -->
-  <section class="section section-dark" id="contato">
-    <div class="container">
-      <div class="split-section">
-        <div class="text-content">
-          <h2>Vamos Criar Algo Incrível</h2>
-          <p>Preencha o formulário e entro em contato em até 24h para conversarmos sobre o seu evento.</p>
-          <p style="margin-top: 1.5rem;">Ou fale diretamente:</p>
-          <div style="display: flex; gap: 2rem; margin-top: 1.2rem; flex-wrap: wrap;">
-            <a href="https://wa.me/5581984094212?text=Olá!%20Gostaria%20de%20saber%20mais%20sobre%20fotografia%20de%20eventos" class="cta-button" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-            <a href="https://www.instagram.com/mconde.foto/" class="cta-button cta-button-outline" target="_blank" rel="noopener noreferrer">Instagram</a>
-          </div>
-          <div style="margin-top: 2.5rem; display: flex; flex-direction: column; gap: 0.6rem;">
-            <a href="mailto:contato@marcelconde.com.br" style="color: var(--secondary); text-decoration: none; font-size: 1rem;">contato@marcelconde.com.br</a>
-            <span style="color: rgba(255,255,255,0.5); font-size: 0.95rem;">Recife, PE — Brasil</span>
-          </div>
-        </div>
-
-        <div class="text-content">
-          <form class="contact-form" action="https://formsubmit.co/contato@marcelconde.com.br" method="POST">
-            <input type="hidden" name="_subject" value="Novo contato pelo site — Marcel Conde Fotografia">
-            <input type="hidden" name="_next" value="https://marcelconde.com.br/?enviado=1">
-            <input type="hidden" name="_captcha" value="false">
-            <input type="hidden" name="_template" value="table">
-            <div class="form-row">
-              <div class="form-group">
-                <label for="nome">Nome</label>
-                <input type="text" id="nome" name="nome" placeholder="Seu nome" required>
-              </div>
-              <div class="form-group">
-                <label for="telefone">Telefone / WhatsApp</label>
-                <input type="tel" id="telefone" name="telefone" placeholder="(81) 9 0000-0000">
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="email">E-mail</label>
-              <input type="email" id="email" name="email" placeholder="seu@email.com" required>
-            </div>
-            <div class="form-group">
-              <label for="tipo">Tipo de evento</label>
-              <select id="tipo" name="tipo_evento">
-                <option value="" disabled selected>Selecione...</option>
-                <option>Casamento</option>
-                <option>Aniversário</option>
-                <option>Pré-Wedding</option>
-                <option>Chá Revelação</option>
-                <option>Evento Corporativo</option>
-                <option>Drone</option>
-                <option>Outro</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="mensagem">Mensagem</label>
-              <textarea id="mensagem" name="mensagem" placeholder="Conte um pouco sobre o seu evento, data prevista..."></textarea>
-            </div>
-            <button type="submit" class="cta-button" style="align-self: flex-start;">Enviar mensagem</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Rodapé -->
-  <footer style="background:#0a0a0a; color:rgba(255,255,255,0.5); padding:3rem 5%; font-size:0.9rem; border-top:1px solid rgba(255,255,255,0.07);">
-    <div style="max-width:1200px; margin:0 auto; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:1.5rem;">
-      <span>© <span id="footer-year"></span> Marcel Conde Fotografia — Recife, PE</span>
-      <div role="navigation" aria-label="Links do rodapé" style="display:flex; gap:1.5rem; flex-wrap:wrap;">
-        <a href="#portfolio" style="color:rgba(255,255,255,0.5); text-decoration:none;">Portfólio</a>
-        <a href="#contato" style="color:rgba(255,255,255,0.5); text-decoration:none;">Contato</a>
-        <a href="/encontre.html" style="color:rgba(255,255,255,0.5); text-decoration:none;">Encontre suas fotos</a>
-        <a href="https://www.instagram.com/mconde.foto/" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.5); text-decoration:none;">Instagram</a>
-      </div>
-    </div>
-  </footer>
-
-  <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
+  <!-- ============================================================
+       JAVASCRIPT
+       ============================================================ -->
   <script>
-    // Navbar (scrolled + fade out conforme rola)
-    const navbar = document.getElementById('navbar');
-    const navToggle = document.getElementById('navToggle');
-    const siteMenu = document.getElementById('siteMenu');
+    // -------------------------------------------------------
+    // FOOTER YEAR
+    // -------------------------------------------------------
+    document.getElementById('footer-year').textContent = new Date().getFullYear();
+
+    // -------------------------------------------------------
+    // NAVBAR — scroll behavior + mobile menu
+    // -------------------------------------------------------
+    const navbar     = document.getElementById('navbar');
+    const navToggle  = document.getElementById('navToggle');
+    const siteMenu   = document.getElementById('siteMenu');
     const menuOverlay = document.getElementById('menuOverlay');
 
     function closeMenu() {
@@ -1183,7 +1887,6 @@
       if (navToggle) {
         navToggle.setAttribute('aria-expanded', 'false');
         navToggle.setAttribute('aria-label', 'Abrir menu');
-        navToggle.textContent = '≡';
       }
       document.body.style.overflow = '';
     }
@@ -1194,7 +1897,6 @@
       if (navToggle) {
         navToggle.setAttribute('aria-expanded', 'true');
         navToggle.setAttribute('aria-label', 'Fechar menu');
-        navToggle.textContent = '×';
       }
       document.body.style.overflow = 'hidden';
     }
@@ -1205,12 +1907,13 @@
     }
 
     let lastScrollY = 0;
+
     function updateNavbar() {
       const y = window.scrollY || 0;
 
       if (navbar.classList.contains('menu-open')) {
-        navbar.style.transform = 'translateY(0)';
-        navbar.style.opacity = '1';
+        navbar.style.transform  = 'translateY(0)';
+        navbar.style.opacity    = '1';
         navbar.style.pointerEvents = 'auto';
         navbar.style.visibility = 'visible';
         lastScrollY = y;
@@ -1220,21 +1923,18 @@
       navbar.classList.toggle('scrolled', y > 50);
 
       if (y < 50) {
-        // No topo — sempre visível
-        navbar.style.transform = 'translateY(0)';
-        navbar.style.opacity = '1';
+        navbar.style.transform  = 'translateY(0)';
+        navbar.style.opacity    = '1';
         navbar.style.pointerEvents = 'auto';
         navbar.style.visibility = 'visible';
       } else if (y > lastScrollY + 8) {
-        // Rolando para baixo — esconde
-        navbar.style.transform = 'translateY(-100%)';
-        navbar.style.opacity = '0';
+        navbar.style.transform  = 'translateY(-100%)';
+        navbar.style.opacity    = '0';
         navbar.style.pointerEvents = 'none';
         navbar.style.visibility = 'hidden';
       } else if (y < lastScrollY - 4) {
-        // Rolando para cima — aparece
-        navbar.style.transform = 'translateY(0)';
-        navbar.style.opacity = '1';
+        navbar.style.transform  = 'translateY(0)';
+        navbar.style.opacity    = '1';
         navbar.style.pointerEvents = 'auto';
         navbar.style.visibility = 'visible';
       }
@@ -1245,59 +1945,40 @@
     window.addEventListener('scroll', updateNavbar, { passive: true });
     updateNavbar();
 
-    // Menu mobile (hamburguer)
     navToggle?.addEventListener('click', toggleMenu);
     menuOverlay?.addEventListener('click', closeMenu);
 
-    // Fecha o menu ao clicar em um item
     siteMenu?.addEventListener('click', (e) => {
       const a = e.target?.closest?.('a');
       if (a) closeMenu();
     });
 
-    // Fecha com ESC
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeMenu();
     });
 
-    // Scroll Animations
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) entry.target.classList.add('visible');
-      });
-    }, { threshold: 0.15, rootMargin: '0px 0px -100px 0px' });
-
-    document.querySelectorAll('.text-content, .insta-post, .service-card, .testimonial-card').forEach(el => observer.observe(el));
-
-    // Smooth Scroll (só para links com #)
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-        closeMenu();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-
-    // === ANIMAÇÕES DO HERO ===
+    // -------------------------------------------------------
+    // HERO PARTICLES
+    // -------------------------------------------------------
     const animLayer = document.querySelector('.hero-particles');
 
     function rand(min, max) { return Math.random() * (max - min) + min; }
 
     function startParticles() {
+      if (!animLayer) return;
       animLayer.innerHTML = '';
       const mobile = window.matchMedia('(max-width:768px)').matches;
-      const count = mobile ? 26 : 48;
+      const count  = mobile ? 18 : 36;
       for (let i = 0; i < count; i++) {
         const p = document.createElement('span');
-        p.style.setProperty('--x',     `${rand(0,100)}%`);
-        p.style.setProperty('--y',     `${rand(0,100)}%`);
-        p.style.setProperty('--size',  `${rand(1.2,2.6)}px`);
-        p.style.setProperty('--alpha', `${rand(0.25,0.95)}`);
-        p.style.setProperty('--dx',    `${rand(-220,220)}px`);
-        p.style.setProperty('--dy',    `${rand(-160,160)}px`);
-        p.style.setProperty('--dur',   `${rand(7,16)}s`);
-        p.style.setProperty('--delay', `${rand(-22,0)}s`);
+        p.style.setProperty('--x',     `${rand(0, 100)}%`);
+        p.style.setProperty('--y',     `${rand(0, 100)}%`);
+        p.style.setProperty('--size',  `${rand(1, 2.4)}px`);
+        p.style.setProperty('--alpha', `${rand(0.15, 0.55)}`);
+        p.style.setProperty('--dx',    `${rand(-180, 180)}px`);
+        p.style.setProperty('--dy',    `${rand(-120, 120)}px`);
+        p.style.setProperty('--dur',   `${rand(9, 18)}s`);
+        p.style.setProperty('--delay', `${rand(-20, 0)}s`);
         animLayer.appendChild(p);
       }
     }
@@ -1309,71 +1990,123 @@
       window.__animResize = setTimeout(startParticles, 250);
     });
 
-    // Hover effect nos links de contato (após DOM pronto)
-    window.addEventListener('DOMContentLoaded', () => {
-      document
-        .querySelectorAll('.text-content a[href^="https://www.instagram"], .text-content a[href^="mailto"], .text-content a[href^="https://wa.me"]')
-        .forEach(link => {
-          link.addEventListener('mouseenter', function () {
-            this.style.color = 'var(--accent)';
-            this.style.transform = 'translateX(-5px)';
-          });
-          link.addEventListener('mouseleave', function () {
-            this.style.color = 'var(--secondary)';
-            this.style.transform = 'translateX(0)';
-          });
-        });
+    // -------------------------------------------------------
+    // INTERSECTION OBSERVER — .reveal class
+    // -------------------------------------------------------
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -80px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+    // -------------------------------------------------------
+    // SMOOTH SCROLL
+    // -------------------------------------------------------
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        closeMenu();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     });
 
-    // Nuvens com movimento baseado no scroll — RAF throttle evita jank
-    const clouds = document.querySelectorAll('.cloud-bg');
-    let lastScroll = 0;
-    let cloudRafPending = false;
+    // -------------------------------------------------------
+    // TESTIMONIALS SLIDER
+    // -------------------------------------------------------
+    const slides = document.querySelectorAll('.testimonial-slide');
+    const dots   = document.querySelectorAll('.slider-dot');
+    let current  = 0;
 
-    window.addEventListener('scroll', () => {
-      if (cloudRafPending) return;
-      cloudRafPending = true;
-      requestAnimationFrame(() => {
-        const scrollY = window.scrollY;
-        const scrollDelta = scrollY - lastScroll;
-        const progress = scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+    function goTo(n) {
+      slides[current].classList.remove('active');
+      dots[current].classList.remove('active');
+      dots[current].setAttribute('aria-selected', 'false');
+      current = (n + slides.length) % slides.length;
+      slides[current].classList.add('active');
+      dots[current].classList.add('active');
+      dots[current].setAttribute('aria-selected', 'true');
+    }
 
-        clouds.forEach((cloud, i) => {
-          const speed = 0.5 + (i * 0.2);
-          const direction = i % 2 === 0 ? 1 : -1;
-          const moveX = scrollDelta * speed * direction;
-          const moveY = Math.sin(progress * Math.PI * 2 + i) * 30;
-          const scale = 1 + Math.sin(progress * Math.PI * 4 + i) * 0.15;
-          const opacity = 0.5 + Math.sin(progress * Math.PI * 3 + i) * 0.3;
+    document.getElementById('slider-prev')?.addEventListener('click', () => goTo(current - 1));
+    document.getElementById('slider-next')?.addEventListener('click', () => goTo(current + 1));
+    dots.forEach((dot, i) => dot.addEventListener('click', () => goTo(i)));
 
-          cloud.style.transform = `translate(${moveX}px, ${moveY}px) scale(${scale})`;
-          cloud.style.opacity = opacity;
-        });
+    // -------------------------------------------------------
+    // CUSTOM CURSOR
+    // -------------------------------------------------------
+    const cursorDot  = document.querySelector('.cursor');
+    const cursorRing = document.querySelector('.cursor-ring');
 
-        lastScroll = scrollY;
-        cloudRafPending = false;
+    if (cursorDot && cursorRing && window.matchMedia('(pointer: fine)').matches) {
+      document.addEventListener('mousemove', e => {
+        cursorDot.style.left  = e.clientX + 'px';
+        cursorDot.style.top   = e.clientY + 'px';
+        cursorRing.style.left = e.clientX + 'px';
+        cursorRing.style.top  = e.clientY + 'px';
       });
-    }, { passive: true });
 
+      // Cursor scale on interactive elements
+      document.querySelectorAll('a, button, [role="link"], .insta-post').forEach(el => {
+        el.addEventListener('mouseenter', () => {
+          cursorDot.style.transform  = 'translate(-50%, -50%) scale(2)';
+          cursorRing.style.transform = 'translate(-50%, -50%) scale(1.4)';
+          cursorRing.style.borderColor = 'rgba(184,149,106,0.5)';
+        });
+        el.addEventListener('mouseleave', () => {
+          cursorDot.style.transform  = 'translate(-50%, -50%) scale(1)';
+          cursorRing.style.transform = 'translate(-50%, -50%) scale(1)';
+          cursorRing.style.borderColor = 'var(--gold)';
+        });
+      });
+    }
 
-    // Carregar Portfólio (Worker) — otimizado (menos bloqueio e mais paralelo)
+    // -------------------------------------------------------
+    // BACK TO TOP
+    // -------------------------------------------------------
+    const backToTopBtn = document.getElementById('backToTop');
+
+    function toggleBackToTop() {
+      if (!backToTopBtn) return;
+      backToTopBtn.classList.toggle('show', window.scrollY > 500);
+    }
+
+    window.addEventListener('scroll', toggleBackToTop, { passive: true });
+    toggleBackToTop();
+
+    backToTopBtn?.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // -------------------------------------------------------
+    // PORTFOLIO — loadPortfolio() via Cloudinary Worker
+    // -------------------------------------------------------
     async function loadPortfolio() {
       const portfolioContainer = document.querySelector('.instagram-feed');
       if (!portfolioContainer) return;
 
-      const WORKER_BASE = "https://cloudinary.marcel-conde.workers.dev";
+      const WORKER_BASE = "https://api.marcelconde.com.br";
 
-      // sem cache — dados sempre frescos do Worker
-
-      // helpers
       const withTimeout = (p, ms = 12000) =>
         Promise.race([
           p,
           new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
         ]);
 
+      function freshWorkerUrl(url) {
+        const freshUrl = new URL(url);
+        freshUrl.searchParams.set('refresh', '1');
+        freshUrl.searchParams.set('_', String(Date.now()));
+        return freshUrl.toString();
+      }
+
       async function fetchJson(url) {
-        const res = await withTimeout(fetch(url));
+        const res = await withTimeout(fetch(freshWorkerUrl(url), { cache: 'no-store' }));
         if (!res.ok) throw new Error(`${url} -> ${res.status}`);
         return res.json();
       }
@@ -1383,7 +2116,6 @@
         return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${t}/`);
       }
 
-      // limita concorrência pra não explodir requests
       async function mapLimit(items, limit, mapper) {
         const out = new Array(items.length);
         let i = 0;
@@ -1408,7 +2140,7 @@
           const slug = album.slug;
           const path = album.path;
 
-          // === CASO ESPECIAL: Eventos Esportivos (pega thumb da primeira subpasta com fotos) ===
+          // Special case: Eventos Esportivos — get thumb from first sub-folder with photos
           if (slug === "Eventos Esportivos") {
             let subFolders;
             try {
@@ -1417,37 +2149,26 @@
               return null;
             }
 
-            // tenta achar a primeira subpasta com thumbnail
             for (const sub of (subFolders || [])) {
               try {
                 const subData = await fetchJson(`${WORKER_BASE}/album?path=${encodeURIComponent(sub.path)}`);
                 const subThumb = subData.thumbnail || (subData.images?.[0]?.url) || null;
                 if (subThumb) {
-                  return {
-                    slug,
-                    title: slug,
-                    thumbnail: subThumb,
-                  };
+                  return { slug, title: slug, thumbnail: subThumb };
                 }
               } catch {
-                // segue para a próxima subpasta
+                // continue to next sub-folder
               }
             }
-
-            // se nenhuma subpasta tiver fotos, não mostra
             return null;
           }
 
-          // === ÁLBUNS NORMAIS ===
+          // Normal albums
           try {
-            const data = await fetchJson(`${WORKER_BASE}/album?path=${encodeURIComponent(path)}`);
+            const data      = await fetchJson(`${WORKER_BASE}/album?path=${encodeURIComponent(path)}`);
             const thumbnail = data.thumbnail || (data.images?.[0]?.url) || null;
             if (!thumbnail) return null;
-            return {
-              slug,
-              title: slug,
-              thumbnail,
-            };
+            return { slug, title: slug, thumbnail };
           } catch {
             return null;
           }
@@ -1456,48 +2177,219 @@
         const cardsHtml = (results || [])
           .filter(Boolean)
           .map(({ slug, title, thumbnail }) => {
+            const href = `/categoria.html?slug=${encodeURIComponent(slug)}`;
             return `
-            <a href="/categoria.html?slug=${encodeURIComponent(slug)}" class="insta-post">
-              <img src="${cloudUrl(thumbnail, 'f_auto,q_auto,w_600')}" alt="${title}" loading="lazy" decoding="async">
-              <div class="insta-overlay" style="opacity:1;background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);">
-                <span>${title}</span>
+              <div class="insta-post reveal" data-href="${href}" role="link" tabindex="0" aria-label="${title}">
+                <img src="${cloudUrl(thumbnail, 'f_auto,q_auto,w_600')}" alt="${title}" loading="lazy" decoding="async">
+                <div class="insta-overlay">
+                  <span class="overlay-title">${title}</span>
+                  <div class="overlay-socials">
+                    <button class="overlay-social-btn" data-url="https://www.instagram.com/mconde.foto/" aria-label="Instagram">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><circle cx="17.5" cy="6.5" r=".5" fill="currentColor"/></svg>
+                    </button>
+                    <button class="overlay-social-btn" data-url="https://br.pinterest.com/marcelconde/" aria-label="Pinterest">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>
+                    </button>
+                    <button class="overlay-heart" aria-label="Curtir">
+                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </a>
-          `;
+            `;
           })
           .join('');
 
         portfolioContainer.innerHTML = cardsHtml;
-        document.querySelectorAll('.insta-post').forEach(el => observer.observe(el));
+
+        // Observe newly added .reveal elements
+        document.querySelectorAll('.insta-post.reveal').forEach(el => revealObserver.observe(el));
+
+        // Re-attach cursor hover listeners to new cards
+        if (cursorDot && cursorRing && window.matchMedia('(pointer: fine)').matches) {
+          document.querySelectorAll('.insta-post').forEach(el => {
+            el.addEventListener('mouseenter', () => {
+              cursorDot.style.transform  = 'translate(-50%, -50%) scale(2)';
+              cursorRing.style.transform = 'translate(-50%, -50%) scale(1.4)';
+              cursorRing.style.borderColor = 'rgba(184,149,106,0.5)';
+            });
+            el.addEventListener('mouseleave', () => {
+              cursorDot.style.transform  = 'translate(-50%, -50%) scale(1)';
+              cursorRing.style.transform = 'translate(-50%, -50%) scale(1)';
+              cursorRing.style.borderColor = 'var(--gold)';
+            });
+          });
+        }
 
       } catch (error) {
         console.error("Erro ao carregar portfólio:", error);
       }
     }
 
-    // carrega o portfólio quando o browser estiver mais livre
+    // Event delegation: navigate to album, open social links, or toggle like
+    document.querySelector('.instagram-feed')?.addEventListener('click', e => {
+      const social = e.target.closest('.overlay-social-btn');
+      if (social) { window.open(social.dataset.url, '_blank', 'noopener,noreferrer'); return; }
+      const heart = e.target.closest('.overlay-heart');
+      if (heart)  { heart.classList.toggle('liked'); return; }
+      const post  = e.target.closest('[data-href]');
+      if (post)   window.location.href = post.dataset.href;
+    });
+
+    document.querySelector('.instagram-feed')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const post = e.target.closest('[data-href]');
+        if (post) { e.preventDefault(); window.location.href = post.dataset.href; }
+      }
+    });
+
+    // -------------------------------------------------------
+    // HERO PHOTO REEL — fotos do portfólio passando aleatoriamente
+    // -------------------------------------------------------
+    async function initHeroReel() {
+      const reel = document.getElementById('hero-reel');
+      if (!reel) return;
+
+      const WORKER_BASE = "https://api.marcelconde.com.br";
+
+      function cloudUrl(src, t) {
+        if (!src || !src.includes('/upload/')) return src;
+        return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${t}/`);
+      }
+
+      // Mobile: crop vertical; desktop: landscape 16:9
+      const isMobile = window.innerWidth <= 768;
+      const transform = isMobile
+        ? 'f_auto,q_auto,w_800,h_1200,c_fill'
+        : 'f_auto,q_auto,w_1920,h_1080,c_fill';
+
+      try {
+        const albums = await fetch(`${WORKER_BASE}/albums?refresh=1&_=${Date.now()}`, { cache: 'no-store' }).then(r => r.json());
+        if (!Array.isArray(albums) || !albums.length) return;
+
+        // Busca todos os álbuns em paralelo e aguarda todos terminarem
+        const albumPhotos = await Promise.allSettled(
+          albums.map(a =>
+            fetch(`${WORKER_BASE}/album?path=${encodeURIComponent(a.path)}&refresh=1&_=${Date.now()}`, { cache: 'no-store' })
+              .then(r => r.json())
+              .then(d =>
+                (d.images || [])
+                  .map(i => (typeof i === 'object' ? i.url : i))
+                  .filter(Boolean)
+                  .sort(() => Math.random() - 0.5)   // embaralha dentro do álbum
+              )
+              .catch(() => [])
+          )
+        );
+
+        // Filtra álbuns que retornaram fotos
+        const buckets = albumPhotos
+          .filter(r => r.status === 'fulfilled' && r.value.length > 0)
+          .map(r => ({ photos: r.value, idx: 0 }))
+          .sort(() => Math.random() - 0.5);  // embaralha a ordem dos álbuns
+
+        if (!buckets.length) return;
+
+        // Intercala: pega 1 foto de cada álbum em rotação (round-robin)
+        // até esgotar todas as fotos de todos os álbuns
+        const interleaved = [];
+        let remaining = buckets.length;
+        while (remaining > 0) {
+          remaining = 0;
+          for (const b of buckets) {
+            if (b.idx < b.photos.length) {
+              interleaved.push(cloudUrl(b.photos[b.idx++], transform));
+              if (b.idx < b.photos.length) remaining++;
+            }
+          }
+        }
+
+        const preloadImage = (src) => new Promise((resolve) => {
+          const img = new Image();
+          img.decoding = 'async';
+          img.onload = resolve;
+          img.onerror = resolve;
+          img.src = src;
+        });
+
+        // Mantém apenas duas imagens no DOM: a atual e a próxima.
+        // Isso preserva o crossfade sem forçar o navegador a carregar o portfólio inteiro.
+        interleaved.slice(0, Math.min(2, interleaved.length)).forEach((src, i) => {
+          const img = document.createElement('img');
+          img.className = 'hero-reel-img';
+          img.src = src;
+          img.alt = '';
+          img.decoding = 'async';
+          img.loading = 'eager';
+          if (i === 0) img.classList.add('active');
+          reel.appendChild(img);
+        });
+
+        if (interleaved.length <= 1) return;
+
+        const imgs = reel.querySelectorAll('.hero-reel-img');
+        let current = 0;
+        let activeSlot = 0;
+        let nextReady = preloadImage(interleaved[1]);
+        let switching = false;
+
+        setInterval(async () => {
+          if (switching) return;
+          switching = true;
+
+          const next = (current + 1) % interleaved.length;
+          await nextReady;
+
+          const currentImg = imgs[activeSlot];
+          activeSlot = activeSlot === 0 ? 1 : 0;
+          const nextImg = imgs[activeSlot];
+          nextImg.src = interleaved[next];
+          nextImg.classList.add('active');
+          currentImg.classList.remove('active');
+
+          current = next;
+          nextReady = preloadImage(interleaved[(current + 1) % interleaved.length]);
+          switching = false;
+        }, 4000);
+
+      } catch (err) {
+        console.warn('Hero reel:', err);
+      }
+    }
+
+    // Carrega foto de perfil do álbum site/about no Cloudinary
+    async function loadAboutPhoto() {
+      try {
+        const data = await fetch(
+          `https://api.marcelconde.com.br/album?path=site/about&refresh=1&_=${Date.now()}`,
+          { cache: 'no-store' }
+        ).then(r => r.json());
+        const first = (data.images || [])[0];
+        const url = first ? (typeof first === 'object' ? first.url : first) : null;
+        if (url) {
+          const el = document.getElementById('about-photo');
+          if (el) {
+            el.src = url.includes('/upload/')
+              ? url.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, '/upload/f_auto,q_auto,w_800/')
+              : url;
+          }
+        }
+      } catch (e) { /* mantém fallback local */ }
+    }
+
+    // Load portfolio when browser is idle
     if ('requestIdleCallback' in window) {
       requestIdleCallback(() => loadPortfolio(), { timeout: 2000 });
+      requestIdleCallback(() => initHeroReel(), { timeout: 1500 });
+      requestIdleCallback(() => loadAboutPhoto(), { timeout: 2000 });
     } else {
       setTimeout(() => loadPortfolio(), 0);
+      setTimeout(() => initHeroReel(), 0);
+      setTimeout(() => loadAboutPhoto(), 0);
     }
 
-    // Botao voltar ao topo
-    const backToTopBtn = document.getElementById('backToTop');
-
-    function toggleBackToTop() {
-      if (!backToTopBtn) return;
-      backToTopBtn.classList.toggle('show', window.scrollY > 500);
-    }
-
-    window.addEventListener('scroll', toggleBackToTop, { passive: true });
-    toggleBackToTop();
-
-    backToTopBtn?.addEventListener('click', () => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
   </script>
+  <script src="/theme.js?v=20260706-01"></script>
 
 </body>
-
 </html>
