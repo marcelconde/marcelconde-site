@@ -155,14 +155,11 @@
   width: 100%;
   border: 1px dashed rgba(184,149,106,0.44);
   background:
-    linear-gradient(45deg, rgba(0,0,0,0.09) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(0,0,0,0.09) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(0,0,0,0.09) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(0,0,0,0.09) 75%),
-    #d8d8d8;
-  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
-  background-size: 24px 24px;
-  color: var(--ink);
+    radial-gradient(circle at 35% 25%, rgba(184,149,106,0.24), transparent 34%),
+    linear-gradient(135deg, #2b251d 0%, #11100e 58%, #070706 100%);
+  background-position: center;
+  background-size: cover;
+  color: #fff;
   padding: 18px;
   display: grid;
   gap: 10px;
@@ -171,6 +168,12 @@
   position: relative;
   overflow: hidden;
   cursor: pointer;
+}
+
+.watermark-preview.has-preview-photo {
+  border-style: solid;
+  background-position: center;
+  background-size: cover;
 }
 
 .watermark-preview:hover {
@@ -225,6 +228,7 @@
   font-family: var(--serif);
   font-size: 1.65rem;
   line-height: 1;
+  color: #fff;
 }
 
 .watermark-preview small {

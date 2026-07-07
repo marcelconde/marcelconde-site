@@ -271,17 +271,42 @@ function updateWatermarkPosition(value = "center") {
   });
 }
 
+function watermarkPreviewPhotoUrl() {
+  const gallery = state.selectedGallery || {};
+  const coverPublicId = gallery.coverPublicId || gallery.cover_public_id || gallery.cover?.public_id || "";
+  const coverImage = coverPublicId
+    ? state.images.find((image) => image.public_id === coverPublicId)
+    : null;
+  const selectedImage = state.selection
+    .map((publicId) => state.images.find((image) => image.public_id === publicId))
+    .find((image) => image?.url || image?.secure_url);
+  const fallbackImage = state.images.find((image) => image?.url || image?.secure_url);
+  const imageUrl = coverImage?.url || coverImage?.secure_url || selectedImage?.url || selectedImage?.secure_url || fallbackImage?.url || fallbackImage?.secure_url || "";
+  return imageUrl ? cloudUrl(imageUrl, "w_1200,q_auto,f_auto") : "";
+}
+
 function renderWatermarkPreview() {
   const logoUrl = watermarkLogo.value.trim();
+  const previewPhotoUrl = watermarkPreviewPhotoUrl();
+  const previewSize = Math.min(
+    Math.max(Number(watermarkSize.value || 180), Number(watermarkSize.min || 80)),
+    Number(watermarkSize.max || 520)
+  );
   watermarkUploadBtn.classList.toggle("has-image", Boolean(logoUrl));
+  watermarkUploadBtn.classList.toggle("has-preview-photo", Boolean(previewPhotoUrl));
+  watermarkUploadBtn.style.backgroundImage = previewPhotoUrl
+    ? `linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.18) 58%, rgba(0,0,0,0.26)), url(${JSON.stringify(previewPhotoUrl)})`
+    : "";
   watermarkPreview.style.backgroundImage = logoUrl ? `url("${logoUrl}")` : "";
   watermarkPreview.style.opacity = Number(watermarkOpacity.value || 0.28);
-  watermarkPreview.style.backgroundSize = `${Math.min(Number(watermarkSize.value || 180), 220)}px auto`;
+  watermarkPreview.style.backgroundSize = `${previewSize}px auto`;
   watermarkPreview.className = `watermark-preview-img ${watermarkPosition.value || "center"}`;
   watermarkPreviewText.textContent = logoUrl ? "Trocar marca d'água" : "Subir marca d'água";
   if (!watermarkStatus.dataset.uploading) {
     watermarkStatus.textContent = logoUrl
-      ? "Imagem salva na galeria. Ajuste posição, opacidade e tamanho ao lado."
+      ? (previewPhotoUrl
+        ? "Prévia usando uma foto desta galeria. Ajuste posição, opacidade e tamanho ao lado."
+        : "Envie fotos para ver a marca aplicada em uma imagem real.")
       : "PNG ou JPG, de preferência com fundo transparente.";
   }
 }
