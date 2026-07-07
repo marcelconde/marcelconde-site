@@ -11,8 +11,8 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #ebe4d8;
-  --panel: #f7efe4;
+  --bg: #ded2c0;
+  --panel: #e9decf;
   --ink: #211a13;
   --muted: rgba(33,26,19,0.64);
   --line: rgba(55,44,33,0.15);
@@ -35,7 +35,7 @@ body {
 :root[data-theme="light"] body {
   background:
     radial-gradient(circle at 75% 10%, rgba(169,130,85,0.12), transparent 32%),
-    #ebe4d8;
+    #ded2c0;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -297,5 +297,5 @@ p {
 :root[data-theme="light"] .gallery-card,
 :root[data-theme="light"] .btn,
 :root[data-theme="light"] .form input {
-  background: rgba(247,239,228,0.86);
+  background: rgba(233,222,207,0.86);
 }

@@ -17,10 +17,10 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #ebe4d8;
-  --bg-soft: #e1d5c4;
-  --panel: #f7efe4;
-  --panel-2: #eee4d5;
+  --bg: #ded2c0;
+  --bg-soft: #d3c4ae;
+  --panel: #e9decf;
+  --panel-2: #e1d4c1;
   --line: rgba(55, 44, 33, 0.15);
   --line-strong: rgba(135, 104, 69, 0.38);
   --ink: #211a13;
@@ -48,7 +48,7 @@ body {
 :root[data-theme="light"] body {
   background:
     radial-gradient(circle at 76% 10%, rgba(169,130,85,0.12), transparent 30rem),
-    linear-gradient(135deg, #efe7da 0%, #e7dccb 58%, #dccbb6 100%);
+    linear-gradient(135deg, #e2d5c3 0%, #d8c9b5 58%, #ccb89e 100%);
 }
 
 button,
@@ -1127,7 +1127,7 @@ label {
 :root[data-theme="light"] .upload-panel,
 :root[data-theme="light"] .admin-card-panel,
 :root[data-theme="light"] .likes-head {
-  background: rgba(247,239,228,0.86);
+  background: rgba(233,222,207,0.86);
 }
 
 @media (max-width: 860px) {

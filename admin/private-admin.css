@@ -638,7 +638,7 @@
 :root[data-theme="light"] .selection-log-panel,
 :root[data-theme="light"] .private-copy,
 :root[data-theme="light"] .photo-bulk-actions {
-  background: rgba(247,239,228,0.82);
+  background: rgba(233,222,207,0.82);
 }
 
 .admin-section-head,
@@ -950,7 +950,7 @@
 :root[data-theme="light"] .detail-topbar,
 :root[data-theme="light"] .detail-sidebar,
 :root[data-theme="light"] .detail-section {
-  background: rgba(247,239,228,0.88);
+  background: rgba(233,222,207,0.88);
 }
 
 .library-hero {
