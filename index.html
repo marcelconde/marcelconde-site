@@ -144,6 +144,11 @@
       background: var(--bg);
     }
 
+    :root[data-theme="light"] .btn-primary,
+    :root[data-theme="light"] .nav-cta {
+      color: #080808;
+    }
+
     /* =============================================
        CUSTOM CURSOR
        ============================================= */
@@ -259,6 +264,28 @@
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       padding: 1.4rem 8%;
+    }
+
+    :root[data-theme="light"] nav.scrolled {
+      background: rgba(245, 243, 239, 0.94);
+      border-bottom-color: rgba(24, 21, 18, 0.12);
+    }
+
+    :root[data-theme="light"] nav:not(.scrolled) .nav-logo,
+    :root[data-theme="light"] nav:not(.scrolled) .nav-links a {
+      color: rgba(240, 236, 227, 0.72);
+    }
+
+    :root[data-theme="light"] nav:not(.scrolled) .nav-links a:hover {
+      color: #f0ece3;
+    }
+
+    :root[data-theme="light"] nav:not(.scrolled) .nav-links .nav-find {
+      color: #d4b48a;
+    }
+
+    :root[data-theme="light"] nav:not(.scrolled) .nav-toggle span {
+      background: #f0ece3;
     }
 
     nav.menu-open {
@@ -391,13 +418,17 @@
        HERO
        ============================================= */
     .hero {
+      --hero-bg: #080808;
+      --hero-ink: #f0ece3;
+      --hero-ink-dim: rgba(240, 236, 227, 0.48);
+      --hero-ink-faint: rgba(240, 236, 227, 0.12);
       position: relative;
       height: 100vh;
       min-height: 600px;
       display: grid;
       grid-template-rows: 1fr auto;
       overflow: hidden;
-      background: var(--bg);
+      background: var(--hero-bg);
     }
 
     /* Grain texture */
@@ -448,8 +479,8 @@
       inset: 0;
       background: linear-gradient(
         to right,
-        var(--bg)            0%,
-        var(--bg)            28%,
+        var(--hero-bg)       0%,
+        var(--hero-bg)       28%,
         rgba(8,8,8,0.88)     42%,
         rgba(8,8,8,0.55)     56%,
         rgba(8,8,8,0.18)     72%,
@@ -465,7 +496,7 @@
       position: absolute;
       inset: 0;
       background:
-        linear-gradient(to bottom, var(--bg) 0%, transparent 16%),
+        linear-gradient(to bottom, var(--hero-bg) 0%, transparent 16%),
         linear-gradient(to top,    rgba(8,8,8,0.80) 0%, transparent 28%);
       z-index: 3;
       pointer-events: none;
@@ -504,7 +535,7 @@
       font-size: clamp(72px, 12vw, 160px);
       font-weight: 700;
       line-height: .92;
-      color: var(--ink);
+      color: var(--hero-ink);
       letter-spacing: 0;
       opacity: 0;
       animation: fadeUp 1s var(--ease) 0.6s forwards;
@@ -524,7 +555,7 @@
       font-family: var(--sans);
       font-size: clamp(0.9rem, 1.5vw, 1.1rem);
       font-weight: 300;
-      color: var(--ink-dim);
+      color: var(--hero-ink-dim);
       max-width: 440px;
       line-height: 1.7;
       opacity: 0;
@@ -569,7 +600,7 @@
       font-weight: 500;
       letter-spacing: .14em;
       text-transform: uppercase;
-      color: var(--ink-dim);
+      color: var(--hero-ink-dim);
       text-decoration: none;
       position: relative;
       transition: color 0.25s ease;
@@ -587,7 +618,7 @@
     }
 
     .btn-ghost:hover {
-      color: var(--ink);
+      color: var(--hero-ink);
     }
 
     .btn-ghost:hover::after {
@@ -614,14 +645,14 @@
       font-weight: 500;
       letter-spacing: .22em;
       text-transform: uppercase;
-      color: var(--ink-dim);
+      color: var(--hero-ink-dim);
       writing-mode: vertical-rl;
     }
 
     .hero-scroll-line {
       width: 1px;
       height: 60px;
-      background: var(--ink-faint);
+      background: var(--hero-ink-faint);
       overflow: hidden;
       position: relative;
     }
@@ -1617,16 +1648,23 @@
       bottom: 18px;
       z-index: 10000;
       min-height: 36px;
-      border: 1px solid var(--ink-faint);
-      background: color-mix(in srgb, var(--bg3) 88%, transparent);
-      color: var(--ink);
-      padding: 0 12px;
+      min-width: 78px;
+      border: 1px solid rgba(240,236,227,0.18);
+      border-radius: 999px;
+      background: rgba(8,8,8,0.72);
+      color: #f0ece3;
+      padding: 0 14px;
       font: 800 0.74rem var(--sans);
       letter-spacing: 0;
       text-transform: uppercase;
-      box-shadow: 0 14px 34px rgba(0,0,0,0.18);
+      box-shadow: 0 14px 34px rgba(0,0,0,0.26);
       backdrop-filter: blur(14px);
       cursor: pointer;
+    }
+
+    .theme-toggle:hover {
+      border-color: rgba(184,149,106,0.58);
+      background: rgba(8,8,8,0.86);
     }
   </style>
 </head>
