@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/clientes/auth.css?v=20260714-01">
+  <link rel="stylesheet" href="/clientes/auth.css?v=20260714-02">
 </head>
 <body>
   <main class="client-shell">
@@ -29,11 +29,11 @@
       </div>
 
       <form class="panel form" id="authForm">
-        <label>
+        <label id="emailField">
           E-mail
           <input id="email" type="email" autocomplete="email" placeholder="seu@email.com" required>
         </label>
-        <label>
+        <label id="passwordField">
           Senha
           <input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
         </label>
@@ -42,13 +42,15 @@
           <input id="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repita a senha">
         </label>
         <button class="btn btn-primary" id="submitBtn" type="submit">Entrar</button>
+        <button class="muted-link link-button" id="forgotPasswordBtn" type="button">Esqueci minha senha</button>
+        <button class="muted-link link-button" id="backToLoginBtn" type="button" hidden>Voltar ao login</button>
         <a class="muted-link" href="/clientes/dashboard/" id="dashboardLink">Ver minhas galerias</a>
         <div class="status" id="statusText"></div>
       </form>
     </section>
   </main>
 
-  <script src="/theme.js?v=20260707-02"></script>
-  <script src="/clientes/login/login.js?v=20260714-01"></script>
+  <script src="/theme.js?v=20260714-03"></script>
+  <script src="/clientes/login/login.js?v=20260714-02"></script>
 </body>
 </html>

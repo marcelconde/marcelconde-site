@@ -129,7 +129,7 @@ function renderQuote() {
   contractorDetails.textContent = contractorInfo(contractor);
 
   const meta = [
-    ["Data do trabalho", quote.serviceDate ? formatDate(quote.serviceDate) : "A combinar"],
+    ["Data do trabalho", quote.serviceDate ? formatDate(quote.serviceDate) : "A definir"],
     ["Local", quote.serviceLocation || "A combinar"],
     ["Prazo de entrega", quote.deliveryEstimate || "Conforme escopo"],
     ["Validade da proposta", formatDate(quote.validUntil)],

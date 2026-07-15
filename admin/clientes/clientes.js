@@ -24,6 +24,8 @@ const clientPhone = $("#clientPhone");
 const clientDocument = $("#clientDocument");
 const clientCompanyName = $("#clientCompanyName");
 const clientPostalCode = $("#clientPostalCode");
+const lookupPostalCodeBtn = $("#lookupPostalCodeBtn");
+const postalCodeStatus = $("#postalCodeStatus");
 const clientStreet = $("#clientStreet");
 const clientAddressNumber = $("#clientAddressNumber");
 const clientComplement = $("#clientComplement");
@@ -36,7 +38,17 @@ const newQuoteBtn = $("#newQuoteBtn");
 const deleteClientBtn = $("#deleteClientBtn");
 const refreshBtn = $("#refreshBtn");
 const saveClientBtn = $("#saveClientBtn");
+const clientAccessStatus = $("#clientAccessStatus");
+const generateTemporaryPasswordBtn = $("#generateTemporaryPasswordBtn");
+const sendPasswordResetBtn = $("#sendPasswordResetBtn");
+const temporaryPasswordResult = $("#temporaryPasswordResult");
+const temporaryPasswordValue = $("#temporaryPasswordValue");
+const copyTemporaryPasswordBtn = $("#copyTemporaryPasswordBtn");
+const clientAccessMessage = $("#clientAccessMessage");
 const toastEl = $("#toast");
+
+let postalCodeTimer = 0;
+let postalCodeController = null;
 
 function getToken() {
   return sessionStorage.getItem(CONFIG.tokenKey) || "";
@@ -56,6 +68,82 @@ function showToast(message) {
   toastEl.classList.add("show");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toastEl.classList.remove("show"), 3200);
+}
+
+function setFieldStatus(element, message = "", type = "") {
+  element.textContent = message;
+  element.className = `field-status${type ? ` ${type}` : ""}`;
+}
+
+function formatPostalCode(value = "") {
+  const digits = String(value).replace(/\D/g, "").slice(0, 8);
+  return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+}
+
+async function lookupPostalCode({ focusNumber = false } = {}) {
+  const postalCode = clientPostalCode.value.replace(/\D/g, "");
+  if (postalCode.length !== 8) {
+    setFieldStatus(postalCodeStatus, postalCode ? "Informe os 8 números do CEP." : "", postalCode ? "error" : "");
+    return;
+  }
+
+  postalCodeController?.abort();
+  postalCodeController = new AbortController();
+  lookupPostalCodeBtn.disabled = true;
+  lookupPostalCodeBtn.textContent = "Buscando...";
+  setFieldStatus(postalCodeStatus, "Consultando endereço...");
+
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${postalCode}/json/`, {
+      signal: postalCodeController.signal,
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error("Não foi possível consultar o CEP.");
+    const address = await res.json();
+    if (address.erro) throw new Error("CEP não encontrado.");
+
+    clientPostalCode.value = formatPostalCode(address.cep || postalCode);
+    clientStreet.value = address.logradouro || clientStreet.value;
+    clientNeighborhood.value = address.bairro || clientNeighborhood.value;
+    clientCity.value = address.localidade || clientCity.value;
+    clientState.value = String(address.uf || clientState.value).toUpperCase();
+    setFieldStatus(postalCodeStatus, "Endereço preenchido automaticamente.", "success");
+    if (focusNumber) clientAddressNumber.focus();
+  } catch (err) {
+    if (err.name !== "AbortError") setFieldStatus(postalCodeStatus, err.message || "Erro ao consultar o CEP.", "error");
+  } finally {
+    lookupPostalCodeBtn.disabled = false;
+    lookupPostalCodeBtn.textContent = "Buscar";
+  }
+}
+
+function renderClientAccess() {
+  const client = state.selectedClient;
+  const hasSavedClient = Boolean(client?.id);
+  const hasEmail = Boolean(client?.email);
+  const access = client?.access || {};
+  generateTemporaryPasswordBtn.disabled = !hasSavedClient || !hasEmail;
+  sendPasswordResetBtn.disabled = !hasSavedClient || !hasEmail || !access.hasPassword;
+
+  if (!hasSavedClient) {
+    clientAccessStatus.textContent = "Salve o cliente com um e-mail para criar o acesso.";
+  } else if (!hasEmail) {
+    clientAccessStatus.textContent = "Adicione e salve um e-mail para habilitar a área do cliente.";
+  } else if (!access.hasPassword) {
+    clientAccessStatus.textContent = "Conta ainda sem senha. Gere um acesso temporário para este cliente.";
+  } else if (access.mustChangePassword) {
+    clientAccessStatus.textContent = "Senha temporária ativa. O cliente deverá criar uma senha definitiva no primeiro login.";
+  } else {
+    clientAccessStatus.textContent = "Acesso ativo com senha definitiva cadastrada.";
+  }
+}
+
+function updateSelectedClientAccess(access) {
+  if (!state.selectedClient) return;
+  state.selectedClient = { ...state.selectedClient, access };
+  const index = state.clients.findIndex((client) => client.id === state.selectedClient.id);
+  if (index >= 0) state.clients[index] = state.selectedClient;
+  renderClientAccess();
 }
 
 async function workerFetch(path, options = {}) {
@@ -96,10 +184,15 @@ function clearForm() {
   clientCity.value = "";
   clientState.value = "";
   clientNotes.value = "";
+  setFieldStatus(postalCodeStatus);
+  setFieldStatus(clientAccessMessage);
+  temporaryPasswordResult.hidden = true;
+  temporaryPasswordValue.value = "";
   deleteClientBtn.disabled = true;
   newQuoteBtn.classList.add("disabled");
   newQuoteBtn.href = "#";
   clientName.focus();
+  renderClientAccess();
   renderClients();
 }
 
@@ -120,9 +213,14 @@ function selectClient(id) {
   clientCity.value = state.selectedClient.address?.city || "";
   clientState.value = state.selectedClient.address?.state || "";
   clientNotes.value = state.selectedClient.notes || "";
+  setFieldStatus(postalCodeStatus);
+  setFieldStatus(clientAccessMessage);
+  temporaryPasswordResult.hidden = true;
+  temporaryPasswordValue.value = "";
   deleteClientBtn.disabled = false;
   newQuoteBtn.classList.remove("disabled");
   newQuoteBtn.href = `/admin/orcamentos/detalhe/?client=${encodeURIComponent(state.selectedClient.id)}`;
+  renderClientAccess();
   renderClients();
 }
 
@@ -156,12 +254,14 @@ function renderClients() {
 async function loadData() {
   const me = await getJson("/auth/me");
   currentUserLabel.textContent = me.user?.email || "";
-  const [galleryData, quoteResult] = await Promise.all([
+  const [galleryData, quoteResult, clientResult] = await Promise.all([
     getJson("/private/galleries"),
     getJson("/private/quotes").then((data) => ({ data })).catch(() => ({ data: { clients: [], quotes: [] } })),
+    getJson("/private/clients").then((data) => ({ data })).catch(() => ({ data: { clients: [] } })),
   ]);
   const quoteData = quoteResult.data;
-  state.clients = galleryData.clients || quoteData.clients || [];
+  const clientData = clientResult.data;
+  state.clients = clientData.clients?.length ? clientData.clients : (galleryData.clients || quoteData.clients || []);
   state.galleries = galleryData.galleries || [];
   state.quotes = quoteData.quotes || [];
   renderClients();
@@ -195,10 +295,19 @@ clientForm.addEventListener("submit", async (event) => {
       body: JSON.stringify(payload),
     });
     const existingIndex = state.clients.findIndex((client) => client.id === data.client.id);
-    if (existingIndex >= 0) state.clients[existingIndex] = data.client;
-    else state.clients.unshift(data.client);
-    state.selectedClient = data.client;
+    const savedClient = { ...data.client, access: data.access || data.client.access || {} };
+    if (existingIndex >= 0) state.clients[existingIndex] = savedClient;
+    else state.clients.unshift(savedClient);
+    state.selectedClient = savedClient;
     deleteClientBtn.disabled = false;
+    newQuoteBtn.classList.remove("disabled");
+    newQuoteBtn.href = `/admin/orcamentos/detalhe/?client=${encodeURIComponent(savedClient.id)}`;
+    if (data.temporaryPassword) {
+      temporaryPasswordValue.value = data.temporaryPassword;
+      temporaryPasswordResult.hidden = false;
+      setFieldStatus(clientAccessMessage, "Acesso temporário criado. A senha será renovada e enviada quando o orçamento for publicado.", "success");
+    }
+    renderClientAccess();
     showToast("Cliente salvo.");
     renderClients();
   } catch (err) {
@@ -251,6 +360,79 @@ deleteClientBtn.addEventListener("click", async () => {
 });
 
 refreshBtn.addEventListener("click", loadData);
+
+clientPostalCode.addEventListener("input", () => {
+  clientPostalCode.value = formatPostalCode(clientPostalCode.value);
+  setFieldStatus(postalCodeStatus);
+  clearTimeout(postalCodeTimer);
+  if (clientPostalCode.value.replace(/\D/g, "").length === 8) {
+    postalCodeTimer = setTimeout(() => lookupPostalCode(), 450);
+  }
+});
+
+clientPostalCode.addEventListener("blur", () => {
+  clearTimeout(postalCodeTimer);
+  if (clientPostalCode.value.replace(/\D/g, "").length === 8) lookupPostalCode();
+});
+
+lookupPostalCodeBtn.addEventListener("click", () => lookupPostalCode({ focusNumber: true }));
+
+generateTemporaryPasswordBtn.addEventListener("click", async () => {
+  if (!state.selectedClient?.id) return;
+  generateTemporaryPasswordBtn.disabled = true;
+  generateTemporaryPasswordBtn.textContent = "Gerando...";
+  setFieldStatus(clientAccessMessage, "");
+  try {
+    const data = await getJson("/private/client/access", {
+      method: "POST",
+      body: JSON.stringify({ clientId: state.selectedClient.id, action: "temporary_password" }),
+    });
+    updateSelectedClientAccess(data.access || {});
+    temporaryPasswordValue.value = data.temporaryPassword || "";
+    temporaryPasswordResult.hidden = !data.temporaryPassword;
+    setFieldStatus(
+      clientAccessMessage,
+      data.emailQueued ? "Senha temporária enviada ao cliente." : `Senha criada, mas o e-mail não saiu: ${data.emailError || "verifique o serviço de e-mail"}`,
+      data.emailQueued ? "success" : "error",
+    );
+  } catch (err) {
+    setFieldStatus(clientAccessMessage, err.message || "Erro ao gerar senha temporária.", "error");
+  } finally {
+    generateTemporaryPasswordBtn.textContent = "Gerar e enviar senha temporária";
+    renderClientAccess();
+  }
+});
+
+sendPasswordResetBtn.addEventListener("click", async () => {
+  if (!state.selectedClient?.id) return;
+  sendPasswordResetBtn.disabled = true;
+  sendPasswordResetBtn.textContent = "Enviando...";
+  setFieldStatus(clientAccessMessage, "");
+  try {
+    const data = await getJson("/private/client/access", {
+      method: "POST",
+      body: JSON.stringify({ clientId: state.selectedClient.id, action: "password_reset" }),
+    });
+    setFieldStatus(clientAccessMessage, data.emailQueued ? "Link de redefinição enviado ao cliente." : "Não foi possível enviar o e-mail.", data.emailQueued ? "success" : "error");
+  } catch (err) {
+    setFieldStatus(clientAccessMessage, err.message || "Erro ao enviar redefinição.", "error");
+  } finally {
+    sendPasswordResetBtn.textContent = "Enviar redefinição";
+    renderClientAccess();
+  }
+});
+
+copyTemporaryPasswordBtn.addEventListener("click", async () => {
+  if (!temporaryPasswordValue.value) return;
+  try {
+    await navigator.clipboard.writeText(temporaryPasswordValue.value);
+    showToast("Senha temporária copiada.");
+  } catch {
+    temporaryPasswordValue.select();
+    document.execCommand("copy");
+    showToast("Senha temporária copiada.");
+  }
+});
 
 loadData().catch((err) => {
   showToast(err.message || "Erro ao carregar clientes.");

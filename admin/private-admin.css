@@ -76,6 +76,97 @@
   grid-column: 1 / -1;
 }
 
+.input-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+  margin-top: 8px;
+}
+
+.input-action-row input {
+  margin-top: 0 !important;
+}
+
+.btn-compact {
+  min-height: 38px;
+  padding: 0 14px;
+  align-self: stretch;
+}
+
+.field-status {
+  display: block;
+  min-height: 18px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.field-status.success {
+  color: #75b88a;
+}
+
+.field-status.error {
+  color: var(--danger);
+}
+
+.client-access-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  gap: 14px 20px;
+  align-items: center;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.022);
+  padding: 14px;
+}
+
+.client-access-panel h2 {
+  margin: 3px 0 4px;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+}
+
+.client-access-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.client-access-panel .content-actions {
+  margin: 0;
+}
+
+.temporary-password-result,
+.client-access-panel > .field-status {
+  grid-column: 1 / -1;
+}
+
+.temporary-password-result {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.temporary-password-result > label,
+.date-option-field > label:first-child {
+  display: block;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.temporary-password-result small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
 .private-form [hidden] {
   display: none !important;
 }
@@ -569,6 +660,14 @@
   .watermark-layout,
   .discount-rule {
     grid-template-columns: 1fr;
+  }
+
+  .client-access-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .client-access-panel .content-actions {
+    justify-content: flex-start;
   }
 
   .selection-log-head,
@@ -1205,6 +1304,34 @@
 .detail-form-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.date-option-field {
+  min-width: 0;
+}
+
+.date-option-field > input[type="date"] {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.inline-check {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px !important;
+  margin-top: 8px;
+  color: var(--muted) !important;
+  font-size: 0.76rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  cursor: pointer;
+}
+
+.inline-check input {
+  width: 15px !important;
+  min-height: 15px !important;
+  margin: 0 !important;
 }
 
 .detail-form-grid textarea {

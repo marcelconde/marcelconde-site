@@ -71,6 +71,32 @@
         line-height: 1 !important;
       }
 
+      .theme-toggle-host {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 10px !important;
+        min-width: 0 !important;
+      }
+
+      .theme-toggle.theme-toggle--inline {
+        position: relative !important;
+        inset: auto !important;
+        z-index: 2 !important;
+        flex: 0 0 82px !important;
+        margin: 0 !important;
+      }
+
+      .theme-toggle-dock {
+        position: relative;
+        z-index: 100;
+        min-height: 60px;
+        padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 10px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
       .theme-toggle::before {
         content: "";
         position: absolute;
@@ -146,6 +172,16 @@
           padding: 3px !important;
         }
 
+        .theme-toggle.theme-toggle--inline {
+          inset: auto !important;
+          flex-basis: 76px !important;
+        }
+
+        .theme-toggle-host {
+          gap: 8px !important;
+          flex-wrap: wrap;
+        }
+
         .theme-toggle::before {
           width: 32px;
           height: 32px;
@@ -176,6 +212,65 @@
     }
   }
 
+  function makeHost(parent, className = "") {
+    const host = document.createElement("div");
+    host.className = `theme-toggle-host ${className}`.trim();
+    parent.appendChild(host);
+    return host;
+  }
+
+  function firstAvailable(selector) {
+    return Array.from(document.querySelectorAll(selector))
+      .find((element) => !element.closest("[hidden], .hidden"));
+  }
+
+  function placeToggle(button) {
+    const previousDock = button.closest(".theme-toggle-dock");
+    let host = firstAvailable(".top-actions, .quote-client-actions");
+
+    if (!host) {
+      const splitHeader = firstAvailable(".client-topbar, .client-top");
+      if (splitHeader) {
+        host = splitHeader.querySelector(":scope > .theme-toggle-host") || makeHost(splitHeader);
+        Array.from(splitHeader.children)
+          .filter((child, index) => index > 0 && child !== host)
+          .forEach((child) => host.appendChild(child));
+      }
+    }
+
+    if (!host) {
+      const navbar = document.getElementById("navbar");
+      if (navbar && !navbar.closest("[hidden], .hidden")) {
+        host = navbar.querySelector(":scope > .theme-toggle-host") || makeHost(navbar, "theme-toggle-host--nav");
+        [navbar.querySelector(":scope > .nav-cta"), navbar.querySelector(":scope > .nav-toggle")]
+          .filter(Boolean)
+          .forEach((element) => host.appendChild(element));
+      }
+    }
+
+    if (!host) {
+      const simpleTopbar = firstAvailable("body > .topbar");
+      if (simpleTopbar) {
+        host = simpleTopbar.querySelector(":scope > .theme-toggle-host") || makeHost(simpleTopbar);
+        host.style.marginLeft = "auto";
+      }
+    }
+
+    if (!host) {
+      host = document.querySelector("body > .theme-toggle-dock");
+      if (!host) {
+        host = document.createElement("div");
+        host.className = "theme-toggle-dock";
+        document.body.insertBefore(host, document.body.firstChild);
+      }
+    }
+
+    host.classList.add("theme-toggle-host");
+    button.classList.add("theme-toggle--inline");
+    if (button.parentElement !== host) host.appendChild(button);
+    if (previousDock && previousDock !== host && !previousDock.children.length) previousDock.remove();
+  }
+
   function applyTheme(theme) {
     root.dataset.theme = theme;
     saveTheme(theme);
@@ -193,10 +288,19 @@
     let button = document.querySelector("[data-theme-toggle]");
     if (!button) {
       button = document.createElement("button");
-      document.body.appendChild(button);
     }
     hydrateToggle(button);
+    placeToggle(button);
     applyTheme(root.dataset.theme || preferredTheme());
+
+    const observer = new MutationObserver(() => {
+      window.requestAnimationFrame(() => placeToggle(button));
+    });
+    observer.observe(document.body, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ["class", "hidden"],
+    });
   }
 
   mountToggleStyles();

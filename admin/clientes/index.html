@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260707-05">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260707-05">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260714-02">
 </head>
 <body>
   <div class="admin-shell" id="adminShell">
@@ -88,7 +88,11 @@
               </label>
               <label>
                 CEP
-                <input id="clientPostalCode" type="text" placeholder="00000-000">
+                <span class="input-action-row">
+                  <input id="clientPostalCode" type="text" inputmode="numeric" maxlength="9" autocomplete="postal-code" placeholder="00000-000">
+                  <button class="btn btn-ghost btn-compact" id="lookupPostalCodeBtn" type="button">Buscar</button>
+                </span>
+                <small class="field-status" id="postalCodeStatus" role="status" aria-live="polite"></small>
               </label>
               <label>
                 Rua / avenida
@@ -118,6 +122,26 @@
                 Observações internas
                 <textarea id="clientNotes" placeholder="Preferências, tipo de trabalho, detalhes do atendimento..."></textarea>
               </label>
+              <section class="client-access-panel full" aria-labelledby="clientAccessTitle">
+                <div>
+                  <span class="eyebrow">Área do cliente</span>
+                  <h2 id="clientAccessTitle">Acesso e senha</h2>
+                  <p id="clientAccessStatus">Salve o cliente com um e-mail para criar o acesso.</p>
+                </div>
+                <div class="content-actions">
+                  <button class="btn btn-primary" id="generateTemporaryPasswordBtn" type="button" disabled>Gerar e enviar senha temporária</button>
+                  <button class="btn btn-ghost" id="sendPasswordResetBtn" type="button" disabled>Enviar redefinição</button>
+                </div>
+                <div class="temporary-password-result" id="temporaryPasswordResult" hidden>
+                  <label for="temporaryPasswordValue">Senha temporária gerada</label>
+                  <div class="input-action-row">
+                    <input id="temporaryPasswordValue" type="text" readonly>
+                    <button class="btn btn-ghost btn-compact" id="copyTemporaryPasswordBtn" type="button">Copiar</button>
+                  </div>
+                  <small>Mostrada somente nesta tela. O cliente também recebe a senha por e-mail.</small>
+                </div>
+                <span class="field-status" id="clientAccessMessage" role="status" aria-live="polite"></span>
+              </section>
             </div>
             <div class="content-actions">
               <button class="btn btn-primary" id="saveClientBtn" type="submit">Salvar cliente</button>
@@ -129,7 +153,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/theme.js?v=20260707-02"></script>
-  <script src="/admin/clientes/clientes.js?v=20260714-01"></script>
+  <script src="/theme.js?v=20260714-03"></script>
+  <script src="/admin/clientes/clientes.js?v=20260714-02"></script>
 </body>
 </html>

@@ -46,6 +46,7 @@ const quoteStatusBadge = $("#quoteStatusBadge");
 const quoteClient = $("#quoteClient");
 const quoteValidUntil = $("#quoteValidUntil");
 const quoteServiceDate = $("#quoteServiceDate");
+const quoteServiceDateUndefined = $("#quoteServiceDateUndefined");
 const quoteTitle = $("#quoteTitle");
 const quoteDescription = $("#quoteDescription");
 const quoteLocation = $("#quoteLocation");
@@ -291,7 +292,7 @@ function payloadFromForm() {
     clientId: quoteClient.value,
     title: quoteTitle.value.trim(),
     serviceDescription: quoteDescription.value.trim(),
-    serviceDate: quoteServiceDate.value,
+    serviceDate: quoteServiceDateUndefined.checked ? "" : quoteServiceDate.value,
     serviceLocation: quoteLocation.value.trim(),
     deliveryEstimate: quoteDelivery.value.trim(),
     validUntil: quoteValidUntil.value,
@@ -376,6 +377,8 @@ function populateForm() {
   quoteClient.value = state.quote.clientId || "";
   quoteValidUntil.value = state.quote.validUntil || "";
   quoteServiceDate.value = state.quote.serviceDate || "";
+  quoteServiceDateUndefined.checked = !state.quote.serviceDate;
+  quoteServiceDate.disabled = quoteServiceDateUndefined.checked;
   quoteTitle.value = state.quote.title || "";
   quoteDescription.value = state.quote.serviceDescription || "";
   quoteLocation.value = state.quote.serviceLocation || "";
@@ -561,6 +564,12 @@ quoteDiscountType.addEventListener("change", () => {
   updateTotals();
 });
 quoteDiscountValue.addEventListener("input", updateTotals);
+
+quoteServiceDateUndefined.addEventListener("change", () => {
+  quoteServiceDate.disabled = quoteServiceDateUndefined.checked;
+  if (quoteServiceDateUndefined.checked) quoteServiceDate.value = "";
+  else quoteServiceDate.focus();
+});
 
 document.querySelectorAll("[data-detail-section]").forEach((button) => {
   button.addEventListener("click", () => {

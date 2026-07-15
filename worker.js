@@ -202,6 +202,10 @@ function clientQuoteInviteKey(token) {
   return `client_quote_invite:${token}`;
 }
 
+function clientPasswordResetKey(token) {
+  return `client_password_reset:${token}`;
+}
+
 function normalizeRole(role = "") {
   return role === "admin" ? "admin" : "editor";
 }
@@ -224,6 +228,7 @@ function publicClientUser(user = {}) {
   return {
     email: normalizeEmail(user.email || ""),
     name: user.name || user.email || "Cliente",
+    mustChangePassword: user.mustChangePassword === true,
     createdAt: user.createdAt || null,
     updatedAt: user.updatedAt || null,
   };
@@ -1499,6 +1504,13 @@ function randomToken(bytes = 32) {
     .replace(/=+$/g, "");
 }
 
+function generateTemporaryPassword(length = 12) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(Math.max(8, length)));
+  const value = Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
+  return `MC-${value}`;
+}
+
 async function hashPassword(password, saltBase64 = "", pepper = "") {
   const saltBytes = saltBase64 ? base64ToBytes(saltBase64) : crypto.getRandomValues(new Uint8Array(16));
   const salt = bytesToBase64(saltBytes);
@@ -1587,6 +1599,19 @@ async function getClientUser(env, email) {
   return env.LIKES_KV.get(clientUserKey(cleanEmail), "json");
 }
 
+function clientAccessSummary(user = {}) {
+  return {
+    hasPassword: Boolean(user.passwordHash || user.hasPassword),
+    mustChangePassword: user.mustChangePassword === true,
+    passwordUpdatedAt: user.passwordUpdatedAt || user.updatedAt || null,
+  };
+}
+
+async function getClientAccessSummary(env, email) {
+  const user = await getClientUser(env, email);
+  return clientAccessSummary(user || {});
+}
+
 async function saveClientPassword(env, email, password, profile = {}) {
   if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
   const cleanEmail = normalizeEmail(email);
@@ -1599,6 +1624,8 @@ async function saveClientPassword(env, email, password, profile = {}) {
     email: cleanEmail,
     name: cleanDisplayName(profile.name || existing?.name || cleanEmail),
     passwordHash: await hashPassword(password, "", authPepper(env)),
+    mustChangePassword: profile.mustChangePassword === true,
+    passwordUpdatedAt: now,
     active: true,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
@@ -1606,6 +1633,24 @@ async function saveClientPassword(env, email, password, profile = {}) {
 
   await writeKvJson(env, clientUserKey(cleanEmail), user);
   return publicClientUser(user);
+}
+
+async function issueClientTemporaryPassword(env, client = {}) {
+  if (!client.email) throw new Error("Cliente sem e-mail cadastrado.");
+  const temporaryPassword = generateTemporaryPassword();
+  const user = await saveClientPassword(env, client.email, temporaryPassword, {
+    name: client.name || client.email,
+    mustChangePassword: true,
+  });
+  return {
+    temporaryPassword,
+    user,
+    access: {
+      hasPassword: true,
+      mustChangePassword: true,
+      passwordUpdatedAt: user.updatedAt || new Date().toISOString(),
+    },
+  };
 }
 
 async function validateClientLogin(env, email, password) {
@@ -1625,6 +1670,7 @@ async function createClientSession(env, user) {
   const session = {
     email: normalizeEmail(user.email || ""),
     name: user.name || user.email || "Cliente",
+    mustChangePassword: user.mustChangePassword === true,
     createdAt: new Date(now).toISOString(),
     expiresAt: now + 1000 * 60 * 60 * 24 * 30,
   };
@@ -1648,6 +1694,9 @@ async function getCurrentClient(request, env) {
 async function requireClientGalleryAccess(request, env, gallery) {
   const session = await getCurrentClient(request, env);
   if (!session) return { error: errorJson("Faça login para acessar esta galeria.", 401) };
+  if (session.mustChangePassword === true) {
+    return { error: errorJson("Crie sua senha definitiva antes de acessar esta galeria.", 403, { passwordChangeRequired: true }) };
+  }
 
   const linkedClient = gallery?.clientId
     ? await readKvJson(env, privateClientKey(gallery.clientId), null)
@@ -1696,9 +1745,16 @@ function clientQuoteInviteUrl(env, token) {
   return `${clientLoginUrl(env)}?convite=${encodeURIComponent(token)}`;
 }
 
+function clientPasswordResetUrl(env, token) {
+  return `${clientLoginUrl(env)}?redefinir=${encodeURIComponent(token)}`;
+}
+
 async function requireClientQuoteAccess(request, env, quote) {
   const session = await getCurrentClient(request, env);
   if (!session) return { error: errorJson("Faça login para acessar este orçamento.", 401) };
+  if (session.mustChangePassword === true) {
+    return { error: errorJson("Crie sua senha definitiva antes de acessar este orçamento.", 403, { passwordChangeRequired: true }) };
+  }
   const linkedClient = quote?.clientId
     ? await readKvJson(env, privateClientKey(quote.clientId), null)
     : null;
@@ -1887,6 +1943,28 @@ async function sendClientGalleryInviteEmail(env, email, token, gallery = {}, cli
   }
 }
 
+async function sendClientGalleryTemporaryPasswordEmail(env, email, gallery = {}, client = {}, temporaryPassword = "") {
+  const galleryLoginUrl = clientGalleryLoginUrl(env, gallery.slug || "");
+  const galleryTitle = gallery.title || "sua galeria";
+  const html = emailLayout(env, {
+    preheader: `Acesse ${galleryTitle} com sua senha temporária.`,
+    eyebrow: "Galeria privada",
+    title: "Sua galeria está disponível",
+    intro: `Olá ${emailHtml(client.name || email)}, sua galeria <strong>${emailHtml(galleryTitle)}</strong> está disponível na área do cliente.`,
+    body: `<p style="margin:0;">Use os dados abaixo para entrar. Por segurança, você deverá criar uma senha definitiva antes de acessar as fotos.</p>${temporaryPasswordEmailBlock(email, temporaryPassword)}`,
+    ctaLabel: "Entrar e acessar galeria",
+    ctaUrl: galleryLoginUrl,
+    secondaryCtaLabel: "Área do cliente",
+    secondaryCtaUrl: clientLoginUrl(env),
+    footerNote: "A senha temporária deixa de funcionar depois que você cadastrar a senha definitiva.",
+  });
+  return sendResendMessage(env, {
+    to: [email],
+    subject: `Sua galeria está disponível — ${galleryTitle}`,
+    html,
+  });
+}
+
 async function sendClientGalleryLoginEmail(env, email, gallery = {}, client = {}) {
   if (!env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY não configurada no Worker.");
@@ -1933,12 +2011,14 @@ async function sendClientGalleryLoginEmail(env, email, gallery = {}, client = {}
   }
 }
 
-async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {}) {
+async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {}, temporaryPassword = "") {
   if (!env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY não configurada no Worker.");
   }
 
-  const galleryUrl = clientGalleryUrl(env, gallery.slug || "");
+  const galleryUrl = temporaryPassword
+    ? clientGalleryLoginUrl(env, gallery.slug || "")
+    : clientGalleryUrl(env, gallery.slug || "");
   const loginUrl = clientLoginUrl(env);
   const galleryTitle = gallery.title || "sua galeria";
   const clientName = emailHtml(client.name || email);
@@ -1947,11 +2027,12 @@ async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {
     eyebrow: "Entrega final",
     title: "Suas fotos estão prontas",
     intro: `Olá ${clientName}, as fotos da galeria <strong>${emailHtml(galleryTitle)}</strong> estão prontas para download.`,
-    body: `<p style="margin:0;">Acesse a galeria pelo botão abaixo e entre com seu e-mail e senha cadastrados.</p>`,
+    body: `<p style="margin:0;">Acesse a galeria pelo botão abaixo e entre com seu e-mail e senha.</p>${temporaryPasswordEmailBlock(email, temporaryPassword)}`,
     ctaLabel: "Acessar e baixar fotos",
     ctaUrl: galleryUrl,
     secondaryCtaLabel: "Área do cliente",
     secondaryCtaUrl: loginUrl,
+    footerNote: temporaryPassword ? "No primeiro acesso, você deverá trocar a senha temporária por uma senha definitiva." : "",
   });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -2013,22 +2094,88 @@ async function sendResendMessage(env, payload = {}) {
   }
 }
 
-async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, accessUrl = "", firstAccess = false) {
+function temporaryPasswordEmailBlock(email, temporaryPassword) {
+  if (!temporaryPassword) return "";
+  return `<div style="margin:18px 0;padding:16px;border:1px solid #d2b488;background:#f7f0e5;">
+    <p style="margin:0 0 8px;font-size:12px;font-weight:700;text-transform:uppercase;color:#6e5940;">Dados do primeiro acesso</p>
+    <p style="margin:0 0 5px;">E-mail: <strong>${emailHtml(email)}</strong></p>
+    <p style="margin:0;">Senha temporária: <strong style="font-size:18px;letter-spacing:.05em;">${emailHtml(temporaryPassword)}</strong></p>
+  </div>`;
+}
+
+async function sendClientTemporaryPasswordEmail(env, email, client = {}, temporaryPassword = "") {
+  const loginUrl = clientLoginUrl(env);
+  const html = emailLayout(env, {
+    preheader: "Sua senha temporária da Área do Cliente foi criada.",
+    eyebrow: "Área do cliente",
+    title: "Seu acesso temporário",
+    intro: `Olá ${emailHtml(client.name || email)}, seu acesso à Área do Cliente está pronto.`,
+    body: `<p style="margin:0;">Use os dados abaixo para entrar. Por segurança, você deverá criar uma senha definitiva no primeiro acesso.</p>${temporaryPasswordEmailBlock(email, temporaryPassword)}`,
+    ctaLabel: "Entrar na Área do Cliente",
+    ctaUrl: loginUrl,
+    footerNote: "A senha temporária deixa de funcionar assim que você cadastrar a senha definitiva.",
+    reason: "Você recebeu este e-mail porque foi criado ou renovado um acesso para o seu cadastro.",
+  });
+  return sendResendMessage(env, {
+    to: [email],
+    subject: `Seu acesso temporário — ${brandName(env)}`,
+    html,
+  });
+}
+
+async function sendClientPasswordResetEmail(env, email, client = {}, token = "") {
+  const resetUrl = clientPasswordResetUrl(env, token);
+  const html = emailLayout(env, {
+    preheader: "Use este link para criar uma nova senha da Área do Cliente.",
+    eyebrow: "Segurança",
+    title: "Redefinir sua senha",
+    intro: `Olá ${emailHtml(client.name || email)}, recebemos uma solicitação para redefinir sua senha.`,
+    body: `<p style="margin:0;">Clique no botão abaixo para criar uma nova senha. Se você não solicitou a alteração, ignore este e-mail.</p>`,
+    ctaLabel: "Criar nova senha",
+    ctaUrl: resetUrl,
+    footerNote: "Este link expira em 1 hora e pode ser utilizado uma única vez.",
+    reason: "Você recebeu este e-mail porque foi solicitada uma redefinição de senha para a Área do Cliente.",
+  });
+  return sendResendMessage(env, {
+    to: [email],
+    subject: `Redefinir senha — ${brandName(env)}`,
+    html,
+  });
+}
+
+async function createClientPasswordReset(env, client = {}, requestedBy = "client") {
+  if (!client.email || !env.LIKES_KV) throw new Error("Acesso do cliente indisponível.");
+  const token = randomToken(36);
+  const reset = {
+    token,
+    email: normalizeEmail(client.email),
+    clientId: client.id || "",
+    requestedBy,
+    createdAt: new Date().toISOString(),
+    expiresAt: Date.now() + 1000 * 60 * 60,
+  };
+  await writeKvJson(env, clientPasswordResetKey(token), reset, { expirationTtl: 60 * 60 });
+  return { token, reset };
+}
+
+async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, accessUrl = "", temporaryPassword = "") {
   const clientName = emailHtml(client.name || email);
   const total = formatCurrencyFromCents(calculateQuoteTotals(quote).totalCents);
+  const firstAccess = Boolean(temporaryPassword);
   const html = emailLayout(env, {
     preheader: `Seu orçamento ${quote.number || ""} está disponível para análise.`,
     eyebrow: "Orçamento e contrato",
     title: "Seu orçamento está pronto",
     intro: `Olá ${clientName}, preparei o orçamento para <strong>${emailHtml(quote.title || "o serviço solicitado")}</strong>.`,
     body: `<p style="margin:0 0 12px;">Valor total: <strong>${emailHtml(total)}</strong></p>
-      <p style="margin:0;">Confira o escopo, as formas de pagamento e todas as cláusulas. Se estiver de acordo, o aceite é feito na própria página.</p>`,
-    ctaLabel: firstAccess ? "Criar senha e ver orçamento" : "Ver orçamento",
+      <p style="margin:0;">Confira o escopo, as formas de pagamento e todas as cláusulas. Se estiver de acordo, o aceite é feito na própria página.</p>
+      ${temporaryPasswordEmailBlock(email, temporaryPassword)}`,
+    ctaLabel: firstAccess ? "Entrar e ver orçamento" : "Ver orçamento",
     ctaUrl: accessUrl,
     secondaryCtaLabel: "Área do cliente",
     secondaryCtaUrl: clientLoginUrl(env),
     footerNote: firstAccess
-      ? "O link de primeiro acesso expira em 7 dias. O orçamento permanece disponível até a data de validade informada."
+      ? "Use a senha temporária acima no primeiro acesso. Em seguida, o site solicitará uma senha definitiva."
       : `Proposta válida até ${formatQuoteDate(quote.validUntil)}.`,
     reason: "Você recebeu este e-mail porque existe um orçamento vinculado ao seu cadastro na área do cliente.",
   });
@@ -2134,7 +2281,7 @@ function buildQuotePdf(env, quote = {}, client = {}, acceptance = null) {
 
   draw("ESCOPO", { font: "F2", size: 10, leading: 14, color: "0.55 0.40 0.23", gap: 4 });
   draw(snapshot.serviceDescription || "Serviço conforme os itens discriminados abaixo.", { size: 10, leading: 14, gap: 7 });
-  if (snapshot.serviceDate) draw(`Data prevista: ${formatQuoteDate(snapshot.serviceDate)}`, { font: "F2", size: 9.5, leading: 13 });
+  draw(`Data prevista: ${snapshot.serviceDate ? formatQuoteDate(snapshot.serviceDate) : "A definir"}`, { font: "F2", size: 9.5, leading: 13 });
   if (snapshot.serviceLocation) draw(`Local: ${snapshot.serviceLocation}`, { size: 9.5, leading: 13 });
   if (snapshot.deliveryEstimate) draw(`Previsão de entrega: ${snapshot.deliveryEstimate}`, { size: 9.5, leading: 13 });
   y -= 9;
@@ -2913,6 +3060,57 @@ export default {
       }, 200, { "Cache-Control": "no-store" });
     }
 
+    if (url.pathname === "/client-auth/forgot" && request.method === "POST") {
+      const body = await readJson(request);
+      const email = normalizeEmail(body.email || "");
+      if (!email) return errorJson("Informe seu e-mail.", 400);
+
+      try {
+        const [storedUser, clients] = await Promise.all([
+          getClientUser(env, email),
+          listPrivateClients(env),
+        ]);
+        const client = clients.find((item) => normalizeEmail(item.email || "") === email);
+        if (storedUser?.passwordHash && client) {
+          const { token } = await createClientPasswordReset(env, client, "client");
+          await sendClientPasswordResetEmail(env, email, client, token);
+        }
+      } catch (err) {
+        console.error("Client forgot password error:", err);
+      }
+
+      return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-auth/reset" && request.method === "GET") {
+      const token = String(url.searchParams.get("token") || "").trim();
+      const reset = token ? await readKvJson(env, clientPasswordResetKey(token), null) : null;
+      if (!reset || Number(reset.expiresAt || 0) < Date.now()) {
+        return errorJson("Link de redefinição inválido ou expirado.", 400);
+      }
+      return json({ email: reset.email }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-auth/reset" && request.method === "POST") {
+      const body = await readJson(request);
+      const token = String(body.token || "").trim();
+      const password = String(body.password || "");
+      if (!token || password.length < 6) return errorJson("Token ou senha inválidos.", 400);
+      const reset = await readKvJson(env, clientPasswordResetKey(token), null);
+      if (!reset || Number(reset.expiresAt || 0) < Date.now()) {
+        return errorJson("Link de redefinição inválido ou expirado.", 400);
+      }
+      const clients = await listPrivateClients(env);
+      const client = clients.find((item) => normalizeEmail(item.email || "") === normalizeEmail(reset.email || ""));
+      if (!client) return errorJson("Cadastro do cliente não encontrado.", 404);
+      await saveClientPassword(env, client.email, password, {
+        name: client.name || client.email,
+        mustChangePassword: false,
+      });
+      await env.LIKES_KV.delete(clientPasswordResetKey(token));
+      return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/client-auth/login" && request.method === "POST") {
       const body = await readJson(request);
       const email = normalizeEmail(body.email || "");
@@ -2924,6 +3122,26 @@ export default {
 
       const session = await createClientSession(env, user);
       return json(session, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-auth/change-password" && request.method === "POST") {
+      const sessionToken = getBearerToken(request);
+      const session = await getClientSession(env, sessionToken);
+      if (!session) return errorJson("Faça login novamente para alterar sua senha.", 401);
+      const body = await readJson(request);
+      const password = String(body.password || "");
+      if (password.length < 6) return errorJson("Use uma senha com pelo menos 6 caracteres.", 400);
+
+      const clients = await listPrivateClients(env);
+      const client = clients.find((item) => normalizeEmail(item.email || "") === normalizeEmail(session.email || ""));
+      if (!client) return errorJson("Cadastro do cliente não encontrado.", 404);
+      const user = await saveClientPassword(env, client.email, password, {
+        name: client.name || client.email,
+        mustChangePassword: false,
+      });
+      if (sessionToken) await env.LIKES_KV.delete(clientSessionKey(sessionToken));
+      const nextSession = await createClientSession(env, user);
+      return json({ ok: true, ...nextSession }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/client-auth/me" && request.method === "GET") {
@@ -2941,6 +3159,9 @@ export default {
     if (url.pathname === "/client-quotes" && request.method === "GET") {
       const session = await getCurrentClient(request, env);
       if (!session) return errorJson("Faça login para acessar seus orçamentos.", 401);
+      if (session.mustChangePassword === true) {
+        return errorJson("Crie sua senha definitiva antes de acessar seus orçamentos.", 403, { passwordChangeRequired: true });
+      }
       const quotes = await listPrivateQuotes(env);
       const items = [];
       for (const quote of quotes) {
@@ -3084,6 +3305,9 @@ export default {
     if (url.pathname === "/client-galleries" && request.method === "GET") {
       const session = await getCurrentClient(request, env);
       if (!session) return errorJson("Faça login para acessar suas galerias.", 401);
+      if (session.mustChangePassword === true) {
+        return errorJson("Crie sua senha definitiva antes de acessar suas galerias.", 403, { passwordChangeRequired: true });
+      }
 
       const galleries = await listPrivateGalleries(env);
       const items = [];
@@ -3635,7 +3859,12 @@ export default {
     if (url.pathname === "/private/clients" && request.method === "GET") {
       const { error } = await requireAdminUser(request, env);
       if (error) return error;
-      return json({ clients: await listPrivateClients(env) }, 200, { "Cache-Control": "no-store" });
+      const clients = await listPrivateClients(env);
+      const enrichedClients = await Promise.all(clients.map(async (client) => ({
+        ...client,
+        access: await getClientAccessSummary(env, client.email),
+      })));
+      return json({ clients: enrichedClients }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/private/clients" && request.method === "POST") {
@@ -3643,8 +3872,78 @@ export default {
       if (error) return error;
       const body = await readJson(request);
       const client = await savePrivateClient(env, body);
+      let temporaryPassword = "";
+      let access = await getClientAccessSummary(env, client.email);
+      if (client.email && !access.hasPassword) {
+        const issued = await issueClientTemporaryPassword(env, client);
+        temporaryPassword = issued.temporaryPassword;
+        access = issued.access;
+      }
       await appendAuditLog(env, request, user, body.id ? "editar_cliente_privado" : "criar_cliente_privado", "private_clients", { clientId: client.id, email: client.email });
-      return json({ client }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
+      return json({ client, access, temporaryPassword }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/client/access" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      const clientId = String(body.clientId || body.id || "").trim();
+      const action = String(body.action || "").trim();
+      const client = await readKvJson(env, privateClientKey(clientId), null);
+      if (!client) return errorJson("Cliente não encontrado.", 404);
+      if (!client.email) return errorJson("Cadastre o e-mail do cliente antes de gerar o acesso.", 400);
+
+      if (action === "temporary_password") {
+        const issued = await issueClientTemporaryPassword(env, client);
+        let emailResult = null;
+        let emailError = "";
+        try {
+          emailResult = await sendClientTemporaryPasswordEmail(env, client.email, client, issued.temporaryPassword);
+        } catch (err) {
+          emailError = String(err?.message || err || "Erro ao enviar e-mail");
+          console.error("Client temporary password email error:", err);
+        }
+        await appendAuditLog(env, request, user, "gerar_senha_temporaria_cliente", "private_clients", {
+          clientId: client.id,
+          email: client.email,
+          emailQueued: Boolean(emailResult),
+          emailError,
+        });
+        return json({
+          ok: true,
+          access: issued.access,
+          temporaryPassword: issued.temporaryPassword,
+          emailQueued: Boolean(emailResult),
+          emailError,
+        }, 200, { "Cache-Control": "no-store" });
+      }
+
+      if (action === "password_reset") {
+        const storedUser = await getClientUser(env, client.email);
+        if (!storedUser?.passwordHash) return errorJson("Este cliente ainda não possui uma senha. Gere um acesso temporário primeiro.", 409);
+        const { token } = await createClientPasswordReset(env, client, user.email || "admin");
+        let emailResult = null;
+        let emailError = "";
+        try {
+          emailResult = await sendClientPasswordResetEmail(env, client.email, client, token);
+        } catch (err) {
+          emailError = String(err?.message || err || "Erro ao enviar e-mail");
+          console.error("Admin client reset email error:", err);
+        }
+        await appendAuditLog(env, request, user, "enviar_reset_senha_cliente", "private_clients", {
+          clientId: client.id,
+          email: client.email,
+          emailQueued: Boolean(emailResult),
+          emailError,
+        });
+        return json({
+          ok: true,
+          emailQueued: Boolean(emailResult),
+          emailError,
+        }, 200, { "Cache-Control": "no-store" });
+      }
+
+      return errorJson("Ação de acesso inválida.", 400);
     }
 
     if (url.pathname === "/private/client/delete" && request.method === "POST") {
@@ -3756,26 +4055,23 @@ export default {
 
       const existingClientUser = await getClientUser(env, client.email);
       const hasClientPassword = existingClientUser?.active !== false && Boolean(existingClientUser?.passwordHash);
-      let token = "";
+      const needsTemporaryPassword = !hasClientPassword || existingClientUser?.mustChangePassword === true;
+      let temporaryPassword = "";
       let emailResult = null;
       let emailError = "";
       try {
-        let accessUrl = clientQuoteLoginUrl(env, quote.id);
-        if (!hasClientPassword) {
-          token = randomToken(36);
-          const invite = {
-            token,
-            email: normalizeEmail(client.email),
-            clientId: client.id,
-            quoteId: quote.id,
-            invitedBy: user.email,
-            createdAt: now,
-            expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7,
-          };
-          await writeKvJson(env, clientQuoteInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
-          accessUrl = clientQuoteInviteUrl(env, token);
+        if (needsTemporaryPassword) {
+          const issued = await issueClientTemporaryPassword(env, client);
+          temporaryPassword = issued.temporaryPassword;
         }
-        emailResult = await sendQuotePublishedEmail(env, client.email, quote, client, accessUrl, !hasClientPassword);
+        emailResult = await sendQuotePublishedEmail(
+          env,
+          client.email,
+          quote,
+          client,
+          clientQuoteLoginUrl(env, quote.id),
+          temporaryPassword,
+        );
       } catch (err) {
         emailError = String(err?.message || err || "Erro ao enviar e-mail");
         console.error("Quote publish email error:", err);
@@ -3790,6 +4086,7 @@ export default {
         number: quote.number,
         version: quote.version,
         email: client.email,
+        temporaryAccess: needsTemporaryPassword,
         emailQueued: Boolean(emailResult),
         emailError,
       });
@@ -3797,6 +4094,7 @@ export default {
         version: quote.version,
         publishedHash: quote.publishedHash,
         email: client.email,
+        temporaryAccess: needsTemporaryPassword,
         emailQueued: Boolean(emailResult),
         emailError,
       }, user);
@@ -3805,7 +4103,8 @@ export default {
         ok: true,
         quote: { ...publicQuote(quote), internalNotes: quote.internalNotes || "" },
         clientUrl: clientQuoteUrl(env, quote.id),
-        inviteUrl: token ? clientQuoteInviteUrl(env, token) : "",
+        inviteUrl: "",
+        temporaryAccess: needsTemporaryPassword,
         emailQueued: Boolean(emailResult),
         emailError,
         resendId: emailResult?.id || null,
@@ -3913,33 +4212,25 @@ export default {
 
       const existingClientUser = await getClientUser(env, client.email);
       const hasClientPassword = existingClientUser?.active !== false && Boolean(existingClientUser?.passwordHash);
+      const needsTemporaryPassword = !hasClientPassword || existingClientUser?.mustChangePassword === true;
       const emailType = gallery.status === "final" || gallery.allowDownload === true
         ? "final_delivery"
-        : hasClientPassword ? "login_access" : "first_access";
-      let token = "";
+        : needsTemporaryPassword ? "temporary_access" : "login_access";
+      let temporaryPassword = "";
       let resend = null;
       let emailError = "";
 
       try {
+        if (needsTemporaryPassword) {
+          const issued = await issueClientTemporaryPassword(env, client);
+          temporaryPassword = issued.temporaryPassword;
+        }
         if (emailType === "final_delivery") {
-          resend = await sendClientFinalDeliveryEmail(env, client.email, gallery, client);
+          resend = await sendClientFinalDeliveryEmail(env, client.email, gallery, client, temporaryPassword);
         } else if (emailType === "login_access") {
           resend = await sendClientGalleryLoginEmail(env, client.email, gallery, client);
         } else {
-          token = randomToken(36);
-          const invite = {
-            token,
-            email: normalizeEmail(client.email),
-            clientId: client.id,
-            galleryId: gallery.id,
-            gallerySlug: gallery.slug,
-            invitedBy: user.email,
-            createdAt: new Date().toISOString(),
-            expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7,
-          };
-
-          await writeKvJson(env, clientGalleryInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
-          resend = await sendClientGalleryInviteEmail(env, client.email, token, gallery, client);
+          resend = await sendClientGalleryTemporaryPasswordEmail(env, client.email, gallery, client, temporaryPassword);
         }
       } catch (err) {
         emailError = String(err?.message || err || "unknown");
@@ -3952,7 +4243,7 @@ export default {
       } else if (emailType === "login_access") {
         gallery.lastAccessEmailAt = new Date().toISOString();
       } else {
-        gallery.lastInviteAt = new Date().toISOString();
+        gallery.lastTemporaryAccessAt = new Date().toISOString();
       }
       gallery.updatedAt = new Date().toISOString();
       await writeKvJson(env, privateGalleryKey(gallery.id), gallery);
@@ -3963,6 +4254,7 @@ export default {
         email: client.email,
         emailType,
         hasClientPassword,
+        temporaryAccess: needsTemporaryPassword,
         emailQueued: Boolean(resend),
         emailError,
       });
@@ -3970,6 +4262,7 @@ export default {
         email: client.email,
         emailType,
         hasClientPassword,
+        temporaryAccess: needsTemporaryPassword,
         emailQueued: Boolean(resend),
         emailError,
       }, user);
@@ -3979,7 +4272,8 @@ export default {
         gallery,
         emailType,
         hasClientPassword,
-        inviteUrl: token ? clientGalleryInviteUrl(env, token) : "",
+        temporaryAccess: needsTemporaryPassword,
+        inviteUrl: "",
         galleryUrl: clientGalleryUrl(env, gallery.slug),
         emailQueued: Boolean(resend),
         emailError,

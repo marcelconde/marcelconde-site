@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260707-05">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260714-01">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260714-02">
 </head>
 <body class="quote-detail-page">
   <div class="admin-shell" id="adminShell">
@@ -100,10 +100,14 @@
                 Validade
                 <input id="quoteValidUntil" type="date" required>
               </label>
-              <label>
-                Data do trabalho
+              <div class="date-option-field">
+                <label for="quoteServiceDate">Data do trabalho</label>
                 <input id="quoteServiceDate" type="date">
-              </label>
+                <label class="inline-check" for="quoteServiceDateUndefined">
+                  <input id="quoteServiceDateUndefined" type="checkbox">
+                  <span>A definir</span>
+                </label>
+              </div>
               <label class="full">
                 Título do serviço
                 <input id="quoteTitle" type="text" placeholder="Ex: Ensaio fotográfico de família" required>
@@ -203,7 +207,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="/theme.js?v=20260707-02"></script>
-  <script src="/admin/orcamentos/detalhe/orcamento.js?v=20260714-01"></script>
+  <script src="/theme.js?v=20260714-03"></script>
+  <script src="/admin/orcamentos/detalhe/orcamento.js?v=20260714-02"></script>
 </body>
 </html>
