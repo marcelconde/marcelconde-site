@@ -299,3 +299,479 @@ p {
 :root[data-theme="light"] .form input {
   background: rgba(233,222,207,0.86);
 }
+
+/* Client dashboard */
+.dashboard-section {
+  margin-top: 42px;
+}
+
+.dashboard-section[hidden] {
+  display: none !important;
+}
+
+.dashboard-section-head {
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.dashboard-section-head h2 {
+  margin: 4px 0 0;
+  font-family: var(--serif);
+  font-size: 2.1rem;
+  line-height: 1;
+}
+
+.quote-list {
+  display: grid;
+  gap: 8px;
+}
+
+.client-quote-card {
+  min-height: 96px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.025);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.client-quote-card:hover {
+  border-color: rgba(184,149,106,0.55);
+  background: rgba(184,149,106,0.07);
+}
+
+.client-quote-card > span,
+.client-quote-card strong,
+.client-quote-card small {
+  display: block;
+}
+
+.client-quote-card > span:first-child strong {
+  margin-top: 5px;
+  font-family: var(--serif);
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.client-quote-card small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.client-quote-value {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.client-quote-value strong {
+  color: var(--gold);
+  font-size: 1.05rem;
+}
+
+.client-quote-value small {
+  margin-top: 5px;
+}
+
+:root[data-theme="light"] .client-quote-card {
+  background: rgba(233,222,207,0.86);
+}
+
+/* Quote and contract */
+.quote-client-shell {
+  width: min(1080px, calc(100% - 36px));
+  padding-top: 24px;
+}
+
+.quote-client-top {
+  margin-bottom: 24px;
+}
+
+.quote-client-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quote-client-actions .btn {
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 0.78rem;
+}
+
+.quote-loading {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+}
+
+.quote-document {
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+:root[data-theme="light"] .quote-document {
+  background: #e9decf;
+}
+
+.quote-document-head {
+  min-height: 260px;
+  padding: clamp(28px, 5vw, 54px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  background:
+    linear-gradient(135deg, rgba(184,149,106,0.12), transparent 46%),
+    rgba(255,255,255,0.02);
+}
+
+.quote-document-head > div {
+  max-width: 760px;
+}
+
+.quote-document-head h1 {
+  margin: 12px 0 18px;
+  font-size: clamp(2.8rem, 6vw, 4.8rem);
+  line-height: 0.92;
+}
+
+.quote-document-head p {
+  margin: 0;
+  max-width: 720px;
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+.client-status {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  color: var(--gold);
+  padding: 6px 10px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.client-status.accepted {
+  color: #75c68b;
+  border-color: rgba(117,198,139,0.4);
+}
+
+.client-status.expired {
+  color: var(--danger);
+  border-color: rgba(223,111,122,0.4);
+}
+
+.quote-party-band {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.quote-party-band > div {
+  min-height: 120px;
+  padding: 20px clamp(22px, 5vw, 54px);
+  display: grid;
+  align-content: center;
+  gap: 6px;
+}
+
+.quote-party-band > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.quote-party-band small,
+.quote-meta-grid small,
+.quote-client-totals small {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.quote-party-band strong {
+  font-family: var(--serif);
+  font-size: 1.55rem;
+}
+
+.quote-party-band span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.quote-document-section,
+.quote-accept-panel,
+.quote-accepted-panel {
+  padding: clamp(28px, 6vw, 64px);
+  border-bottom: 1px solid var(--line);
+}
+
+.quote-section-title {
+  margin-bottom: 22px;
+}
+
+.quote-section-title h2,
+.quote-accept-panel h2,
+.quote-accepted-panel h2 {
+  margin: 5px 0 0;
+  font-family: var(--serif);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 0.95;
+}
+
+.quote-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.quote-meta-grid > div {
+  min-height: 88px;
+  background: var(--panel);
+  padding: 14px;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+}
+
+:root[data-theme="light"] .quote-meta-grid > div {
+  background: #e9decf;
+}
+
+.quote-meta-grid strong {
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.quote-client-items {
+  border-top: 1px solid var(--line);
+}
+
+.quote-client-item {
+  min-height: 68px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 0;
+}
+
+.quote-client-item span strong,
+.quote-client-item span small {
+  display: block;
+}
+
+.quote-client-item span small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.quote-client-totals {
+  margin-top: 18px;
+  margin-left: auto;
+  width: min(420px, 100%);
+  display: grid;
+  gap: 8px;
+}
+
+.quote-client-totals > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.quote-client-totals > span:last-child {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.quote-client-totals > span:last-child strong {
+  color: var(--gold);
+  font-size: 1.35rem;
+}
+
+.quote-client-payments {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.quote-client-payments > div {
+  min-height: 86px;
+  border: 1px solid var(--line);
+  padding: 14px;
+}
+
+.quote-client-payments strong,
+.quote-client-payments span {
+  display: block;
+}
+
+.quote-client-payments span {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.quote-client-clauses {
+  border-top: 1px solid var(--line);
+}
+
+.quote-client-clauses article {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding: 22px 0;
+}
+
+.quote-client-clauses article > span {
+  color: var(--gold);
+  font-family: var(--serif);
+  font-size: 1.4rem;
+}
+
+.quote-client-clauses h3 {
+  margin: 0 0 8px;
+  font-family: var(--serif);
+  font-size: 1.45rem;
+}
+
+.quote-client-clauses p {
+  margin: 0;
+  max-width: none;
+  line-height: 1.65;
+}
+
+.quote-client-note {
+  margin-top: 24px;
+  border-left: 2px solid var(--gold);
+  padding: 4px 0 4px 16px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.quote-accept-panel {
+  background: rgba(184,149,106,0.07);
+}
+
+.quote-accept-form {
+  margin-top: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.quote-accept-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quote-accept-fields label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.quote-accept-fields input {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--ink);
+  padding: 0 12px;
+}
+
+.quote-confirmation {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.quote-confirmation input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--gold);
+}
+
+.quote-accept-submit {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.quote-accept-submit .btn {
+  min-height: 44px;
+}
+
+.quote-accept-submit small {
+  color: var(--danger);
+}
+
+.quote-accepted-panel {
+  border: 1px solid rgba(117,198,139,0.38);
+  background: rgba(117,198,139,0.07);
+}
+
+.quote-accepted-panel p,
+.quote-accepted-panel small {
+  display: block;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .client-quote-card,
+  .quote-document-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .client-quote-value {
+    text-align: left;
+  }
+
+  .quote-client-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .quote-party-band,
+  .quote-meta-grid,
+  .quote-accept-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .quote-party-band > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .quote-client-clauses article {
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+  }
+}

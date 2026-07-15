@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Editar orçamento — Admin Marcel Conde</title>
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260707-05">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260714-01">
+</head>
+<body class="quote-detail-page">
+  <div class="admin-shell" id="adminShell">
+    <header class="topbar">
+      <a class="brand" href="/admin/orcamentos/" aria-label="Voltar para orçamentos">
+        <span>MC</span>
+        <strong>Orçamentos</strong>
+      </a>
+      <div class="stats">
+        <div><strong id="quoteStatusStat">—</strong><span>Status</span></div>
+        <div><strong id="quoteVersionStat">0</strong><span>Versão</span></div>
+        <div><strong id="quoteTotalStat">R$ 0</strong><span>Total</span></div>
+      </div>
+      <div class="top-actions">
+        <span class="user-pill" id="currentUserLabel"></span>
+        <a class="btn btn-ghost" href="/admin/orcamentos/">Todos os orçamentos</a>
+        <a class="btn btn-ghost" href="/admin/">Admin</a>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Seções do admin">
+      <a class="tab" href="/admin/">Portfólios</a>
+      <a class="tab" href="/admin/clientes/">Clientes</a>
+      <a class="tab active" href="/admin/orcamentos/">Orçamentos</a>
+      <a class="tab" href="/admin/galerias/">Galerias</a>
+    </nav>
+
+    <main class="private-admin quote-detail-shell">
+      <section class="detail-topbar quote-detail-topbar">
+        <div>
+          <a class="detail-back" href="/admin/orcamentos/">← Orçamentos</a>
+          <span class="eyebrow" id="quoteNumberLabel">Novo orçamento</span>
+          <h1 id="quoteTitleLabel">Nova proposta</h1>
+          <p id="quoteMeta">Preencha os dados e salve o rascunho.</p>
+        </div>
+        <div class="content-actions detail-actions">
+          <button class="btn btn-primary" id="publishQuoteBtn" type="button">Publicar e enviar</button>
+          <button class="btn btn-primary" id="saveQuoteBtn" type="submit" form="quoteForm">Salvar rascunho</button>
+          <a class="btn btn-ghost disabled" id="openQuoteBtn" href="#" target="_blank" rel="noopener">Abrir página</a>
+          <a class="btn btn-ghost" id="createGalleryBtn" href="/admin/galerias/" hidden>Criar galeria</a>
+          <button class="btn btn-ghost" id="downloadPdfBtn" type="button" disabled>Baixar PDF</button>
+          <button class="btn btn-danger" id="deleteQuoteBtn" type="button" disabled>Apagar</button>
+        </div>
+      </section>
+
+      <section class="gallery-detail-layout quote-detail-layout">
+        <aside class="detail-sidebar panel" aria-label="Menu do orçamento">
+          <nav class="detail-side-nav">
+            <button class="detail-nav-item active" type="button" data-detail-section="section-summary">
+              <strong>Resumo</strong>
+              <span>Cliente e serviço</span>
+            </button>
+            <button class="detail-nav-item" type="button" data-detail-section="section-values">
+              <strong>Valores</strong>
+              <span>Itens e desconto</span>
+            </button>
+            <button class="detail-nav-item" type="button" data-detail-section="section-payment">
+              <strong>Pagamento</strong>
+              <span>Formas e condições</span>
+            </button>
+            <button class="detail-nav-item" type="button" data-detail-section="section-contract">
+              <strong>Contrato</strong>
+              <span>Cláusulas e observações</span>
+            </button>
+            <button class="detail-nav-item" type="button" data-detail-section="section-history">
+              <strong>Histórico</strong>
+              <span>Publicação e aceite</span>
+            </button>
+          </nav>
+        </aside>
+
+        <form class="detail-content private-form" id="quoteForm" novalidate>
+          <section class="detail-section" id="section-summary">
+            <div class="detail-section-head">
+              <div>
+                <span class="eyebrow">Proposta</span>
+                <h2>Cliente e serviço</h2>
+              </div>
+              <span class="status-badge neutral" id="quoteStatusBadge">Rascunho</span>
+            </div>
+            <div class="form-grid detail-form-grid">
+              <label>
+                Cliente
+                <select id="quoteClient" required></select>
+              </label>
+              <label>
+                Validade
+                <input id="quoteValidUntil" type="date" required>
+              </label>
+              <label>
+                Data do trabalho
+                <input id="quoteServiceDate" type="date">
+              </label>
+              <label class="full">
+                Título do serviço
+                <input id="quoteTitle" type="text" placeholder="Ex: Ensaio fotográfico de família" required>
+              </label>
+              <label class="full">
+                Descrição do trabalho
+                <textarea id="quoteDescription" placeholder="Escopo, duração, equipe, entregas e detalhes combinados" required></textarea>
+              </label>
+              <label>
+                Local
+                <input id="quoteLocation" type="text" placeholder="Recife, PE">
+              </label>
+              <label>
+                Prazo de entrega
+                <input id="quoteDelivery" type="text" placeholder="Ex: até 20 dias úteis">
+              </label>
+              <label class="full">
+                Observações internas
+                <textarea id="quoteInternalNotes" placeholder="Visível apenas no admin"></textarea>
+              </label>
+            </div>
+          </section>
+
+          <section class="detail-section" id="section-values" hidden>
+            <div class="detail-section-head">
+              <div>
+                <span class="eyebrow">Investimento</span>
+                <h2>Itens e valores</h2>
+              </div>
+              <button class="btn btn-ghost" id="addItemBtn" type="button">Adicionar item</button>
+            </div>
+            <div class="quote-item-list" id="quoteItems"></div>
+            <div class="quote-discount-row">
+              <label>
+                Desconto
+                <select id="quoteDiscountType">
+                  <option value="none">Sem desconto</option>
+                  <option value="percent">Percentual</option>
+                  <option value="fixed">Valor fixo</option>
+                </select>
+              </label>
+              <label>
+                Valor do desconto
+                <input id="quoteDiscountValue" type="number" min="0" step="0.01" value="0" disabled>
+              </label>
+            </div>
+            <div class="quote-totals" aria-live="polite">
+              <span><small>Subtotal</small><strong id="quoteSubtotal">R$ 0,00</strong></span>
+              <span><small>Desconto</small><strong id="quoteDiscountTotal">R$ 0,00</strong></span>
+              <span class="quote-grand-total"><small>Total</small><strong id="quoteGrandTotal">R$ 0,00</strong></span>
+            </div>
+          </section>
+
+          <section class="detail-section" id="section-payment" hidden>
+            <div class="detail-section-head">
+              <div>
+                <span class="eyebrow">Cobrança</span>
+                <h2>Formas de pagamento</h2>
+              </div>
+              <button class="btn btn-ghost" id="addPaymentBtn" type="button">Adicionar forma</button>
+            </div>
+            <div class="quote-payment-list" id="quotePayments"></div>
+            <label class="full quote-payment-terms">
+              Condições e vencimentos
+              <textarea id="quotePaymentTerms" placeholder="Ex: 30% na reserva e 70% até a data do ensaio"></textarea>
+            </label>
+          </section>
+
+          <section class="detail-section" id="section-contract" hidden>
+            <div class="detail-section-head">
+              <div>
+                <span class="eyebrow">Termos</span>
+                <h2>Cláusulas do contrato</h2>
+              </div>
+              <button class="btn btn-ghost" id="addClauseBtn" type="button">Adicionar cláusula</button>
+            </div>
+            <div class="quote-clause-list" id="quoteClauses"></div>
+            <label class="full quote-client-notes">
+              Observações para o cliente
+              <textarea id="quoteClientNotes" placeholder="Informações adicionais que aparecerão no orçamento"></textarea>
+            </label>
+          </section>
+
+          <section class="detail-section" id="section-history" hidden>
+            <div class="detail-section-head">
+              <div>
+                <span class="eyebrow">Registro</span>
+                <h2>Histórico do orçamento</h2>
+              </div>
+            </div>
+            <div class="quote-acceptance-summary" id="quoteAcceptanceSummary" hidden></div>
+            <div class="event-list-inner quote-event-list" id="quoteEvents"></div>
+          </section>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/theme.js?v=20260707-02"></script>
+  <script src="/admin/orcamentos/detalhe/orcamento.js?v=20260714-01"></script>
+</body>
+</html>

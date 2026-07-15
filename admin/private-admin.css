@@ -1331,3 +1331,331 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Quotes and contracts */
+.quote-library,
+.quote-detail-shell {
+  width: min(1680px, calc(100% - 48px));
+  margin-top: 22px;
+}
+
+.quote-library-hero {
+  min-height: 144px;
+}
+
+.quote-toolbar {
+  grid-template-columns: minmax(260px, 1fr) auto;
+}
+
+.quote-filters {
+  display: inline-flex;
+  justify-self: end;
+  border: 1px solid var(--line);
+  padding: 3px;
+}
+
+.filter-chip {
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.filter-chip:hover,
+.filter-chip.active {
+  background: var(--gold);
+  color: #0b0a08;
+}
+
+.quote-card-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 10px;
+}
+
+.quote-card {
+  min-height: 190px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.024);
+  color: var(--ink);
+  padding: 14px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 18px;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.quote-card:hover {
+  border-color: rgba(184,149,106,0.55);
+  background: rgba(184,149,106,0.07);
+}
+
+:root[data-theme="light"] .quote-card,
+:root[data-theme="light"] .quote-acceptance-summary {
+  background: rgba(233,222,207,0.88);
+}
+
+.quote-card-top,
+.quote-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quote-number {
+  color: var(--gold);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.status-badge.neutral { color: var(--muted); }
+.status-badge.pending { color: var(--gold); border-color: rgba(184,149,106,0.4); }
+.status-badge.success { color: var(--green); border-color: rgba(117,198,139,0.35); }
+.status-badge.danger { color: var(--danger); border-color: rgba(223,111,122,0.35); }
+
+.quote-card-main {
+  display: block;
+}
+
+.quote-card-main strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.quote-card-main small,
+.quote-card-footer small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.quote-card-footer > strong {
+  font-size: 1rem;
+}
+
+.quote-empty {
+  grid-column: 1 / -1;
+  min-height: 180px;
+}
+
+.quote-detail-topbar {
+  grid-template-columns: minmax(0, 1fr) minmax(520px, 0.9fr);
+}
+
+.quote-item-list,
+.quote-payment-list,
+.quote-clause-list {
+  display: grid;
+  gap: 8px;
+}
+
+.quote-item-row,
+.quote-payment-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.7fr) minmax(100px, 0.45fr) minmax(150px, 0.65fr) 34px;
+  gap: 8px;
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.quote-payment-row {
+  grid-template-columns: minmax(180px, 0.7fr) minmax(180px, 0.8fr) minmax(260px, 1.4fr) 34px;
+}
+
+.quote-item-row label,
+.quote-payment-row label {
+  margin: 0;
+}
+
+.quote-remove {
+  width: 34px;
+  min-height: 34px;
+  color: var(--danger);
+  font-size: 1rem;
+}
+
+.quote-discount-row {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 300px));
+  gap: 10px;
+}
+
+.quote-totals {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.quote-totals > span {
+  min-height: 70px;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.quote-totals > span:last-child {
+  border-right: 0;
+}
+
+.quote-totals small {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.quote-totals strong {
+  font-size: 1rem;
+}
+
+.quote-grand-total {
+  background: rgba(184,149,106,0.1);
+}
+
+.quote-grand-total strong {
+  color: var(--gold);
+  font-size: 1.3rem;
+}
+
+.quote-payment-terms,
+.quote-client-notes {
+  margin-top: 16px;
+}
+
+.quote-clause-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  gap: 10px;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 0 12px;
+}
+
+.quote-clause-index {
+  color: var(--gold);
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  line-height: 34px;
+}
+
+.quote-clause-row > div {
+  display: grid;
+  gap: 6px;
+}
+
+.quote-clause-row input {
+  font-weight: 700;
+}
+
+.quote-clause-row textarea {
+  min-height: 88px;
+  margin: 0;
+}
+
+.quote-event-list {
+  display: grid;
+  gap: 7px;
+}
+
+.quote-event-list .event-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.quote-event-list time {
+  color: var(--muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.quote-acceptance-summary {
+  margin-bottom: 12px;
+  border: 1px solid rgba(117,198,139,0.4);
+  background: rgba(117,198,139,0.07);
+  padding: 14px;
+}
+
+.quote-acceptance-summary strong,
+.quote-acceptance-summary small {
+  display: block;
+}
+
+.quote-acceptance-summary strong {
+  margin-top: 7px;
+  font-family: var(--serif);
+  font-size: 1.6rem;
+}
+
+.quote-acceptance-summary p,
+.quote-acceptance-summary small {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .quote-detail-topbar,
+  .quote-toolbar,
+  .quote-item-row,
+  .quote-payment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .quote-filters {
+    justify-self: stretch;
+    overflow-x: auto;
+  }
+
+  .quote-remove {
+    justify-self: end;
+  }
+}
+
+@media (max-width: 680px) {
+  .quote-library,
+  .quote-detail-shell {
+    width: calc(100% - 20px);
+  }
+
+  .quote-filters {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .quote-discount-row,
+  .quote-totals {
+    grid-template-columns: 1fr;
+  }
+
+  .quote-totals > span {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .quote-clause-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .quote-clause-row .quote-remove {
+    grid-column: 2;
+  }
+}

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/clientes/auth.css?v=20260707-03">
+  <link rel="stylesheet" href="/clientes/auth.css?v=20260714-01">
 </head>
 <body>
   <main class="client-shell">
@@ -24,16 +24,30 @@
     <section class="dashboard-head">
       <div>
         <span class="eyebrow">Área do cliente</span>
-        <h1>Suas galerias</h1>
+        <h1>Sua área</h1>
         <p id="clientLabel">Carregando acesso...</p>
       </div>
       <a class="btn" href="/encontre/">Outras plataformas</a>
     </section>
 
-    <section class="gallery-list" id="galleryList"></section>
+    <section class="dashboard-section" id="quoteSection">
+      <header class="dashboard-section-head">
+        <span class="eyebrow">Propostas</span>
+        <h2>Orçamentos e contratos</h2>
+      </header>
+      <div class="quote-list" id="quoteList"></div>
+    </section>
+
+    <section class="dashboard-section">
+      <header class="dashboard-section-head">
+        <span class="eyebrow">Entregas</span>
+        <h2>Galerias</h2>
+      </header>
+      <div class="gallery-list" id="galleryList"></div>
+    </section>
   </main>
 
   <script src="/theme.js?v=20260707-02"></script>
-  <script src="/clientes/dashboard/dashboard.js?v=20260706-01"></script>
+  <script src="/clientes/dashboard/dashboard.js?v=20260714-01"></script>
 </body>
 </html>

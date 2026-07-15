@@ -33,6 +33,7 @@
     <nav class="tabs" aria-label="Seções do admin">
       <a class="tab" href="/admin/">Portfólios</a>
       <a class="tab active" href="/admin/clientes/">Clientes</a>
+      <a class="tab" href="/admin/orcamentos/">Orçamentos</a>
       <a class="tab" href="/admin/galerias/">Galerias</a>
     </nav>
 
@@ -57,6 +58,7 @@
               <p>Cadastre clientes que terão galerias privadas independentes do portfólio público.</p>
             </div>
             <div class="content-actions">
+              <a class="btn btn-ghost disabled" id="newQuoteBtn" href="#">Novo orçamento</a>
               <button class="btn btn-ghost" id="newClientBtn" type="button">Novo cliente</button>
               <button class="btn btn-danger" id="deleteClientBtn" type="button" disabled>Apagar cliente</button>
             </div>
@@ -76,6 +78,42 @@
                 Telefone / WhatsApp
                 <input id="clientPhone" type="text" placeholder="(81) 9 0000-0000">
               </label>
+              <label>
+                CPF / CNPJ
+                <input id="clientDocument" type="text" placeholder="000.000.000-00">
+              </label>
+              <label class="full">
+                Empresa / razão social
+                <input id="clientCompanyName" type="text" placeholder="Opcional">
+              </label>
+              <label>
+                CEP
+                <input id="clientPostalCode" type="text" placeholder="00000-000">
+              </label>
+              <label>
+                Rua / avenida
+                <input id="clientStreet" type="text" placeholder="Endereço">
+              </label>
+              <label>
+                Número
+                <input id="clientAddressNumber" type="text" placeholder="Nº">
+              </label>
+              <label>
+                Complemento
+                <input id="clientComplement" type="text" placeholder="Apto, sala...">
+              </label>
+              <label>
+                Bairro
+                <input id="clientNeighborhood" type="text" placeholder="Bairro">
+              </label>
+              <label>
+                Cidade
+                <input id="clientCity" type="text" placeholder="Recife">
+              </label>
+              <label>
+                UF
+                <input id="clientState" type="text" maxlength="2" placeholder="PE">
+              </label>
               <label class="full">
                 Observações internas
                 <textarea id="clientNotes" placeholder="Preferências, tipo de trabalho, detalhes do atendimento..."></textarea>
@@ -92,6 +130,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260707-02"></script>
-  <script src="/admin/clientes/clientes.js?v=20260706-01"></script>
+  <script src="/admin/clientes/clientes.js?v=20260714-01"></script>
 </body>
 </html>

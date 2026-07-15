@@ -186,6 +186,22 @@ function clientGalleryInviteKey(token) {
   return `client_gallery_invite:${token}`;
 }
 
+function privateQuotesIndexKey() {
+  return "private_quotes_index";
+}
+
+function privateQuoteKey(id) {
+  return `private_quote:${id}`;
+}
+
+function privateQuoteEventsKey(id) {
+  return `private_quote_events:${id}`;
+}
+
+function clientQuoteInviteKey(token) {
+  return `client_quote_invite:${token}`;
+}
+
 function normalizeRole(role = "") {
   return role === "admin" ? "admin" : "editor";
 }
@@ -632,6 +648,319 @@ async function listPrivateClients(env) {
   return clients.filter(Boolean).sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
+function defaultQuoteClauses() {
+  return [
+    {
+      id: "objeto",
+      title: "Objeto e escopo",
+      text: "O presente instrumento formaliza a prestação dos serviços fotográficos descritos neste orçamento. Qualquer atividade, cobertura, arquivo ou entrega não prevista deverá ser acordada por escrito entre as partes.",
+    },
+    {
+      id: "reserva",
+      title: "Reserva, pagamento e inadimplência",
+      text: "A data somente será reservada após o aceite deste contrato e o pagamento da entrada, quando prevista. Os demais vencimentos obedecerão às condições indicadas neste orçamento. O atraso poderá suspender a execução ou a entrega até a regularização.",
+    },
+    {
+      id: "execucao",
+      title: "Execução e entrega",
+      text: "O serviço será executado conforme o escopo, a data e o local informados. O prazo de entrega começa após a realização do trabalho e, quando aplicável, após a seleção das imagens pelo cliente.",
+    },
+    {
+      id: "reagendamento",
+      title: "Reagendamento e cancelamento",
+      text: "Pedidos de reagendamento ou cancelamento devem ser comunicados por escrito. Custos já incorridos e valores de reserva poderão ser retidos. Caso fortuito, força maior ou impossibilidade técnica serão tratados de boa-fé, priorizando nova data compatível.",
+    },
+    {
+      id: "edicao",
+      title: "Seleção, edição e arquivos",
+      text: "A curadoria e a edição seguem a linguagem autoral do fotógrafo. Arquivos brutos não integram a entrega, salvo previsão expressa. Solicitações fora do escopo poderão gerar novo orçamento.",
+    },
+    {
+      id: "direitos",
+      title: "Direitos autorais e uso de imagem",
+      text: "Os direitos autorais permanecem com o fotógrafo. O cliente recebe licença de uso pessoal dos arquivos entregues. Qualquer autorização para divulgação em portfólio, redes sociais ou publicidade deverá respeitar a opção acordada entre as partes e a legislação aplicável.",
+    },
+    {
+      id: "armazenamento",
+      title: "Guarda e disponibilidade",
+      text: "Após a entrega final, o cliente é responsável por manter cópias de segurança. A guarda dos arquivos pelo fotógrafo ocorrerá pelo período informado neste orçamento ou, na ausência de prazo específico, por até 90 dias após a entrega.",
+    },
+    {
+      id: "dados",
+      title: "Dados pessoais",
+      text: "Os dados pessoais serão utilizados para atendimento, execução do contrato, cobrança, entrega e cumprimento de obrigações legais, com acesso restrito às finalidades necessárias ao serviço.",
+    },
+    {
+      id: "gerais",
+      title: "Disposições gerais",
+      text: "O aceite eletrônico registra a concordância com este orçamento e suas cláusulas. Alterações posteriores somente terão validade quando formalizadas por escrito. Fica eleito o foro da comarca de Recife, Pernambuco, ressalvadas as regras legais de competência aplicáveis.",
+    },
+  ];
+}
+
+function defaultQuotePaymentMethods() {
+  return [
+    {
+      id: "pix",
+      type: "pix",
+      label: "PIX",
+      details: "Dados para pagamento enviados após a aprovação.",
+    },
+  ];
+}
+
+function normalizeQuoteItems(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .slice(0, 40)
+    .map((item, index) => ({
+      id: String(item.id || `item_${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80),
+      description: cleanGalleryText(item.description || "Serviço fotográfico", 320),
+      quantity: Math.max(0.01, Math.min(Number(item.quantity || 1), 10000)),
+      unitPriceCents: normalizeMoneyCents(item.unitPriceCents || 0),
+    }))
+    .filter((item) => item.description);
+}
+
+function normalizeQuotePaymentMethods(methods = []) {
+  const allowed = ["pix", "bank_transfer", "credit_card", "debit_card", "cash", "boleto", "other"];
+  return (Array.isArray(methods) ? methods : [])
+    .slice(0, 12)
+    .map((method, index) => ({
+      id: String(method.id || `payment_${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80),
+      type: allowed.includes(method.type) ? method.type : "other",
+      label: cleanDisplayName(method.label || "Forma de pagamento"),
+      details: cleanGalleryText(method.details || "", 600),
+    }))
+    .filter((method) => method.label);
+}
+
+function normalizeQuoteClauses(clauses = []) {
+  const source = Array.isArray(clauses) && clauses.length ? clauses : defaultQuoteClauses();
+  return source
+    .slice(0, 30)
+    .map((clause, index) => ({
+      id: String(clause.id || `clause_${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80),
+      title: cleanDisplayName(clause.title || `Cláusula ${index + 1}`),
+      text: cleanGalleryText(clause.text || "", 5000),
+    }))
+    .filter((clause) => clause.title && clause.text);
+}
+
+function calculateQuoteTotals(quote = {}) {
+  const items = normalizeQuoteItems(quote.items || []);
+  const subtotalCents = items.reduce((total, item) => (
+    total + Math.round(item.quantity * item.unitPriceCents)
+  ), 0);
+  const discountType = ["none", "percent", "fixed"].includes(quote.discountType)
+    ? quote.discountType
+    : "none";
+  const discountValue = discountType === "percent"
+    ? normalizePercent(quote.discountValue || 0)
+    : discountType === "fixed" ? normalizeMoneyCents(quote.discountValue || 0) : 0;
+  const discountCents = discountType === "percent"
+    ? Math.round(subtotalCents * (discountValue / 100))
+    : Math.min(subtotalCents, discountValue);
+  return {
+    items,
+    subtotalCents,
+    discountType,
+    discountValue,
+    discountCents,
+    totalCents: Math.max(0, subtotalCents - discountCents),
+  };
+}
+
+function effectiveQuoteStatus(quote = {}) {
+  if (["accepted", "cancelled", "draft"].includes(quote.status)) return quote.status;
+  if (quote.validUntil) {
+    const expiresAt = new Date(`${quote.validUntil}T23:59:59-03:00`).getTime();
+    if (Number.isFinite(expiresAt) && expiresAt < Date.now()) return "expired";
+  }
+  return ["published", "viewed"].includes(quote.status) ? quote.status : "draft";
+}
+
+function quoteContractor(env) {
+  return {
+    name: env.BRAND_LEGAL_NAME || env.BRAND_NAME || "Marcel Conde | Photography",
+    document: env.BRAND_CNPJ || "67.096.533/0001-90",
+    email: env.CONTACT_EMAIL || "contato@marcelconde.com.br",
+    phone: env.BRAND_PHONE || "(81) 98409-4212",
+    city: env.BRAND_CITY || "Recife, PE",
+  };
+}
+
+function quoteClientSnapshot(client = {}) {
+  return {
+    id: client.id || "",
+    name: client.name || "Cliente",
+    email: normalizeEmail(client.email || ""),
+    phone: client.phone || "",
+    document: client.document || "",
+    companyName: client.companyName || "",
+    address: client.address || {},
+  };
+}
+
+function quotePublishedSnapshot(env, quote = {}, client = {}) {
+  const totals = calculateQuoteTotals(quote);
+  return {
+    quoteId: quote.id,
+    number: quote.number,
+    version: Number(quote.version || 1),
+    title: quote.title,
+    serviceDescription: quote.serviceDescription || "",
+    serviceDate: quote.serviceDate || "",
+    serviceLocation: quote.serviceLocation || "",
+    deliveryEstimate: quote.deliveryEstimate || "",
+    validUntil: quote.validUntil || "",
+    items: totals.items,
+    subtotalCents: totals.subtotalCents,
+    discountType: totals.discountType,
+    discountValue: totals.discountValue,
+    discountCents: totals.discountCents,
+    totalCents: totals.totalCents,
+    paymentMethods: normalizeQuotePaymentMethods(quote.paymentMethods || []),
+    paymentTerms: cleanGalleryText(quote.paymentTerms || "", 1600),
+    clauses: normalizeQuoteClauses(quote.clauses || []),
+    notesForClient: cleanGalleryText(quote.notesForClient || "", 1600),
+    client: quoteClientSnapshot(client),
+    contractor: quoteContractor(env),
+  };
+}
+
+function publicQuote(quote = {}) {
+  const totals = calculateQuoteTotals(quote);
+  return {
+    id: quote.id,
+    number: quote.number,
+    clientId: quote.clientId,
+    title: quote.title,
+    serviceDescription: quote.serviceDescription || "",
+    serviceDate: quote.serviceDate || "",
+    serviceLocation: quote.serviceLocation || "",
+    deliveryEstimate: quote.deliveryEstimate || "",
+    validUntil: quote.validUntil || "",
+    items: totals.items,
+    subtotalCents: totals.subtotalCents,
+    discountType: totals.discountType,
+    discountValue: totals.discountValue,
+    discountCents: totals.discountCents,
+    totalCents: totals.totalCents,
+    paymentMethods: normalizeQuotePaymentMethods(quote.paymentMethods || []),
+    paymentTerms: quote.paymentTerms || "",
+    clauses: normalizeQuoteClauses(quote.clauses || []),
+    notesForClient: quote.notesForClient || "",
+    status: effectiveQuoteStatus(quote),
+    version: Number(quote.version || 0),
+    publishedAt: quote.publishedAt || null,
+    viewedAt: quote.viewedAt || null,
+    acceptedAt: quote.acceptedAt || null,
+    acceptance: quote.acceptance ? {
+      name: quote.acceptance.name,
+      email: quote.acceptance.email,
+      document: quote.acceptance.document || "",
+      acceptedAt: quote.acceptance.acceptedAt,
+      code: quote.acceptance.code,
+      hash: quote.acceptance.hash,
+    } : null,
+    createdAt: quote.createdAt || null,
+    updatedAt: quote.updatedAt || null,
+  };
+}
+
+async function appendPrivateQuoteEvent(env, request, quoteId, action, details = {}, actor = {}) {
+  try {
+    if (!env.LIKES_KV || !quoteId) return;
+    const events = await readKvJson(env, privateQuoteEventsKey(quoteId), []);
+    events.unshift({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      action,
+      details,
+      actorEmail: actor.email || null,
+      actorName: actor.name || null,
+      createdAt: new Date().toISOString(),
+      ip: request.headers.get("CF-Connecting-IP") || "",
+      userAgent: request.headers.get("User-Agent") || "",
+    });
+    await writeKvJson(env, privateQuoteEventsKey(quoteId), events.slice(0, 300));
+  } catch (err) {
+    console.error("Private quote event failed:", err);
+  }
+}
+
+async function listPrivateQuotes(env) {
+  const ids = await readKvJson(env, privateQuotesIndexKey(), []);
+  const quotes = await Promise.all(ids.map((id) => readKvJson(env, privateQuoteKey(id), null)));
+  return quotes.filter(Boolean).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+}
+
+async function savePrivateQuote(env, input = {}) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const now = new Date().toISOString();
+  const id = String(input.id || `orc_${randomToken(9)}`).replace(/[^a-zA-Z0-9_-]/g, "");
+  const existing = await readKvJson(env, privateQuoteKey(id), {});
+  if (existing.status === "accepted") {
+    const err = new Error("Um contrato aceito não pode ser alterado. Duplique-o para criar uma nova versão.");
+    err.status = 409;
+    throw err;
+  }
+
+  const totals = calculateQuoteTotals({
+    items: input.items ?? existing.items ?? [],
+    discountType: input.discountType ?? existing.discountType ?? "none",
+    discountValue: input.discountValue ?? existing.discountValue ?? 0,
+  });
+  const defaultValidity = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const quote = {
+    ...existing,
+    id,
+    number: existing.number || `ORC-${new Date().getFullYear()}-${randomToken(4).slice(0, 6).toUpperCase()}`,
+    clientId: String(input.clientId ?? existing.clientId ?? ""),
+    title: cleanDisplayName(input.title ?? existing.title ?? "Ensaio fotográfico"),
+    serviceDescription: cleanGalleryText(input.serviceDescription ?? existing.serviceDescription ?? "", 5000),
+    serviceDate: String(input.serviceDate ?? existing.serviceDate ?? "").slice(0, 10),
+    serviceLocation: cleanDisplayName(input.serviceLocation ?? existing.serviceLocation ?? ""),
+    deliveryEstimate: cleanGalleryText(input.deliveryEstimate ?? existing.deliveryEstimate ?? "", 500),
+    validUntil: String(input.validUntil ?? existing.validUntil ?? defaultValidity).slice(0, 10),
+    items: totals.items,
+    discountType: totals.discountType,
+    discountValue: totals.discountValue,
+    paymentMethods: normalizeQuotePaymentMethods(input.paymentMethods ?? existing.paymentMethods ?? defaultQuotePaymentMethods()),
+    paymentTerms: cleanGalleryText(input.paymentTerms ?? existing.paymentTerms ?? "", 1600),
+    clauses: normalizeQuoteClauses(input.clauses ?? existing.clauses ?? defaultQuoteClauses()),
+    notesForClient: cleanGalleryText(input.notesForClient ?? existing.notesForClient ?? "", 1600),
+    internalNotes: cleanGalleryText(input.internalNotes ?? existing.internalNotes ?? "", 1600),
+    status: ["published", "viewed"].includes(existing.status) ? "draft" : (existing.status || "draft"),
+    publishedSnapshot: ["published", "viewed"].includes(existing.status) ? null : (existing.publishedSnapshot || null),
+    createdAt: existing.createdAt || now,
+    updatedAt: now,
+  };
+
+  await writeKvJson(env, privateQuoteKey(id), quote);
+  const index = await readKvJson(env, privateQuotesIndexKey(), []);
+  await writeKvJson(env, privateQuotesIndexKey(), [...new Set([id, ...index])]);
+  return quote;
+}
+
+async function deletePrivateQuote(env, quoteId) {
+  if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
+  const id = String(quoteId || "").trim();
+  const quote = await readKvJson(env, privateQuoteKey(id), null);
+  if (!quote) return null;
+  if (quote.status === "accepted") {
+    const err = new Error("Contratos aceitos devem ser preservados e não podem ser apagados.");
+    err.status = 409;
+    throw err;
+  }
+  const index = await readKvJson(env, privateQuotesIndexKey(), []);
+  await Promise.all([
+    env.LIKES_KV.delete(privateQuoteKey(id)),
+    env.LIKES_KV.delete(privateQuoteEventsKey(id)),
+    writeKvJson(env, privateQuotesIndexKey(), index.filter((item) => item !== id)),
+  ]);
+  return quote;
+}
+
 function shouldRepairGalleryToEditing(gallery = {}, latestPayment = null, events = []) {
   const hasCompletionEvent = events.some((event) => (
     event?.action === "concluir_selecao" ||
@@ -682,6 +1011,17 @@ async function savePrivateClient(env, input = {}) {
     name: cleanDisplayName(input.name || existing.name || "Cliente"),
     email: normalizeEmail(input.email || existing.email || ""),
     phone: cleanDisplayName(input.phone || existing.phone || ""),
+    document: cleanDisplayName(input.document || existing.document || ""),
+    companyName: cleanDisplayName(input.companyName || existing.companyName || ""),
+    address: {
+      postalCode: cleanDisplayName(input.address?.postalCode || existing.address?.postalCode || ""),
+      street: cleanDisplayName(input.address?.street || existing.address?.street || ""),
+      number: cleanDisplayName(input.address?.number || existing.address?.number || ""),
+      complement: cleanDisplayName(input.address?.complement || existing.address?.complement || ""),
+      neighborhood: cleanDisplayName(input.address?.neighborhood || existing.address?.neighborhood || ""),
+      city: cleanDisplayName(input.address?.city || existing.address?.city || ""),
+      state: cleanDisplayName(input.address?.state || existing.address?.state || "").slice(0, 2).toUpperCase(),
+    },
     notes: cleanGalleryText(input.notes || existing.notes || "", 600),
     createdAt: existing.createdAt || now,
     updatedAt: now,
@@ -755,10 +1095,13 @@ async function deletePrivateClient(env, clientId) {
 
   const galleries = await listPrivateGalleries(env);
   const linkedGalleries = galleries.filter((gallery) => gallery.clientId === id);
-  if (linkedGalleries.length) {
-    const err = new Error("Este cliente possui galerias vinculadas. Apague ou troque essas galerias antes.");
+  const quotes = await listPrivateQuotes(env);
+  const linkedQuotes = quotes.filter((quote) => quote.clientId === id);
+  if (linkedGalleries.length || linkedQuotes.length) {
+    const err = new Error("Este cliente possui galerias ou orçamentos vinculados. Remova ou transfira esses registros antes.");
     err.status = 409;
     err.linkedGalleries = linkedGalleries.length;
+    err.linkedQuotes = linkedQuotes.length;
     throw err;
   }
 
@@ -864,6 +1207,14 @@ async function readJson(request) {
 async function sha1Hex(value) {
   const data = new TextEncoder().encode(value);
   const digest = await crypto.subtle.digest("SHA-1", data);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function sha256Hex(value) {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -1331,6 +1682,33 @@ function clientGalleryLoginUrl(env, slug) {
   return `${origin}/clientes/login/?next=${encodeURIComponent(next)}`;
 }
 
+function clientQuoteUrl(env, quoteId) {
+  const origin = siteOrigin(env);
+  return `${origin}/clientes/orcamento/?id=${encodeURIComponent(quoteId || "")}`;
+}
+
+function clientQuoteLoginUrl(env, quoteId) {
+  const next = `/clientes/orcamento/?id=${encodeURIComponent(quoteId || "")}`;
+  return `${clientLoginUrl(env)}?next=${encodeURIComponent(next)}`;
+}
+
+function clientQuoteInviteUrl(env, token) {
+  return `${clientLoginUrl(env)}?convite=${encodeURIComponent(token)}`;
+}
+
+async function requireClientQuoteAccess(request, env, quote) {
+  const session = await getCurrentClient(request, env);
+  if (!session) return { error: errorJson("Faça login para acessar este orçamento.", 401) };
+  const linkedClient = quote?.clientId
+    ? await readKvJson(env, privateClientKey(quote.clientId), null)
+    : null;
+  const allowedEmail = normalizeEmail(linkedClient?.email || quote?.publishedSnapshot?.client?.email || "");
+  if (!allowedEmail || normalizeEmail(session.email) !== allowedEmail) {
+    return { error: errorJson("Este orçamento pertence a outro cliente.", 403) };
+  }
+  return { client: publicClientUser(session), linkedClient };
+}
+
 function emailHtml(value = "") {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -1599,6 +1977,298 @@ async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {
   } catch {
     return { raw: text };
   }
+}
+
+function formatQuoteDate(value, includeTime = false) {
+  if (!value) return "Não informado";
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? new Date(`${value}T12:00:00-03:00`)
+    : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Recife",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    ...(includeTime ? { hour: "2-digit", minute: "2-digit" } : {}),
+  }).format(date);
+}
+
+async function sendResendMessage(env, payload = {}) {
+  if (!env.RESEND_API_KEY) throw new Error("RESEND_API_KEY não configurada no Worker.");
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+    },
+    body: JSON.stringify({ from: resendFrom(env), ...payload }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${text}`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, accessUrl = "", firstAccess = false) {
+  const clientName = emailHtml(client.name || email);
+  const total = formatCurrencyFromCents(calculateQuoteTotals(quote).totalCents);
+  const html = emailLayout(env, {
+    preheader: `Seu orçamento ${quote.number || ""} está disponível para análise.`,
+    eyebrow: "Orçamento e contrato",
+    title: "Seu orçamento está pronto",
+    intro: `Olá ${clientName}, preparei o orçamento para <strong>${emailHtml(quote.title || "o serviço solicitado")}</strong>.`,
+    body: `<p style="margin:0 0 12px;">Valor total: <strong>${emailHtml(total)}</strong></p>
+      <p style="margin:0;">Confira o escopo, as formas de pagamento e todas as cláusulas. Se estiver de acordo, o aceite é feito na própria página.</p>`,
+    ctaLabel: firstAccess ? "Criar senha e ver orçamento" : "Ver orçamento",
+    ctaUrl: accessUrl,
+    secondaryCtaLabel: "Área do cliente",
+    secondaryCtaUrl: clientLoginUrl(env),
+    footerNote: firstAccess
+      ? "O link de primeiro acesso expira em 7 dias. O orçamento permanece disponível até a data de validade informada."
+      : `Proposta válida até ${formatQuoteDate(quote.validUntil)}.`,
+    reason: "Você recebeu este e-mail porque existe um orçamento vinculado ao seu cadastro na área do cliente.",
+  });
+  return sendResendMessage(env, {
+    to: [email],
+    subject: `Orçamento ${quote.number || ""} — ${quote.title || "Marcel Conde Fotografia"}`,
+    html,
+  });
+}
+
+function pdfCleanText(value = "") {
+  return String(value || "")
+    .replace(/[–—]/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/…/g, "...")
+    .replace(/•/g, "-")
+    .replace(/[^\x09\x0A\x0D\x20-\xFF]/g, "?");
+}
+
+function pdfEscapeText(value = "") {
+  return pdfCleanText(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
+function wrapPdfText(value = "", maxChars = 92) {
+  const paragraphs = pdfCleanText(value).split(/\n/);
+  const lines = [];
+  paragraphs.forEach((paragraph) => {
+    const words = paragraph.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      lines.push("");
+      return;
+    }
+    let line = "";
+    words.forEach((word) => {
+      if (!line) {
+        line = word;
+      } else if (`${line} ${word}`.length <= maxChars) {
+        line += ` ${word}`;
+      } else {
+        lines.push(line);
+        line = word;
+      }
+    });
+    if (line) lines.push(line);
+  });
+  return lines;
+}
+
+function pdfBytesFromString(value = "") {
+  return Uint8Array.from(value, (char) => char.charCodeAt(0) & 0xff);
+}
+
+function buildQuotePdf(env, quote = {}, client = {}, acceptance = null) {
+  const snapshot = acceptance?.snapshot || quote.publishedSnapshot || quotePublishedSnapshot(env, quote, client);
+  const pages = [[]];
+  let pageIndex = 0;
+  let y = 780;
+
+  const newPage = () => {
+    pages.push([]);
+    pageIndex += 1;
+    y = 780;
+  };
+  const draw = (text, options = {}) => {
+    const font = options.font || "F1";
+    const size = Number(options.size || 10);
+    const leading = Number(options.leading || Math.max(13, size * 1.35));
+    const x = Number(options.x || 46);
+    const maxChars = Number(options.maxChars || Math.max(38, Math.floor(96 * (10 / size))));
+    const color = options.color || "0.12 0.11 0.09";
+    const lines = wrapPdfText(text, maxChars);
+
+    lines.forEach((line) => {
+      if (y - leading < 58) newPage();
+      if (line) {
+        pages[pageIndex].push(`BT /${font} ${size} Tf ${color} rg ${x} ${y.toFixed(2)} Td (${pdfEscapeText(line)}) Tj ET`);
+      }
+      y -= leading;
+    });
+    y -= Number(options.gap || 0);
+  };
+  const rule = () => {
+    if (y < 70) newPage();
+    pages[pageIndex].push(`0.70 0.58 0.40 RG 0.7 w 46 ${y.toFixed(2)} m 549 ${y.toFixed(2)} l S`);
+    y -= 15;
+  };
+
+  draw(snapshot.contractor?.name || brandName(env), { font: "F3", size: 17, leading: 21, color: "0.33 0.25 0.16", gap: 3 });
+  draw(`ORÇAMENTO E CONTRATO DE PRESTAÇÃO DE SERVIÇOS | ${snapshot.number || quote.number || ""}`, { font: "F2", size: 8.5, leading: 12, color: "0.45 0.40 0.34", gap: 8 });
+  rule();
+  draw(snapshot.title || "Serviços fotográficos", { font: "F3", size: 25, leading: 29, maxChars: 46, gap: 4 });
+  draw(`Versão ${snapshot.version || quote.version || 1} | Validade: ${formatQuoteDate(snapshot.validUntil)}`, { size: 9, color: "0.42 0.39 0.34", gap: 15 });
+
+  draw("PARTES", { font: "F2", size: 10, leading: 14, color: "0.55 0.40 0.23", gap: 4 });
+  draw(`CONTRATANTE: ${snapshot.client?.name || client.name || "Cliente"}${snapshot.client?.document ? ` | CPF/CNPJ: ${snapshot.client.document}` : ""}`, { font: "F2", size: 9.5, leading: 14 });
+  draw(`${snapshot.client?.email || client.email || ""}${snapshot.client?.phone ? ` | ${snapshot.client.phone}` : ""}`, { size: 9, leading: 13, color: "0.38 0.35 0.31", gap: 4 });
+  draw(`CONTRATADO: ${snapshot.contractor?.name || brandName(env)} | CNPJ: ${snapshot.contractor?.document || ""}`, { font: "F2", size: 9.5, leading: 14 });
+  draw(`${snapshot.contractor?.email || ""}${snapshot.contractor?.phone ? ` | ${snapshot.contractor.phone}` : ""} | ${snapshot.contractor?.city || ""}`, { size: 9, leading: 13, color: "0.38 0.35 0.31", gap: 14 });
+
+  draw("ESCOPO", { font: "F2", size: 10, leading: 14, color: "0.55 0.40 0.23", gap: 4 });
+  draw(snapshot.serviceDescription || "Serviço conforme os itens discriminados abaixo.", { size: 10, leading: 14, gap: 7 });
+  if (snapshot.serviceDate) draw(`Data prevista: ${formatQuoteDate(snapshot.serviceDate)}`, { font: "F2", size: 9.5, leading: 13 });
+  if (snapshot.serviceLocation) draw(`Local: ${snapshot.serviceLocation}`, { size: 9.5, leading: 13 });
+  if (snapshot.deliveryEstimate) draw(`Previsão de entrega: ${snapshot.deliveryEstimate}`, { size: 9.5, leading: 13 });
+  y -= 9;
+
+  draw("INVESTIMENTO", { font: "F2", size: 10, leading: 14, color: "0.55 0.40 0.23", gap: 5 });
+  (snapshot.items || []).forEach((item) => {
+    const amount = Math.round(Number(item.quantity || 0) * Number(item.unitPriceCents || 0));
+    draw(`${item.description} | ${item.quantity} x ${formatCurrencyFromCents(item.unitPriceCents)} = ${formatCurrencyFromCents(amount)}`, { size: 9.5, leading: 14 });
+  });
+  y -= 3;
+  draw(`Subtotal: ${formatCurrencyFromCents(snapshot.subtotalCents)}`, { size: 9.5, leading: 14 });
+  if (snapshot.discountCents > 0) draw(`Desconto: -${formatCurrencyFromCents(snapshot.discountCents)}`, { size: 9.5, leading: 14 });
+  draw(`TOTAL: ${formatCurrencyFromCents(snapshot.totalCents)}`, { font: "F2", size: 13, leading: 17, color: "0.33 0.25 0.16", gap: 13 });
+
+  draw("PAGAMENTO", { font: "F2", size: 10, leading: 14, color: "0.55 0.40 0.23", gap: 5 });
+  (snapshot.paymentMethods || []).forEach((method) => {
+    draw(`${method.label}${method.details ? `: ${method.details}` : ""}`, { size: 9.5, leading: 14 });
+  });
+  if (snapshot.paymentTerms) draw(snapshot.paymentTerms, { size: 9.5, leading: 14 });
+  y -= 10;
+
+  draw("CLÁUSULAS CONTRATUAIS", { font: "F2", size: 10, leading: 14, color: "0.55 0.40 0.23", gap: 7 });
+  (snapshot.clauses || []).forEach((clause, index) => {
+    draw(`${index + 1}. ${clause.title}`, { font: "F2", size: 9.8, leading: 14, gap: 2 });
+    draw(clause.text, { size: 9.2, leading: 13.2, gap: 8 });
+  });
+
+  if (snapshot.notesForClient) {
+    draw("OBSERVAÇÕES", { font: "F2", size: 10, leading: 14, color: "0.55 0.40 0.23", gap: 5 });
+    draw(snapshot.notesForClient, { size: 9.5, leading: 14, gap: 12 });
+  }
+
+  if (acceptance) {
+    rule();
+    draw("ACEITE ELETRÔNICO", { font: "F2", size: 10, leading: 14, color: "0.55 0.40 0.23", gap: 5 });
+    draw(`Aceito por ${acceptance.name} (${acceptance.email}) em ${formatQuoteDate(acceptance.acceptedAt, true)}.`, { font: "F2", size: 9.5, leading: 14 });
+    if (acceptance.document) draw(`CPF/CNPJ informado: ${acceptance.document}`, { size: 9.2, leading: 13 });
+    draw(`Código de aceite: ${acceptance.code}`, { size: 9.2, leading: 13 });
+    draw(`Hash de integridade: ${acceptance.hash}`, { size: 7.5, leading: 11, maxChars: 120 });
+    draw(`IP registrado: ${acceptance.ip || "não disponível"}`, { size: 8, leading: 12, color: "0.38 0.35 0.31" });
+  } else {
+    rule();
+    draw("DOCUMENTO AINDA NÃO ACEITO", { font: "F2", size: 9.5, leading: 14, color: "0.55 0.40 0.23" });
+  }
+
+  pages.forEach((commands, index) => {
+    commands.unshift(`BT /F2 7.5 Tf 0.45 0.40 0.34 rg 46 815 Td (${pdfEscapeText(snapshot.number || quote.number || "ORÇAMENTO")}) Tj ET`);
+    commands.push(`BT /F1 7.5 Tf 0.45 0.40 0.34 rg 46 28 Td (${pdfEscapeText(`${brandName(env)} | Página ${index + 1} de ${pages.length}`)}) Tj ET`);
+  });
+
+  const objects = [];
+  const fontRegularId = 3;
+  const fontBoldId = 4;
+  const fontSerifId = 5;
+  const pageIds = pages.map((_, index) => 6 + index * 2);
+  objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`;
+  objects[fontRegularId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+  objects[fontBoldId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
+  objects[fontSerifId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>";
+
+  pages.forEach((commands, index) => {
+    const pageId = pageIds[index];
+    const contentId = pageId + 1;
+    const stream = commands.join("\n");
+    objects[pageId] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R /F3 ${fontSerifId} 0 R >> >> /Contents ${contentId} 0 R >>`;
+    objects[contentId] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  });
+
+  let pdf = "%PDF-1.4\n%âãÏÓ\n";
+  const offsets = [0];
+  for (let id = 1; id < objects.length; id += 1) {
+    offsets[id] = pdf.length;
+    pdf += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+  }
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id += 1) {
+    pdf += `${String(offsets[id]).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return pdfBytesFromString(pdf);
+}
+
+async function sendQuoteAcceptedEmails(env, quote = {}, client = {}, acceptance = {}, pdfBytes = new Uint8Array()) {
+  const filename = `${sanitizeDownloadName(quote.number || "contrato")}-aceito.pdf`;
+  const attachment = { filename, content: bytesToBase64(pdfBytes) };
+  const total = formatCurrencyFromCents(acceptance.snapshot?.totalCents || calculateQuoteTotals(quote).totalCents);
+  const quoteUrl = clientQuoteUrl(env, quote.id);
+  const clientHtml = emailLayout(env, {
+    preheader: `Seu aceite do orçamento ${quote.number || ""} foi registrado.`,
+    eyebrow: "Contrato aceito",
+    title: "Aceite confirmado",
+    intro: `Olá ${emailHtml(client.name || client.email)}, o aceite do orçamento <strong>${emailHtml(quote.number || "")}</strong> foi registrado com sucesso.`,
+    body: `<p style="margin:0 0 12px;">Serviço: <strong>${emailHtml(quote.title || "")}</strong><br>Valor: <strong>${emailHtml(total)}</strong></p><p style="margin:0;">A cópia do contrato aceito está anexada a este e-mail.</p>`,
+    ctaLabel: "Consultar na área do cliente",
+    ctaUrl: quoteUrl,
+    footerNote: `Código de aceite: ${emailHtml(acceptance.code || "")}`,
+    reason: "Você recebeu este e-mail porque aceitou eletronicamente um orçamento na área do cliente.",
+  });
+  const adminHtml = emailLayout(env, {
+    preheader: `${client.name || client.email} aceitou o orçamento ${quote.number || ""}.`,
+    eyebrow: "Novo aceite",
+    title: "Orçamento aprovado",
+    intro: `<strong>${emailHtml(client.name || client.email)}</strong> aceitou o orçamento <strong>${emailHtml(quote.number || "")}</strong>.`,
+    body: `<p style="margin:0 0 12px;">Serviço: ${emailHtml(quote.title || "")}<br>Valor: <strong>${emailHtml(total)}</strong><br>Data do aceite: ${emailHtml(formatQuoteDate(acceptance.acceptedAt, true))}</p><p style="margin:0;">A cópia aceita está anexada.</p>`,
+    ctaLabel: "Abrir orçamento no admin",
+    ctaUrl: `${siteOrigin(env)}/admin/orcamentos/detalhe/?id=${encodeURIComponent(quote.id || "")}`,
+    footerNote: `Código de aceite: ${emailHtml(acceptance.code || "")}`,
+    reason: "Notificação administrativa da plataforma Marcel Conde.",
+  });
+
+  const [clientResult, adminResult] = await Promise.allSettled([
+    sendResendMessage(env, {
+      to: [client.email],
+      subject: `Contrato aceito — ${quote.number || quote.title || "Orçamento"}`,
+      html: clientHtml,
+      attachments: [attachment],
+    }),
+    sendResendMessage(env, {
+      to: [adminEmail(env)],
+      subject: `Orçamento aprovado por ${client.name || client.email} — ${quote.number || ""}`,
+      html: adminHtml,
+      attachments: [attachment],
+    }),
+  ]);
+
+  return {
+    client: clientResult.status === "fulfilled" ? clientResult.value : null,
+    admin: adminResult.status === "fulfilled" ? adminResult.value : null,
+    errors: [clientResult, adminResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => String(result.reason?.message || result.reason || "Erro de e-mail")),
+  };
 }
 
 function formatCurrencyFromCents(cents = 0) {
@@ -2147,23 +2817,40 @@ export default {
       }
     }
 
-    // ── GALERIAS PRIVADAS: ACESSO DO CLIENTE ─────────────────────
+    // ── ÁREA PRIVADA: ACESSO DO CLIENTE ──────────────────────────
 
     if (url.pathname === "/client-auth/invite" && request.method === "GET") {
       const token = String(url.searchParams.get("token") || "").trim();
       if (!token || !env.LIKES_KV) return errorJson("Convite inválido.", 400);
 
-      const invite = await readKvJson(env, clientGalleryInviteKey(token), null);
+      const galleryInvite = await readKvJson(env, clientGalleryInviteKey(token), null);
+      const quoteInvite = galleryInvite ? null : await readKvJson(env, clientQuoteInviteKey(token), null);
+      const invite = galleryInvite || quoteInvite;
       if (!invite || Number(invite.expiresAt || 0) < Date.now()) {
         return errorJson("Convite inválido ou expirado.", 400);
       }
 
-      const gallery = await readKvJson(env, privateGalleryKey(invite.galleryId), null);
       const client = await readKvJson(env, privateClientKey(invite.clientId), null);
-      if (!gallery || !client) return errorJson("Galeria indisponível.", 404);
+      if (!client) return errorJson("Acesso indisponível.", 404);
 
       const existingUser = await getClientUser(env, client.email);
+      if (quoteInvite) {
+        const quote = await readKvJson(env, privateQuoteKey(invite.quoteId), null);
+        if (!quote) return errorJson("Orçamento indisponível.", 404);
+        return json({
+          kind: "quote",
+          email: client.email,
+          clientName: client.name || client.email,
+          quoteTitle: quote.title || "Orçamento",
+          quoteId: quote.id,
+          hasPassword: Boolean(existingUser?.passwordHash),
+        }, 200, { "Cache-Control": "no-store" });
+      }
+
+      const gallery = await readKvJson(env, privateGalleryKey(invite.galleryId), null);
+      if (!gallery) return errorJson("Galeria indisponível.", 404);
       return json({
+        kind: "gallery",
         email: client.email,
         clientName: client.name || client.email,
         galleryTitle: gallery.title || "Galeria privada",
@@ -2180,21 +2867,40 @@ export default {
       if (!token || password.length < 6) return errorJson("Token ou senha inválidos.", 400);
       if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
 
-      const invite = await readKvJson(env, clientGalleryInviteKey(token), null);
+      const galleryInvite = await readKvJson(env, clientGalleryInviteKey(token), null);
+      const quoteInvite = galleryInvite ? null : await readKvJson(env, clientQuoteInviteKey(token), null);
+      const invite = galleryInvite || quoteInvite;
       if (!invite || Number(invite.expiresAt || 0) < Date.now()) {
         return errorJson("Convite inválido ou expirado.", 400);
       }
 
-      const gallery = await readKvJson(env, privateGalleryKey(invite.galleryId), null);
       const client = await readKvJson(env, privateClientKey(invite.clientId), null);
-      if (!gallery || !client?.email) return errorJson("Galeria indisponível.", 404);
+      if (!client?.email) return errorJson("Acesso indisponível.", 404);
 
       const user = await saveClientPassword(env, client.email, password, {
         name: client.name || client.email,
       });
       invite.usedAt = new Date().toISOString();
-      await writeKvJson(env, clientGalleryInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
       const session = await createClientSession(env, user);
+
+      if (quoteInvite) {
+        const quote = await readKvJson(env, privateQuoteKey(invite.quoteId), null);
+        if (!quote) return errorJson("Orçamento indisponível.", 404);
+        await writeKvJson(env, clientQuoteInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
+        await appendPrivateQuoteEvent(env, request, quote.id, "cliente_criou_senha", {}, user);
+        return json({
+          ok: true,
+          ...session,
+          quote: {
+            id: quote.id,
+            url: clientQuoteUrl(env, quote.id),
+          },
+        }, 200, { "Cache-Control": "no-store" });
+      }
+
+      const gallery = await readKvJson(env, privateGalleryKey(invite.galleryId), null);
+      if (!gallery) return errorJson("Galeria indisponível.", 404);
+      await writeKvJson(env, clientGalleryInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
       await appendPrivateGalleryEvent(env, request, gallery.id, "cliente_criou_senha", {}, user);
 
       return json({
@@ -2230,6 +2936,149 @@ export default {
       const token = getBearerToken(request);
       if (token && env.LIKES_KV) await env.LIKES_KV.delete(clientSessionKey(token));
       return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-quotes" && request.method === "GET") {
+      const session = await getCurrentClient(request, env);
+      if (!session) return errorJson("Faça login para acessar seus orçamentos.", 401);
+      const quotes = await listPrivateQuotes(env);
+      const items = [];
+      for (const quote of quotes) {
+        const client = quote.clientId ? await readKvJson(env, privateClientKey(quote.clientId), null) : null;
+        if (normalizeEmail(client?.email || "") !== normalizeEmail(session.email)) continue;
+        const item = publicQuote(quote);
+        if (["draft", "cancelled"].includes(item.status)) continue;
+        items.push({
+          id: item.id,
+          number: item.number,
+          title: item.title,
+          status: item.status,
+          totalCents: item.totalCents,
+          validUntil: item.validUntil,
+          acceptedAt: item.acceptedAt,
+          updatedAt: item.updatedAt,
+          url: clientQuoteUrl(env, item.id),
+        });
+      }
+      return json({ quotes: items }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-quote" && request.method === "GET") {
+      const id = String(url.searchParams.get("id") || "").trim();
+      const quote = await readKvJson(env, privateQuoteKey(id), null);
+      if (!quote) return errorJson("Orçamento não encontrado.", 404);
+      const access = await requireClientQuoteAccess(request, env, quote);
+      if (access.error) return access.error;
+      const status = effectiveQuoteStatus(quote);
+      if (["draft", "cancelled"].includes(status)) return errorJson("Este orçamento ainda não está disponível.", 404);
+
+      if (quote.status === "published" && !quote.viewedAt) {
+        quote.status = "viewed";
+        quote.viewedAt = new Date().toISOString();
+        quote.updatedAt = quote.viewedAt;
+        await writeKvJson(env, privateQuoteKey(quote.id), quote);
+        ctx.waitUntil(appendPrivateQuoteEvent(env, request, quote.id, "cliente_abriu_orcamento", {}, access.client));
+      }
+
+      return json({
+        quote: publicQuote(quote),
+        client: quoteClientSnapshot(access.linkedClient || {}),
+        contractor: quote.contractor || quote.publishedSnapshot?.contractor || quoteContractor(env),
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-quote/pdf" && request.method === "GET") {
+      const id = String(url.searchParams.get("id") || "").trim();
+      const quote = await readKvJson(env, privateQuoteKey(id), null);
+      if (!quote) return errorJson("Orçamento não encontrado.", 404);
+      const access = await requireClientQuoteAccess(request, env, quote);
+      if (access.error) return access.error;
+      if (["draft", "cancelled"].includes(effectiveQuoteStatus(quote))) return errorJson("Orçamento indisponível.", 404);
+      const bytes = buildQuotePdf(env, quote, access.linkedClient || {}, quote.acceptance || null);
+      return new Response(bytes, {
+        status: 200,
+        headers: {
+          ...corsHeaders(),
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${sanitizeDownloadName(quote.number || "orcamento")}.pdf"`,
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
+
+    if (url.pathname === "/client-quote/accept" && request.method === "POST") {
+      const body = await readJson(request);
+      const id = String(body.id || body.quoteId || "").trim();
+      const quote = await readKvJson(env, privateQuoteKey(id), null);
+      if (!quote) return errorJson("Orçamento não encontrado.", 404);
+      const access = await requireClientQuoteAccess(request, env, quote);
+      if (access.error) return access.error;
+      const status = effectiveQuoteStatus(quote);
+      if (status === "accepted") return json({ ok: true, alreadyAccepted: true, quote: publicQuote(quote) }, 200, { "Cache-Control": "no-store" });
+      if (status === "expired") return errorJson("Este orçamento expirou. Solicite uma nova validade antes de aceitar.", 409);
+      if (!["published", "viewed"].includes(status)) return errorJson("Este orçamento não está disponível para aceite.", 409);
+
+      const signerName = cleanDisplayName(body.name || "");
+      const signerDocument = cleanDisplayName(body.document || access.linkedClient?.document || "");
+      if (signerName.length < 3) return errorJson("Informe o nome completo de quem está aceitando.", 400);
+      if (signerDocument.length < 5) return errorJson("Informe o CPF ou CNPJ de quem está aceitando.", 400);
+      if (body.confirmContract !== true || body.confirmElectronicSignature !== true) {
+        return errorJson("Confirme a leitura do contrato e o aceite eletrônico.", 400);
+      }
+
+      const acceptedAt = new Date().toISOString();
+      const snapshot = quote.publishedSnapshot || quotePublishedSnapshot(env, quote, access.linkedClient || {});
+      const evidence = {
+        quoteId: quote.id,
+        number: quote.number,
+        version: snapshot.version || quote.version || 1,
+        snapshot,
+        name: signerName,
+        email: normalizeEmail(access.client.email || ""),
+        document: signerDocument,
+        acceptedAt,
+        ip: request.headers.get("CF-Connecting-IP") || "",
+        userAgent: request.headers.get("User-Agent") || "",
+      };
+      const hash = await sha256Hex(JSON.stringify(evidence));
+      const acceptance = {
+        ...evidence,
+        code: `ACE-${randomToken(6).slice(0, 9).toUpperCase()}`,
+        hash,
+      };
+
+      quote.status = "accepted";
+      quote.acceptedAt = acceptedAt;
+      quote.acceptance = acceptance;
+      quote.updatedAt = acceptedAt;
+      await writeKvJson(env, privateQuoteKey(quote.id), quote);
+      await appendPrivateQuoteEvent(env, request, quote.id, "cliente_aceitou_orcamento", {
+        version: acceptance.version,
+        code: acceptance.code,
+        hash: acceptance.hash,
+      }, access.client);
+
+      const pdfBytes = buildQuotePdf(env, quote, access.linkedClient || {}, acceptance);
+      let emailResult = { client: null, admin: null, errors: [] };
+      try {
+        emailResult = await sendQuoteAcceptedEmails(env, quote, access.linkedClient || {}, acceptance, pdfBytes);
+      } catch (err) {
+        emailResult.errors = [String(err?.message || err || "Erro ao enviar e-mails")];
+      }
+      quote.acceptanceEmails = {
+        sentAt: new Date().toISOString(),
+        clientQueued: Boolean(emailResult.client),
+        adminQueued: Boolean(emailResult.admin),
+        errors: emailResult.errors,
+      };
+      await writeKvJson(env, privateQuoteKey(quote.id), quote);
+
+      return json({
+        ok: true,
+        quote: publicQuote(quote),
+        emailQueued: Boolean(emailResult.client && emailResult.admin),
+        emailErrors: emailResult.errors,
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/client-galleries" && request.method === "GET") {
@@ -2816,8 +3665,170 @@ export default {
       } catch (err) {
         return errorJson(err.message || "Erro ao apagar cliente.", err.status || 500, {
           linkedGalleries: err.linkedGalleries || undefined,
+          linkedQuotes: err.linkedQuotes || undefined,
         });
       }
+    }
+
+    if (url.pathname === "/private/quotes" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      const [quotes, clients] = await Promise.all([listPrivateQuotes(env), listPrivateClients(env)]);
+      return json({
+        quotes: quotes.map((quote) => ({ ...publicQuote(quote), internalNotes: quote.internalNotes || "" })),
+        clients,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/quotes" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      try {
+        const quote = await savePrivateQuote(env, body);
+        await appendAuditLog(env, request, user, body.id ? "editar_orcamento" : "criar_orcamento", "private_quotes", {
+          quoteId: quote.id,
+          number: quote.number,
+          clientId: quote.clientId,
+        });
+        await appendPrivateQuoteEvent(env, request, quote.id, body.id ? "admin_editou_orcamento" : "admin_criou_orcamento", {}, user);
+        return json({ quote: { ...publicQuote(quote), internalNotes: quote.internalNotes || "" } }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
+      } catch (err) {
+        return errorJson(err.message || "Erro ao salvar orçamento.", err.status || 500);
+      }
+    }
+
+    if (url.pathname === "/private/quote" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      const id = String(url.searchParams.get("id") || "").trim();
+      const quote = await readKvJson(env, privateQuoteKey(id), null);
+      if (!quote) return errorJson("Orçamento não encontrado.", 404);
+      const [client, events] = await Promise.all([
+        quote.clientId ? readKvJson(env, privateClientKey(quote.clientId), null) : null,
+        readKvJson(env, privateQuoteEventsKey(id), []),
+      ]);
+      return json({
+        quote: { ...publicQuote(quote), internalNotes: quote.internalNotes || "", acceptanceEmails: quote.acceptanceEmails || null },
+        client,
+        events: events.slice(0, 160),
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/quote/delete" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      try {
+        const quote = await deletePrivateQuote(env, body.id || body.quoteId);
+        if (!quote) return errorJson("Orçamento não encontrado.", 404);
+        await appendAuditLog(env, request, user, "excluir_orcamento", "private_quotes", { quoteId: quote.id, number: quote.number });
+        return json({ ok: true, quoteId: quote.id }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        return errorJson(err.message || "Erro ao apagar orçamento.", err.status || 500);
+      }
+    }
+
+    if (url.pathname === "/private/quote/publish" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      const id = String(body.id || body.quoteId || "").trim();
+      const quote = await readKvJson(env, privateQuoteKey(id), null);
+      if (!quote) return errorJson("Orçamento não encontrado.", 404);
+      if (quote.status === "accepted") return errorJson("Este orçamento já foi aceito e não pode ser republicado.", 409);
+      const client = quote.clientId ? await readKvJson(env, privateClientKey(quote.clientId), null) : null;
+      if (!client?.email) return errorJson("Vincule um cliente com e-mail antes de publicar.", 400);
+      if (!normalizeQuoteItems(quote.items || []).length) return errorJson("Adicione ao menos um item ao orçamento.", 400);
+      if (!normalizeQuoteClauses(quote.clauses || []).length) return errorJson("Adicione as cláusulas do contrato.", 400);
+
+      const now = new Date().toISOString();
+      quote.version = Number(quote.version || 0) + 1;
+      quote.status = "published";
+      quote.publishedAt = now;
+      quote.viewedAt = null;
+      quote.acceptedAt = null;
+      quote.acceptance = null;
+      quote.publishedSnapshot = quotePublishedSnapshot(env, quote, client);
+      quote.publishedHash = await sha256Hex(JSON.stringify(quote.publishedSnapshot));
+      quote.updatedAt = now;
+      await writeKvJson(env, privateQuoteKey(quote.id), quote);
+
+      const existingClientUser = await getClientUser(env, client.email);
+      const hasClientPassword = existingClientUser?.active !== false && Boolean(existingClientUser?.passwordHash);
+      let token = "";
+      let emailResult = null;
+      let emailError = "";
+      try {
+        let accessUrl = clientQuoteLoginUrl(env, quote.id);
+        if (!hasClientPassword) {
+          token = randomToken(36);
+          const invite = {
+            token,
+            email: normalizeEmail(client.email),
+            clientId: client.id,
+            quoteId: quote.id,
+            invitedBy: user.email,
+            createdAt: now,
+            expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7,
+          };
+          await writeKvJson(env, clientQuoteInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
+          accessUrl = clientQuoteInviteUrl(env, token);
+        }
+        emailResult = await sendQuotePublishedEmail(env, client.email, quote, client, accessUrl, !hasClientPassword);
+      } catch (err) {
+        emailError = String(err?.message || err || "Erro ao enviar e-mail");
+        console.error("Quote publish email error:", err);
+      }
+
+      quote.lastEmailAt = new Date().toISOString();
+      quote.lastEmailQueued = Boolean(emailResult);
+      quote.lastEmailError = emailError;
+      await writeKvJson(env, privateQuoteKey(quote.id), quote);
+      await appendAuditLog(env, request, user, "publicar_orcamento", "private_quotes", {
+        quoteId: quote.id,
+        number: quote.number,
+        version: quote.version,
+        email: client.email,
+        emailQueued: Boolean(emailResult),
+        emailError,
+      });
+      await appendPrivateQuoteEvent(env, request, quote.id, "admin_publicou_orcamento", {
+        version: quote.version,
+        publishedHash: quote.publishedHash,
+        email: client.email,
+        emailQueued: Boolean(emailResult),
+        emailError,
+      }, user);
+
+      return json({
+        ok: true,
+        quote: { ...publicQuote(quote), internalNotes: quote.internalNotes || "" },
+        clientUrl: clientQuoteUrl(env, quote.id),
+        inviteUrl: token ? clientQuoteInviteUrl(env, token) : "",
+        emailQueued: Boolean(emailResult),
+        emailError,
+        resendId: emailResult?.id || null,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/quote/pdf" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      const id = String(url.searchParams.get("id") || "").trim();
+      const quote = await readKvJson(env, privateQuoteKey(id), null);
+      if (!quote) return errorJson("Orçamento não encontrado.", 404);
+      const client = quote.clientId ? await readKvJson(env, privateClientKey(quote.clientId), null) : null;
+      const bytes = buildQuotePdf(env, quote, client || {}, quote.acceptance || null);
+      return new Response(bytes, {
+        status: 200,
+        headers: {
+          ...corsHeaders(),
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${sanitizeDownloadName(quote.number || "orcamento")}.pdf"`,
+          "Cache-Control": "private, no-store",
+        },
+      });
     }
 
     if (url.pathname === "/private/galleries" && request.method === "GET") {

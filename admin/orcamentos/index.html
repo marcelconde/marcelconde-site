@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Orçamentos — Admin Marcel Conde</title>
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260707-05">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260714-01">
+</head>
+<body class="quote-index-page">
+  <div class="admin-shell" id="adminShell">
+    <header class="topbar">
+      <a class="brand" href="/admin/" aria-label="Voltar para o admin">
+        <span>MC</span>
+        <strong>Orçamentos</strong>
+      </a>
+      <div class="stats">
+        <div><strong id="statQuotes">0</strong><span>Total</span></div>
+        <div><strong id="statPending">0</strong><span>Aguardando</span></div>
+        <div><strong id="statAccepted">0</strong><span>Aceitos</span></div>
+      </div>
+      <div class="top-actions">
+        <span class="user-pill" id="currentUserLabel"></span>
+        <a class="btn btn-ghost" href="/admin/clientes/">Clientes</a>
+        <a class="btn btn-ghost" href="/admin/">Admin</a>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Seções do admin">
+      <a class="tab" href="/admin/">Portfólios</a>
+      <a class="tab" href="/admin/clientes/">Clientes</a>
+      <a class="tab active" href="/admin/orcamentos/">Orçamentos</a>
+      <a class="tab" href="/admin/galerias/">Galerias</a>
+    </nav>
+
+    <main class="private-admin quote-library">
+      <section class="library-hero quote-library-hero">
+        <div>
+          <span class="eyebrow">Comercial</span>
+          <h1>Orçamentos</h1>
+          <p>Propostas, contratos e aprovações dos clientes.</p>
+        </div>
+        <div class="content-actions">
+          <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar" aria-label="Atualizar">↻</button>
+          <a class="btn btn-primary" href="/admin/orcamentos/detalhe/">Novo orçamento</a>
+        </div>
+      </section>
+
+      <section class="library-toolbar quote-toolbar" aria-label="Filtros">
+        <label class="library-search">
+          <span>Buscar</span>
+          <input id="quoteSearch" type="search" placeholder="Cliente, serviço ou número">
+        </label>
+        <div class="quote-filters" id="quoteFilters" aria-label="Filtrar por status">
+          <button class="filter-chip active" type="button" data-status="all">Todos</button>
+          <button class="filter-chip" type="button" data-status="draft">Rascunhos</button>
+          <button class="filter-chip" type="button" data-status="pending">Aguardando</button>
+          <button class="filter-chip" type="button" data-status="accepted">Aceitos</button>
+        </div>
+      </section>
+
+      <section class="quote-card-grid" id="quoteList" aria-label="Orçamentos disponíveis"></section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/theme.js?v=20260707-02"></script>
+  <script src="/admin/orcamentos/orcamentos.js?v=20260714-01"></script>
+</body>
+</html>

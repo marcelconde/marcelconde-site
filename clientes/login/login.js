@@ -5,7 +5,8 @@ const CONFIG = {
 
 const params = new URLSearchParams(location.search);
 const inviteToken = params.get("convite") || "";
-const nextUrl = params.get("next") || "/clientes/dashboard/";
+const requestedNextUrl = params.get("next") || "";
+const nextUrl = requestedNextUrl.startsWith("/clientes/") ? requestedNextUrl : "/clientes/dashboard/";
 
 const modeLabel = document.getElementById("modeLabel");
 const pageTitle = document.getElementById("pageTitle");
@@ -21,8 +22,8 @@ const dashboardLink = document.getElementById("dashboardLink");
 
 function configureLoginMode() {
   modeLabel.textContent = "Área do cliente";
-  pageTitle.textContent = "Acesse sua galeria";
-  pageCopy.textContent = "Entre com o e-mail e senha cadastrados para ver suas galerias privadas, acompanhar seleções e baixar fotos liberadas.";
+  pageTitle.textContent = "Acesse sua área";
+  pageCopy.textContent = "Entre com o e-mail e senha cadastrados para consultar orçamentos, contratos e galerias privadas.";
   passwordInput.autocomplete = "current-password";
   passwordInput.placeholder = "Digite sua senha";
   passwordConfirm.value = "";
@@ -51,6 +52,10 @@ function saveSession(data) {
 }
 
 function redirectAfterLogin(data = {}) {
+  if (data.quote?.url) {
+    location.href = data.quote.url;
+    return;
+  }
   if (data.gallery?.url) {
     location.href = data.gallery.url;
     return;
@@ -66,7 +71,7 @@ async function loadInvite() {
 
   modeLabel.textContent = "Primeiro acesso";
   pageTitle.textContent = "Crie sua senha";
-  pageCopy.textContent = "Defina uma senha para acessar esta galeria agora e voltar depois pela Área do Cliente.";
+  pageCopy.textContent = "Defina uma senha para acessar seu conteúdo privado e voltar depois pela Área do Cliente.";
   passwordInput.autocomplete = "new-password";
   passwordInput.placeholder = "Crie uma senha";
   setupOnly.hidden = false;
@@ -78,8 +83,10 @@ async function loadInvite() {
     const invite = await api(`/client-auth/invite?token=${encodeURIComponent(inviteToken)}`);
     emailInput.value = invite.email || "";
     emailInput.readOnly = true;
-    pageTitle.textContent = invite.galleryTitle || "Crie sua senha";
-    pageCopy.textContent = `Olá ${invite.clientName || ""}. Crie sua senha para acessar esta galeria privada.`;
+    pageTitle.textContent = invite.quoteTitle || invite.galleryTitle || "Crie sua senha";
+    pageCopy.textContent = invite.kind === "quote"
+      ? `Olá ${invite.clientName || ""}. Crie sua senha para acessar seu orçamento e contrato.`
+      : `Olá ${invite.clientName || ""}. Crie sua senha para acessar esta galeria privada.`;
   } catch (err) {
     setStatus(err.message || "Convite inválido.", "error");
     submitBtn.disabled = true;
@@ -103,7 +110,7 @@ authForm.addEventListener("submit", async (event) => {
         }),
       });
       saveSession(data);
-      setStatus("Senha criada. Abrindo sua galeria...", "ok");
+      setStatus("Senha criada. Abrindo sua área...", "ok");
       redirectAfterLogin(data);
       return;
     }

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Orçamento e contrato | Marcel Conde Fotografia</title>
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/clientes/auth.css?v=20260714-01">
+</head>
+<body class="client-quote-page">
+  <main class="client-shell quote-client-shell">
+    <header class="client-top quote-client-top">
+      <a class="brand" href="/clientes/dashboard/">
+        <span>MC</span>
+        <strong>Marcel Conde</strong>
+      </a>
+      <div class="quote-client-actions">
+        <a class="btn btn-back" href="/clientes/dashboard/">Minha área</a>
+        <button class="btn" id="downloadQuoteBtn" type="button" disabled>Baixar PDF</button>
+      </div>
+    </header>
+
+    <section class="panel quote-loading" id="quoteLoading">
+      <strong>Carregando orçamento...</strong>
+    </section>
+
+    <article class="quote-document" id="quoteDocument" hidden>
+      <header class="quote-document-head">
+        <div>
+          <span class="eyebrow" id="quoteNumber">Orçamento</span>
+          <h1 id="quoteTitle">Serviço fotográfico</h1>
+          <p id="quoteDescription"></p>
+        </div>
+        <span class="client-status" id="quoteStatus">Aguardando</span>
+      </header>
+
+      <section class="quote-party-band">
+        <div>
+          <small>Contratante</small>
+          <strong id="clientName">Cliente</strong>
+          <span id="clientDetails"></span>
+        </div>
+        <div>
+          <small>Contratado</small>
+          <strong id="contractorName">Marcel Conde | Photography</strong>
+          <span id="contractorDetails"></span>
+        </div>
+      </section>
+
+      <section class="quote-document-section">
+        <span class="eyebrow">Informações</span>
+        <div class="quote-meta-grid" id="quoteMetaGrid"></div>
+      </section>
+
+      <section class="quote-document-section">
+        <div class="quote-section-title">
+          <span class="eyebrow">Investimento</span>
+          <h2>Itens do orçamento</h2>
+        </div>
+        <div class="quote-client-items" id="quoteItems"></div>
+        <div class="quote-client-totals">
+          <span><small>Subtotal</small><strong id="quoteSubtotal"></strong></span>
+          <span id="quoteDiscountRow"><small>Desconto</small><strong id="quoteDiscount"></strong></span>
+          <span><small>Total</small><strong id="quoteTotal"></strong></span>
+        </div>
+      </section>
+
+      <section class="quote-document-section">
+        <div class="quote-section-title">
+          <span class="eyebrow">Pagamento</span>
+          <h2>Formas e condições</h2>
+        </div>
+        <div class="quote-client-payments" id="quotePayments"></div>
+        <p id="quotePaymentTerms"></p>
+      </section>
+
+      <section class="quote-document-section">
+        <div class="quote-section-title">
+          <span class="eyebrow">Contrato</span>
+          <h2>Cláusulas</h2>
+        </div>
+        <div class="quote-client-clauses" id="quoteClauses"></div>
+        <div class="quote-client-note" id="quoteClientNote" hidden></div>
+      </section>
+
+      <section class="quote-accept-panel" id="quoteAcceptPanel">
+        <div class="quote-section-title">
+          <span class="eyebrow">Aceite eletrônico</span>
+          <h2>Confirmar contratação</h2>
+        </div>
+        <form class="quote-accept-form" id="quoteAcceptForm">
+          <div class="quote-accept-fields">
+            <label>
+              Nome completo
+              <input id="signerName" type="text" autocomplete="name" required>
+            </label>
+            <label>
+              CPF / CNPJ
+              <input id="signerDocument" type="text" autocomplete="off" required>
+            </label>
+          </div>
+          <label class="quote-confirmation">
+            <input id="confirmContract" type="checkbox" required>
+            <span>Li e concordo com o escopo, os valores, as condições de pagamento e todas as cláusulas acima.</span>
+          </label>
+          <label class="quote-confirmation">
+            <input id="confirmSignature" type="checkbox" required>
+            <span>Confirmo que este aceite eletrônico representa minha manifestação de vontade.</span>
+          </label>
+          <div class="quote-accept-submit">
+            <button class="btn btn-primary" id="acceptQuoteBtn" type="submit">Aceitar orçamento e contrato</button>
+            <small id="acceptStatus" role="status" aria-live="polite"></small>
+          </div>
+        </form>
+      </section>
+
+      <section class="quote-accepted-panel" id="quoteAcceptedPanel" hidden>
+        <span class="eyebrow">Contrato aceito</span>
+        <h2>Aprovação registrada</h2>
+        <p id="acceptedSummary"></p>
+        <small id="acceptedEvidence"></small>
+      </section>
+    </article>
+  </main>
+
+  <script src="/theme.js?v=20260707-02"></script>
+  <script src="/clientes/orcamento/orcamento.js?v=20260714-01"></script>
+</body>
+</html>

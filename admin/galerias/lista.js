@@ -8,6 +8,7 @@ const $ = (selector) => document.querySelector(selector);
 const state = {
   clients: [],
   galleries: [],
+  quickClientId: new URLSearchParams(location.search).get("client") || "",
 };
 
 const currentUserLabel = $("#currentUserLabel");
@@ -149,6 +150,7 @@ async function createGallery() {
     const data = await getJson("/private/galleries", {
       method: "POST",
       body: JSON.stringify({
+        clientId: state.quickClientId || undefined,
         title,
         slug: slugify(title),
         status: "selection",
@@ -193,6 +195,9 @@ quickCreateBtn.addEventListener("click", createGallery);
 quickTitle.addEventListener("keydown", (event) => {
   if (event.key === "Enter") createGallery();
 });
+
+const suggestedTitle = new URLSearchParams(location.search).get("title") || "";
+if (suggestedTitle) quickTitle.value = suggestedTitle;
 
 loadData().catch((err) => {
   showToast(err.message || "Erro ao carregar galerias.");
