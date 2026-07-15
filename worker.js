@@ -438,7 +438,8 @@ function normalizePercent(value = 0) {
   return Math.round(clampNumber(value, 0, 95, 0) * 100) / 100;
 }
 
-function normalizeMoneyCents(value = 0) {
+/** @param {unknown} value */
+function normalizeMoneyCents(value) {
   if (typeof value === "string") {
     const normalized = value
       .replace(/[^\d,.-]/g, "")
@@ -905,9 +906,10 @@ async function savePrivateQuote(env, input = {}) {
   const id = String(input.id || `orc_${randomToken(9)}`).replace(/[^a-zA-Z0-9_-]/g, "");
   const existing = await readKvJson(env, privateQuoteKey(id), {});
   if (existing.status === "accepted") {
-    const err = new Error("Um contrato aceito não pode ser alterado. Duplique-o para criar uma nova versão.");
-    err.status = 409;
-    throw err;
+    throw Object.assign(
+      new Error("Um contrato aceito não pode ser alterado. Duplique-o para criar uma nova versão."),
+      { status: 409 }
+    );
   }
 
   const totals = calculateQuoteTotals({
@@ -953,9 +955,10 @@ async function deletePrivateQuote(env, quoteId) {
   const quote = await readKvJson(env, privateQuoteKey(id), null);
   if (!quote) return null;
   if (quote.status === "accepted") {
-    const err = new Error("Contratos aceitos devem ser preservados e não podem ser apagados.");
-    err.status = 409;
-    throw err;
+    throw Object.assign(
+      new Error("Contratos aceitos devem ser preservados e não podem ser apagados."),
+      { status: 409 }
+    );
   }
   const index = await readKvJson(env, privateQuotesIndexKey(), []);
   await Promise.all([
@@ -1103,11 +1106,14 @@ async function deletePrivateClient(env, clientId) {
   const quotes = await listPrivateQuotes(env);
   const linkedQuotes = quotes.filter((quote) => quote.clientId === id);
   if (linkedGalleries.length || linkedQuotes.length) {
-    const err = new Error("Este cliente possui galerias ou orçamentos vinculados. Remova ou transfira esses registros antes.");
-    err.status = 409;
-    err.linkedGalleries = linkedGalleries.length;
-    err.linkedQuotes = linkedQuotes.length;
-    throw err;
+    throw Object.assign(
+      new Error("Este cliente possui galerias ou orçamentos vinculados. Remova ou transfira esses registros antes."),
+      {
+        status: 409,
+        linkedGalleries: linkedGalleries.length,
+        linkedQuotes: linkedQuotes.length,
+      }
+    );
   }
 
   const index = await readKvJson(env, privateClientsIndexKey(), []);
@@ -1141,9 +1147,7 @@ async function deletePrivateGallery(env, galleryId) {
   const apiSecret = env.CLOUDINARY_API_SECRET;
 
   if (images.length && (!cloudName || !apiKey || !apiSecret)) {
-    const err = new Error("Missing Cloudinary env vars");
-    err.status = 500;
-    throw err;
+    throw Object.assign(new Error("Missing Cloudinary env vars"), { status: 500 });
   }
 
   for (const image of images) {
@@ -1296,9 +1300,11 @@ async function destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId) {
   };
   const signature = await signCloudinaryParams(params, apiSecret);
   const body = new URLSearchParams({
-    ...params,
-    api_key: apiKey,
-    signature,
+    public_id: params.public_id,
+    invalidate: params.invalidate,
+    timestamp: String(params.timestamp),
+    api_key: String(apiKey),
+    signature: String(signature),
   });
 
   const res = await fetchWithTimeout(
@@ -4788,9 +4794,11 @@ export default {
       const signature = await signCloudinaryParams(params, apiSecret);
 
       const destroyBody = new URLSearchParams({
-        ...params,
-        api_key: apiKey,
-        signature,
+        public_id: params.public_id,
+        invalidate: params.invalidate,
+        timestamp: String(params.timestamp),
+        api_key: String(apiKey),
+        signature: String(signature),
       });
 
       const res = await fetchWithTimeout(
@@ -4870,9 +4878,12 @@ export default {
       const signature = await signCloudinaryParams(params, apiSecret);
 
       const explicitBody = new URLSearchParams({
-        ...params,
-        api_key: apiKey,
-        signature,
+        public_id: params.public_id,
+        type: params.type,
+        display_name: params.display_name,
+        timestamp: String(params.timestamp),
+        api_key: String(apiKey),
+        signature: String(signature),
       });
 
       const res = await fetchWithTimeout(
