@@ -569,8 +569,8 @@ function renderSelectedGallery() {
   galleryName.value = gallery.title || "";
   gallerySlug.value = gallery.slug || "";
   gallerySubtitle.value = gallery.subtitle || "";
-  selectionLimit.value = gallery.selectionLimit || 15;
-  extraPhotoPrice.value = centsToCurrencyInput(gallery.extraPhotoPriceCents || 0);
+  selectionLimit.value = gallery.selectionLimit ?? 15;
+  extraPhotoPrice.value = centsToCurrencyInput(gallery.extraPhotoPriceCents ?? 0);
   allPhotosDiscount.value = gallery.allPhotosDiscountPercent || 0;
   quantityDiscountEnabled.checked = gallery.quantityDiscountEnabled === true;
   quantityDiscountMinPhotos.value = gallery.quantityDiscountMinPhotos || 0;

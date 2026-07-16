@@ -35,6 +35,7 @@ function setStatus(message, type = "") {
 function resetFields() {
   passwordInput.value = "";
   passwordConfirm.value = "";
+  submitBtn.disabled = false;
   emailInput.readOnly = false;
   emailField.hidden = false;
   passwordField.hidden = false;
@@ -145,6 +146,7 @@ async function loadInvite() {
   } catch (err) {
     setStatus(err.message || "Convite inválido.", "error");
     submitBtn.disabled = true;
+    backToLoginBtn.hidden = false;
   }
 }
 

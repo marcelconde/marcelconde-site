@@ -438,6 +438,12 @@ function normalizePercent(value = 0) {
   return Math.round(clampNumber(value, 0, 95, 0) * 100) / 100;
 }
 
+function normalizeSelectionLimit(value, fallback = 15) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return Math.max(0, Math.min(Math.round(Number(fallback) || 15), 2000));
+  return Math.max(0, Math.min(Math.round(parsed), 2000));
+}
+
 /** @param {unknown} value */
 function normalizeMoneyCents(value) {
   if (typeof value === "string") {
@@ -970,18 +976,19 @@ async function deletePrivateQuote(env, quoteId) {
 }
 
 function shouldRepairGalleryToEditing(gallery = {}, latestPayment = null, events = []) {
-  const hasCompletionEvent = events.some((event) => (
-    event?.action === "concluir_selecao" ||
-    event?.action === "pix_aprovado"
-  ));
-  return (
-    gallery?.status === "selection" &&
-    (
-      Boolean(gallery.selectionCompletedAt) ||
-      (latestPayment?.status === "approved" && Boolean(latestPayment.selectionCompletedAt)) ||
-      hasCompletionEvent
-    )
-  );
+  if (gallery?.status !== "selection") return false;
+  const reopenedAt = Date.parse(gallery.selectionReopenedAt || "") || 0;
+  const completionTimes = [
+    gallery.selectionCompletedAt,
+    latestPayment?.status === "approved" ? latestPayment.selectionCompletedAt : null,
+    ...events
+      .filter((event) => event?.action === "concluir_selecao" || event?.action === "pix_aprovado")
+      .map((event) => event.createdAt),
+  ]
+    .map((value) => Date.parse(value || "") || 0)
+    .filter(Boolean);
+  const latestCompletionAt = completionTimes.length ? Math.max(...completionTimes) : 0;
+  return latestCompletionAt > reopenedAt;
 }
 
 async function getPrivateGalleryLatestPayment(env, galleryId = "") {
@@ -1062,6 +1069,17 @@ async function savePrivateGallery(env, input = {}) {
   const slugOwner = await readKvJson(env, privateGalleryBySlugKey(slug), null);
   if (slugOwner && slugOwner !== id) slug = `${slug}-${randomToken(3).toLowerCase()}`;
   const commerce = normalizeGalleryCommerce(input, existing);
+  const requestedStatus = ["selection", "editing", "final"].includes(input.status || existing.status)
+    ? (input.status || existing.status)
+    : "selection";
+  const reopeningSelection = requestedStatus === "selection" && Boolean(
+    existing.status && (
+      existing.status !== "selection" ||
+      existing.selectionCompletedAt ||
+      existing.selectionLockedAt ||
+      existing.allowDownload === true
+    )
+  );
 
   const gallery = {
     ...existing,
@@ -1071,12 +1089,10 @@ async function savePrivateGallery(env, input = {}) {
     title,
     subtitle: cleanGalleryText(input.subtitle || existing.subtitle || "", 180),
     message: cleanGalleryText(input.message || existing.message || "", 1200),
-    selectionLimit: Math.max(0, Math.min(Number(input.selectionLimit ?? existing.selectionLimit ?? 15), 2000)),
+    selectionLimit: normalizeSelectionLimit(input.selectionLimit ?? existing.selectionLimit, existing.selectionLimit ?? 15),
     ...commerce,
-    status: ["selection", "editing", "final"].includes(input.status || existing.status)
-      ? (input.status || existing.status)
-      : "selection",
-    allowDownload: input.allowDownload === true || existing.allowDownload === true,
+    status: requestedStatus,
+    allowDownload: requestedStatus === "final",
     coverUrl: String(input.coverUrl || existing.coverUrl || ""),
     coverPublicId: sanitizePublicId(input.coverPublicId || existing.coverPublicId || ""),
     watermark: normalizeWatermark(input.watermark || existing.watermark || {}),
@@ -1084,9 +1100,27 @@ async function savePrivateGallery(env, input = {}) {
     updatedAt: now,
   };
 
+  if (reopeningSelection) {
+    Object.assign(gallery, {
+      selectionCompletedAt: null,
+      selectionLockedPublicIds: [],
+      selectionLockedPricing: null,
+      selectionLockedAt: null,
+      selectionPaymentId: null,
+      selectionRevision: 0,
+      selectionReopenedAt: now,
+    });
+  }
+
   await writeKvJson(env, privateGalleryKey(id), gallery);
   await writeKvJson(env, privateGalleryBySlugKey(slug), id);
   if (previousSlug && previousSlug !== slug) await env.LIKES_KV.delete(privateGalleryBySlugKey(previousSlug));
+  if (reopeningSelection) {
+    await Promise.all([
+      writeKvJson(env, privateGallerySelectionKey(id), []),
+      env.LIKES_KV.delete(privateGalleryLatestPaymentKey(id)),
+    ]);
+  }
 
   const index = await readKvJson(env, privateGalleriesIndexKey(), []);
   await writeKvJson(env, privateGalleriesIndexKey(), [...new Set([id, ...index])]);
@@ -1613,6 +1647,12 @@ function clientAccessSummary(user = {}) {
   };
 }
 
+function hasPermanentClientAccess(user = {}) {
+  return user?.active !== false &&
+    Boolean(user?.passwordHash) &&
+    user?.mustChangePassword !== true;
+}
+
 async function getClientAccessSummary(env, email) {
   const user = await getClientUser(env, email);
   return clientAccessSummary(user || {});
@@ -1749,6 +1789,25 @@ function clientQuoteLoginUrl(env, quoteId) {
 
 function clientQuoteInviteUrl(env, token) {
   return `${clientLoginUrl(env)}?convite=${encodeURIComponent(token)}`;
+}
+
+async function createClientContentInvite(env, kind, clientId, contentId) {
+  const token = randomToken(36);
+  const now = Date.now();
+  const invite = {
+    clientId,
+    ...(kind === "quote" ? { quoteId: contentId } : { galleryId: contentId }),
+    createdAt: new Date(now).toISOString(),
+    expiresAt: now + 1000 * 60 * 60 * 24 * 7,
+  };
+
+  if (kind === "quote") {
+    await writeKvJson(env, clientQuoteInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
+    return { token, url: clientQuoteInviteUrl(env, token) };
+  }
+
+  await writeKvJson(env, clientGalleryInviteKey(token), invite, { expirationTtl: 60 * 60 * 24 * 7 });
+  return { token, url: clientGalleryInviteUrl(env, token) };
 }
 
 function clientPasswordResetUrl(env, token) {
@@ -2017,14 +2076,12 @@ async function sendClientGalleryLoginEmail(env, email, gallery = {}, client = {}
   }
 }
 
-async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {}, temporaryPassword = "") {
+async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {}, accessUrl = "", firstAccess = false) {
   if (!env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY não configurada no Worker.");
   }
 
-  const galleryUrl = temporaryPassword
-    ? clientGalleryLoginUrl(env, gallery.slug || "")
-    : clientGalleryUrl(env, gallery.slug || "");
+  const galleryUrl = accessUrl || clientGalleryLoginUrl(env, gallery.slug || "");
   const loginUrl = clientLoginUrl(env);
   const galleryTitle = gallery.title || "sua galeria";
   const clientName = emailHtml(client.name || email);
@@ -2033,12 +2090,14 @@ async function sendClientFinalDeliveryEmail(env, email, gallery = {}, client = {
     eyebrow: "Entrega final",
     title: "Suas fotos estão prontas",
     intro: `Olá ${clientName}, as fotos da galeria <strong>${emailHtml(galleryTitle)}</strong> estão prontas para download.`,
-    body: `<p style="margin:0;">Acesse a galeria pelo botão abaixo e entre com seu e-mail e senha.</p>${temporaryPasswordEmailBlock(email, temporaryPassword)}`,
-    ctaLabel: "Acessar e baixar fotos",
+    body: firstAccess
+      ? `<p style="margin:0;">Como este é seu primeiro acesso, crie sua senha pelo botão abaixo. Depois disso, as fotos serão abertas automaticamente.</p>`
+      : `<p style="margin:0;">Acesse a galeria pelo botão abaixo e entre com seu e-mail e senha.</p>`,
+    ctaLabel: firstAccess ? "Criar senha e baixar fotos" : "Acessar e baixar fotos",
     ctaUrl: galleryUrl,
     secondaryCtaLabel: "Área do cliente",
     secondaryCtaUrl: loginUrl,
-    footerNote: temporaryPassword ? "No primeiro acesso, você deverá trocar a senha temporária por uma senha definitiva." : "",
+    footerNote: firstAccess ? "Este link de primeiro acesso expira em 7 dias e pode ser usado uma única vez." : "",
   });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -2164,10 +2223,9 @@ async function createClientPasswordReset(env, client = {}, requestedBy = "client
   return { token, reset };
 }
 
-async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, accessUrl = "", temporaryPassword = "") {
+async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, accessUrl = "", firstAccess = false) {
   const clientName = emailHtml(client.name || email);
   const total = formatCurrencyFromCents(calculateQuoteTotals(quote).totalCents);
-  const firstAccess = Boolean(temporaryPassword);
   const html = emailLayout(env, {
     preheader: `Seu orçamento ${quote.number || ""} está disponível para análise.`,
     eyebrow: "Orçamento e contrato",
@@ -2175,13 +2233,13 @@ async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, acce
     intro: `Olá ${clientName}, preparei o orçamento para <strong>${emailHtml(quote.title || "o serviço solicitado")}</strong>.`,
     body: `<p style="margin:0 0 12px;">Valor total: <strong>${emailHtml(total)}</strong></p>
       <p style="margin:0;">Confira o escopo, as formas de pagamento e todas as cláusulas. Se estiver de acordo, o aceite é feito na própria página.</p>
-      ${temporaryPasswordEmailBlock(email, temporaryPassword)}`,
-    ctaLabel: firstAccess ? "Entrar e ver orçamento" : "Ver orçamento",
+      ${firstAccess ? `<p style="margin:14px 0 0;">Como este é seu primeiro acesso, o botão abaixo abrirá a criação da sua senha antes de mostrar o orçamento.</p>` : ""}`,
+    ctaLabel: firstAccess ? "Criar senha e ver orçamento" : "Ver orçamento",
     ctaUrl: accessUrl,
     secondaryCtaLabel: "Área do cliente",
     secondaryCtaUrl: clientLoginUrl(env),
     footerNote: firstAccess
-      ? "Use a senha temporária acima no primeiro acesso. Em seguida, o site solicitará uma senha definitiva."
+      ? "Este link de primeiro acesso expira em 7 dias e pode ser usado uma única vez."
       : `Proposta válida até ${formatQuoteDate(quote.validUntil)}.`,
     reason: "Você recebeu este e-mail porque existe um orçamento vinculado ao seu cadastro na área do cliente.",
   });
@@ -2979,7 +3037,7 @@ export default {
       const galleryInvite = await readKvJson(env, clientGalleryInviteKey(token), null);
       const quoteInvite = galleryInvite ? null : await readKvJson(env, clientQuoteInviteKey(token), null);
       const invite = galleryInvite || quoteInvite;
-      if (!invite || Number(invite.expiresAt || 0) < Date.now()) {
+      if (!invite || invite.usedAt || Number(invite.expiresAt || 0) < Date.now()) {
         return errorJson("Convite inválido ou expirado.", 400);
       }
 
@@ -2987,6 +3045,11 @@ export default {
       if (!client) return errorJson("Acesso indisponível.", 404);
 
       const existingUser = await getClientUser(env, client.email);
+      if (hasPermanentClientAccess(existingUser)) {
+        return errorJson("Este cliente já possui uma senha. Entre com seu e-mail e senha.", 409, {
+          loginUrl: clientLoginUrl(env),
+        });
+      }
       if (quoteInvite) {
         const quote = await readKvJson(env, privateQuoteKey(invite.quoteId), null);
         if (!quote) return errorJson("Orçamento indisponível.", 404);
@@ -3023,12 +3086,19 @@ export default {
       const galleryInvite = await readKvJson(env, clientGalleryInviteKey(token), null);
       const quoteInvite = galleryInvite ? null : await readKvJson(env, clientQuoteInviteKey(token), null);
       const invite = galleryInvite || quoteInvite;
-      if (!invite || Number(invite.expiresAt || 0) < Date.now()) {
+      if (!invite || invite.usedAt || Number(invite.expiresAt || 0) < Date.now()) {
         return errorJson("Convite inválido ou expirado.", 400);
       }
 
       const client = await readKvJson(env, privateClientKey(invite.clientId), null);
       if (!client?.email) return errorJson("Acesso indisponível.", 404);
+
+      const existingUser = await getClientUser(env, client.email);
+      if (hasPermanentClientAccess(existingUser)) {
+        return errorJson("Este cliente já possui uma senha. Entre com seu e-mail e senha.", 409, {
+          loginUrl: clientLoginUrl(env),
+        });
+      }
 
       const user = await saveClientPassword(env, client.email, password, {
         name: client.name || client.email,
@@ -3878,15 +3948,9 @@ export default {
       if (error) return error;
       const body = await readJson(request);
       const client = await savePrivateClient(env, body);
-      let temporaryPassword = "";
-      let access = await getClientAccessSummary(env, client.email);
-      if (client.email && !access.hasPassword) {
-        const issued = await issueClientTemporaryPassword(env, client);
-        temporaryPassword = issued.temporaryPassword;
-        access = issued.access;
-      }
+      const access = await getClientAccessSummary(env, client.email);
       await appendAuditLog(env, request, user, body.id ? "editar_cliente_privado" : "criar_cliente_privado", "private_clients", { clientId: client.id, email: client.email });
-      return json({ client, access, temporaryPassword }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
+      return json({ client, access, temporaryPassword: "" }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/private/client/access" && request.method === "POST") {
@@ -4060,23 +4124,25 @@ export default {
       await writeKvJson(env, privateQuoteKey(quote.id), quote);
 
       const existingClientUser = await getClientUser(env, client.email);
-      const hasClientPassword = existingClientUser?.active !== false && Boolean(existingClientUser?.passwordHash);
-      const needsTemporaryPassword = !hasClientPassword || existingClientUser?.mustChangePassword === true;
-      let temporaryPassword = "";
+      const hasClientPassword = hasPermanentClientAccess(existingClientUser);
+      const firstAccess = !hasClientPassword;
+      let accessUrl = clientQuoteLoginUrl(env, quote.id);
+      let inviteUrl = "";
       let emailResult = null;
       let emailError = "";
       try {
-        if (needsTemporaryPassword) {
-          const issued = await issueClientTemporaryPassword(env, client);
-          temporaryPassword = issued.temporaryPassword;
+        if (firstAccess) {
+          const invite = await createClientContentInvite(env, "quote", client.id, quote.id);
+          accessUrl = invite.url;
+          inviteUrl = invite.url;
         }
         emailResult = await sendQuotePublishedEmail(
           env,
           client.email,
           quote,
           client,
-          clientQuoteLoginUrl(env, quote.id),
-          temporaryPassword,
+          accessUrl,
+          firstAccess,
         );
       } catch (err) {
         emailError = String(err?.message || err || "Erro ao enviar e-mail");
@@ -4092,7 +4158,7 @@ export default {
         number: quote.number,
         version: quote.version,
         email: client.email,
-        temporaryAccess: needsTemporaryPassword,
+        firstAccess,
         emailQueued: Boolean(emailResult),
         emailError,
       });
@@ -4100,7 +4166,7 @@ export default {
         version: quote.version,
         publishedHash: quote.publishedHash,
         email: client.email,
-        temporaryAccess: needsTemporaryPassword,
+        firstAccess,
         emailQueued: Boolean(emailResult),
         emailError,
       }, user);
@@ -4109,8 +4175,9 @@ export default {
         ok: true,
         quote: { ...publicQuote(quote), internalNotes: quote.internalNotes || "" },
         clientUrl: clientQuoteUrl(env, quote.id),
-        inviteUrl: "",
-        temporaryAccess: needsTemporaryPassword,
+        inviteUrl,
+        firstAccess,
+        temporaryAccess: false,
         emailQueued: Boolean(emailResult),
         emailError,
         resendId: emailResult?.id || null,
@@ -4204,11 +4271,14 @@ export default {
       if (!galleryId) return errorJson("Galeria inválida.", 400);
       if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
 
-      const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
+      let gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
 
       if (["selection", "editing", "final"].includes(body.status) && body.status !== gallery.status) {
-        gallery.status = body.status;
+        gallery = await savePrivateGallery(env, {
+          id: gallery.id,
+          status: body.status,
+        });
       }
 
       const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
@@ -4217,26 +4287,29 @@ export default {
       }
 
       const existingClientUser = await getClientUser(env, client.email);
-      const hasClientPassword = existingClientUser?.active !== false && Boolean(existingClientUser?.passwordHash);
-      const needsTemporaryPassword = !hasClientPassword || existingClientUser?.mustChangePassword === true;
-      const emailType = gallery.status === "final" || gallery.allowDownload === true
-        ? "final_delivery"
-        : needsTemporaryPassword ? "temporary_access" : "login_access";
-      let temporaryPassword = "";
+      const hasClientPassword = hasPermanentClientAccess(existingClientUser);
+      const firstAccess = !hasClientPassword;
+      const finalDelivery = gallery.status === "final" || gallery.allowDownload === true;
+      const emailType = finalDelivery ? "final_delivery" : firstAccess ? "first_access" : "login_access";
+      let inviteUrl = "";
+      let accessUrl = clientGalleryLoginUrl(env, gallery.slug || "");
       let resend = null;
       let emailError = "";
 
       try {
-        if (needsTemporaryPassword) {
-          const issued = await issueClientTemporaryPassword(env, client);
-          temporaryPassword = issued.temporaryPassword;
+        let inviteToken = "";
+        if (firstAccess) {
+          const invite = await createClientContentInvite(env, "gallery", client.id, gallery.id);
+          inviteToken = invite.token;
+          inviteUrl = invite.url;
+          accessUrl = invite.url;
         }
         if (emailType === "final_delivery") {
-          resend = await sendClientFinalDeliveryEmail(env, client.email, gallery, client, temporaryPassword);
+          resend = await sendClientFinalDeliveryEmail(env, client.email, gallery, client, accessUrl, firstAccess);
         } else if (emailType === "login_access") {
           resend = await sendClientGalleryLoginEmail(env, client.email, gallery, client);
         } else {
-          resend = await sendClientGalleryTemporaryPasswordEmail(env, client.email, gallery, client, temporaryPassword);
+          resend = await sendClientGalleryInviteEmail(env, client.email, inviteToken, gallery, client);
         }
       } catch (err) {
         emailError = String(err?.message || err || "unknown");
@@ -4260,7 +4333,7 @@ export default {
         email: client.email,
         emailType,
         hasClientPassword,
-        temporaryAccess: needsTemporaryPassword,
+        firstAccess,
         emailQueued: Boolean(resend),
         emailError,
       });
@@ -4268,7 +4341,7 @@ export default {
         email: client.email,
         emailType,
         hasClientPassword,
-        temporaryAccess: needsTemporaryPassword,
+        firstAccess,
         emailQueued: Boolean(resend),
         emailError,
       }, user);
@@ -4278,8 +4351,9 @@ export default {
         gallery,
         emailType,
         hasClientPassword,
-        temporaryAccess: needsTemporaryPassword,
-        inviteUrl: "",
+        firstAccess,
+        temporaryAccess: false,
+        inviteUrl,
         galleryUrl: clientGalleryUrl(env, gallery.slug),
         emailQueued: Boolean(resend),
         emailError,
