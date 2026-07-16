@@ -148,18 +148,18 @@
       }
 
       :root[data-theme="light"] .theme-toggle {
-        background: rgba(218,217,212,0.94) !important;
-        border-color: rgba(32,32,30,0.18) !important;
-        color: rgba(32,32,30,0.68) !important;
-        box-shadow: 0 12px 30px rgba(32,32,30,0.14) !important;
+        background: rgba(216,211,203,0.96) !important;
+        border-color: rgba(38,35,31,0.20) !important;
+        color: rgba(38,35,31,0.72) !important;
+        box-shadow: 0 12px 30px rgba(38,35,31,0.16) !important;
       }
 
       :root[data-theme="light"] .theme-toggle::before {
-        background: #9b794f;
+        background: #704c2c;
       }
 
       :root[data-theme="light"] .theme-toggle__icon {
-        color: rgba(32,32,30,0.66);
+        color: rgba(38,35,31,0.70);
       }
 
       @media (max-width: 720px) {

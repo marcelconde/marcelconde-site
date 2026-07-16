@@ -12,12 +12,12 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #d7d6d2;
-  --panel: #e9e8e4;
-  --ink: #20201e;
-  --muted: rgba(32,32,30,0.66);
-  --line: rgba(32,32,30,0.16);
-  --gold: #8c6b43;
+  --bg: #cec9c1;
+  --panel: #e2ddd5;
+  --ink: #26231f;
+  --muted: rgba(38,35,31,0.68);
+  --line: rgba(38,35,31,0.17);
+  --gold: #704c2c;
   --success: #227a47;
   --danger: #b34854;
 }
@@ -33,7 +33,7 @@ body {
 }
 
 :root[data-theme="light"] body {
-  background: #d7d6d2;
+  background: #cec9c1;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -669,7 +669,7 @@ body.selection-processing .workflow-status {
 :root[data-theme="light"] .workflow-status,
 :root[data-theme="light"] .photo-card,
 :root[data-theme="light"] .payment-card {
-  background: rgba(233,232,228,0.94);
+  background: rgba(226,221,213,0.96);
 }
 
 :root[data-theme="light"] .selection-counter {

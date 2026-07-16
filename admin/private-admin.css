@@ -737,7 +737,7 @@
 :root[data-theme="light"] .selection-log-panel,
 :root[data-theme="light"] .private-copy,
 :root[data-theme="light"] .photo-bulk-actions {
-  background: rgba(233,222,207,0.82);
+  background: rgba(226,221,213,0.90);
 }
 
 .admin-section-head,
@@ -1049,7 +1049,7 @@
 :root[data-theme="light"] .detail-topbar,
 :root[data-theme="light"] .detail-sidebar,
 :root[data-theme="light"] .detail-section {
-  background: rgba(233,222,207,0.88);
+  background: rgba(226,221,213,0.94);
 }
 
 .library-hero {
@@ -1524,7 +1524,7 @@
 
 :root[data-theme="light"] .quote-card,
 :root[data-theme="light"] .quote-acceptance-summary {
-  background: rgba(233,222,207,0.88);
+  background: rgba(226,221,213,0.94);
 }
 
 .quote-card-top,

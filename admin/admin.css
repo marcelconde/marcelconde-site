@@ -17,16 +17,16 @@
 }
 
 :root[data-theme="light"] {
-  --bg: #ded2c0;
-  --bg-soft: #d3c4ae;
-  --panel: #e9decf;
-  --panel-2: #e1d4c1;
-  --line: rgba(55, 44, 33, 0.15);
-  --line-strong: rgba(135, 104, 69, 0.38);
-  --ink: #211a13;
-  --muted: #74685a;
-  --gold: #a98255;
-  --gold-dark: #84633f;
+  --bg: #cec9c1;
+  --bg-soft: #c2bcb3;
+  --panel: #e2ddd5;
+  --panel-2: #d8d2c9;
+  --line: rgba(38, 35, 31, 0.17);
+  --line-strong: rgba(113, 82, 51, 0.42);
+  --ink: #26231f;
+  --muted: #686158;
+  --gold: #704c2c;
+  --gold-dark: #57371e;
   --danger: #b34848;
   --green: #377f52;
 }
@@ -47,8 +47,8 @@ body {
 
 :root[data-theme="light"] body {
   background:
-    radial-gradient(circle at 76% 10%, rgba(169,130,85,0.12), transparent 30rem),
-    linear-gradient(135deg, #e2d5c3 0%, #d8c9b5 58%, #ccb89e 100%);
+    radial-gradient(circle at 76% 10%, rgba(143,104,65,0.12), transparent 30rem),
+    linear-gradient(135deg, #d8d3cb 0%, #cbc5bc 58%, #bbb3a8 100%);
 }
 
 button,
@@ -1126,12 +1126,33 @@ label {
 }
 
 :root[data-theme="light"] .topbar,
+:root[data-theme="light"] .login-card,
 :root[data-theme="light"] .panel,
 :root[data-theme="light"] .content,
 :root[data-theme="light"] .upload-panel,
 :root[data-theme="light"] .admin-card-panel,
 :root[data-theme="light"] .likes-head {
-  background: rgba(233,222,207,0.86);
+  background: rgba(226,221,213,0.92);
+}
+
+:root[data-theme="light"] .login-card {
+  box-shadow: 0 30px 80px rgba(38,35,31,0.20);
+}
+
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea {
+  background: rgba(194,188,179,0.48);
+}
+
+:root[data-theme="light"] .btn-danger,
+:root[data-theme="light"] .form-msg {
+  border-color: rgba(159,63,69,0.34);
+  color: #8f353c;
+}
+
+:root[data-theme="light"] .form-msg.success {
+  color: #286a43;
 }
 
 @media (max-width: 860px) {
