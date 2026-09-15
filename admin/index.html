@@ -10,8 +10,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
+  <link rel="stylesheet" href="/admin/workspace.css?v=20260915-01">
 </head>
-<body>
+<body class="workspace-page">
+  <a class="skip-link" href="#adminMain">Pular para o conteúdo</a>
   <section class="login-screen" id="loginScreen">
     <div class="login-card">
       <span class="eyebrow">Painel Administrativo</span>
@@ -76,14 +78,8 @@
     <header class="topbar">
       <a class="brand" href="/" aria-label="Voltar para o site">
         <span>MC</span>
-        <strong>Admin</strong>
+        <strong>Estúdio<span class="brand-caption">Marcel Conde</span></strong>
       </a>
-
-      <div class="stats">
-        <div><strong id="statAlbums">0</strong><span>Álbuns</span></div>
-        <div><strong id="statPhotos">0</strong><span>Fotos</span></div>
-        <div><strong id="statLikes">0</strong><span>Curtidas</span></div>
-      </div>
 
       <div class="top-actions">
         <span class="user-pill" id="currentUserLabel"></span>
@@ -93,7 +89,7 @@
     </header>
 
     <nav class="tabs" aria-label="Seções do admin">
-      <button class="tab active" data-view="albumsView" type="button">Portfólios</button>
+      <button class="tab active" aria-current="page" data-view="albumsView" type="button">Portfólios</button>
       <button class="tab" data-view="likesView" type="button">Curtidas</button>
       <a class="tab" href="/admin/clientes/">Clientes</a>
       <a class="tab" href="/admin/orcamentos/">Orçamentos</a>
@@ -102,7 +98,7 @@
       <button class="tab" data-view="auditView" data-admin-only="true" type="button">Auditoria</button>
     </nav>
 
-    <main class="admin-main">
+    <main class="admin-main" id="adminMain" tabindex="-1">
       <section class="view grid-view" id="albumsView">
         <aside class="panel sidebar">
           <div class="panel-head">
@@ -110,23 +106,34 @@
               <span class="eyebrow">Biblioteca</span>
               <h2>Álbuns</h2>
             </div>
-            <button class="icon-btn" id="refreshAlbumsBtn" type="button" title="Atualizar">↻</button>
+            <button class="icon-btn" id="refreshAlbumsBtn" type="button" title="Atualizar álbuns" aria-label="Atualizar álbuns">↻</button>
           </div>
 
-          <div class="new-album">
-            <label for="newAlbumName">Novo álbum</label>
-            <div class="inline-form new-album-form">
-              <input id="newAlbumName" type="text" placeholder="Ex: Aniversário">
-              <button class="btn btn-small" id="createAlbumBtn" type="button">Criar</button>
-              <select id="newAlbumParent" aria-label="Local do novo álbum">
-                <option value="portfolio">Portfólio principal</option>
-                <option value="selected">Dentro do selecionado</option>
-              </select>
+          <details class="new-album">
+            <summary>+ Novo álbum</summary>
+            <div class="disclosure-body">
+              <label for="newAlbumName">Novo álbum</label>
+              <div class="inline-form new-album-form">
+                <input id="newAlbumName" type="text" placeholder="Ex: Aniversário">
+                <button class="btn btn-small" id="createAlbumBtn" type="button">Criar</button>
+                <select id="newAlbumParent" aria-label="Local do novo álbum">
+                  <option value="portfolio">Portfólio principal</option>
+                  <option value="selected">Dentro do selecionado</option>
+                </select>
+              </div>
+              <small class="new-album-target" id="newAlbumTarget">Destino: portfolio</small>
             </div>
-            <small class="new-album-target" id="newAlbumTarget">Destino: portfolio</small>
-          </div>
+          </details>
 
+          <label class="sr-only" for="albumSearch">Buscar álbuns</label>
+          <input id="albumSearch" type="search" placeholder="Buscar álbum…" autocomplete="off">
           <div class="album-list" id="albumList"></div>
+          <p id="albumSearchEmpty" class="hidden" role="status">Nenhum álbum encontrado.</p>
+          <div class="stats" aria-label="Resumo: total de álbuns e dados do álbum selecionado">
+            <div><strong id="statAlbums">0</strong><span>Álbuns</span></div>
+            <div><strong id="statPhotos">0</strong><span>Fotos</span></div>
+            <div><strong id="statLikes">0</strong><span>Curtidas</span></div>
+          </div>
         </aside>
 
         <section class="content">
@@ -138,38 +145,46 @@
             </div>
             <div class="content-actions">
               <a class="btn btn-ghost disabled" id="viewAlbumBtn" href="#" target="_blank" rel="noopener">Abrir álbum</a>
-              <button class="btn btn-ghost" id="clearCacheBtn" type="button" disabled>Limpar cache</button>
-              <button class="btn btn-danger" id="deleteAlbumBtn" type="button" disabled>Apagar álbum</button>
+              <details class="album-tools">
+                <summary class="btn btn-ghost">Mais opções</summary>
+                <div class="album-tools-body">
+                  <button class="btn btn-ghost" id="clearCacheBtn" type="button" disabled>Limpar cache</button>
+                  <button class="btn btn-danger" id="deleteAlbumBtn" type="button" disabled>Apagar álbum</button>
+                </div>
+              </details>
             </div>
           </div>
 
-          <section class="upload-panel" id="uploadPanel">
-            <div class="dropzone" id="dropzone">
-              <input id="fileInput" type="file" accept="image/*" multiple>
-              <div>
-                <strong>Arraste fotos aqui</strong>
-                <span>ou clique para selecionar arquivos</span>
+          <details class="upload-panel" id="uploadPanel">
+            <summary><span><strong>Adicionar fotos</strong><small>Selecione arquivos ou arraste para enviar</small></span><span class="disclosure-symbol" aria-hidden="true">+</span></summary>
+            <div class="upload-body">
+              <div class="dropzone" id="dropzone">
+                <input id="fileInput" type="file" accept="image/*" multiple aria-label="Selecionar fotos para enviar">
+                <div>
+                  <strong>Arraste fotos aqui</strong>
+                  <span>ou clique para selecionar arquivos</span>
+                </div>
               </div>
-            </div>
 
-            <div class="upload-options">
-              <label class="text-field">
-                Nome exibido
-                <input id="singleDisplayName" type="text" placeholder="Opcional para 1 foto. Ex: IMG_2048">
-              </label>
-              <label class="check-field">
-                <input id="firstAsCover" type="checkbox" checked>
-                <span>Usar primeira foto enviada como capa</span>
-              </label>
-              <button class="btn btn-primary" id="uploadBtn" type="button" disabled>Enviar fotos</button>
-            </div>
+              <div class="upload-options">
+                <label class="text-field">
+                  Nome exibido
+                  <input id="singleDisplayName" type="text" placeholder="Opcional para 1 foto. Ex: IMG_2048">
+                </label>
+                <label class="check-field">
+                  <input id="firstAsCover" type="checkbox" checked>
+                  <span>Usar primeira foto enviada como capa</span>
+                </label>
+                <button class="btn btn-primary" id="uploadBtn" type="button" disabled>Enviar fotos</button>
+              </div>
 
-            <div class="queue" id="uploadQueue"></div>
-          </section>
+              <div class="queue" id="uploadQueue" aria-live="polite"></div>
+            </div>
+          </details>
 
           <div class="empty-state" id="emptyState">
             <strong>Nenhuma foto carregada neste álbum.</strong>
-            <span>Envie imagens pelo painel acima para criar ou preencher o portfólio.</span>
+            <span>Abra “Adicionar fotos” para preencher este álbum.</span>
           </div>
 
           <div class="photo-grid" id="photoGrid"></div>
@@ -246,6 +261,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="/theme.js?v=20260716-02"></script>
-  <script src="/admin/admin.js?v=20260706-01"></script>
+  <script src="/admin/admin.js?v=20260915-01"></script>
 </body>
 </html>

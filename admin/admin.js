@@ -274,7 +274,11 @@ function isAdminUser() {
 function applyRoleVisibility() {
   const canManageAccess = isAdminUser();
   document.querySelectorAll('[data-admin-only="true"]').forEach((element) => {
-    element.classList.toggle("hidden", !canManageAccess);
+    if (element.classList.contains("view")) {
+      if (!canManageAccess) element.classList.add("hidden");
+    } else {
+      element.classList.toggle("hidden", !canManageAccess);
+    }
   });
 
   const activeRestrictedTab = document.querySelector('.tab.active[data-admin-only="true"]');
@@ -430,9 +434,13 @@ document.querySelectorAll(".tab[data-view]").forEach((tab) => {
   tab.addEventListener("click", async () => {
     if (tab.dataset.adminOnly === "true" && !isAdminUser()) return;
 
-    document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
+    document.querySelectorAll(".tab").forEach((item) => {
+      item.classList.remove("active");
+      item.removeAttribute("aria-current");
+    });
     document.querySelectorAll(".view").forEach((view) => view.classList.add("hidden"));
     tab.classList.add("active");
+    tab.setAttribute("aria-current", "page");
     document.getElementById(tab.dataset.view).classList.remove("hidden");
     if (tab.dataset.view === "likesView") await loadLikesOverview();
     if (tab.dataset.view === "usersView") await loadUsersView();
@@ -481,7 +489,7 @@ function renderAlbumList() {
   }
 
   albumList.innerHTML = state.albums.map((album) => `
-    <button class="album-item ${album.path === state.selectedPath ? "active" : ""}" data-path="${escapeHtml(album.path)}" type="button">
+    <button class="album-item ${album.path === state.selectedPath ? "active" : ""}" data-path="${escapeHtml(album.path)}" aria-pressed="${album.path === state.selectedPath}" type="button">
       <span class="album-copy" style="padding-left:${Math.min(album.depth || 0, 5) * 16}px">
         <strong>${escapeHtml(albumName(album.path))}</strong>
         <small>${escapeHtml(album.path)}</small>
@@ -490,10 +498,24 @@ function renderAlbumList() {
     </button>
   `).join("");
 
+  filterAlbumList();
   albumList.querySelectorAll(".album-item[data-path]").forEach((btn) => {
     btn.addEventListener("click", () => selectAlbum(btn.dataset.path));
   });
 }
+
+function filterAlbumList() {
+  const query = $("#albumSearch").value.trim().toLocaleLowerCase("pt-BR");
+  let visible = 0;
+  albumList.querySelectorAll("button[data-path]").forEach((button) => {
+    const matches = button.dataset.path.toLocaleLowerCase("pt-BR").includes(query);
+    button.classList.toggle("hidden", !matches);
+    if (matches) visible++;
+  });
+  $("#albumSearchEmpty").classList.toggle("hidden", !query || visible > 0);
+}
+
+$("#albumSearch").addEventListener("input", filterAlbumList);
 
 async function selectAlbum(path) {
   state.selectedPath = path;
@@ -565,21 +587,24 @@ function renderPhotos() {
 
     return `
       <article class="photo-card" data-index="${index}">
-        <div class="photo-thumb">
+        <a class="photo-thumb" href="${safeUrl}" target="_blank" rel="noopener" aria-label="Ver foto: ${safeName}">
           ${isCover ? `<span class="badge">Capa</span>` : ""}
           ${likes ? `<span class="like-badge">♥ ${likes}</span>` : ""}
           <img src="${escapeHtml(src)}" alt="${safeName}" loading="lazy" decoding="async">
-        </div>
+        </a>
         <div class="photo-info">
           <strong title="${safeName}">${safeName}</strong>
-          <code title="${safePublicId}">${safePublicId || "sem public_id"}</code>
         </div>
-        <div class="photo-actions">
-          <button class="btn btn-ghost" data-action="cover" type="button">Definir capa</button>
-          <button class="btn btn-ghost" data-action="rename" type="button">Renomear</button>
-          <a class="btn btn-ghost" href="${safeUrl}" target="_blank" rel="noopener">Ver</a>
-          <button class="btn btn-danger" data-action="delete" type="button">Excluir</button>
-        </div>
+        <details class="photo-tools" name="photo-options">
+          <summary aria-label="Opções da foto: ${safeName}">Opções da foto <span aria-hidden="true">⌄</span></summary>
+          <code class="photo-id" title="${safePublicId}">${safePublicId || "sem public_id"}</code>
+          <div class="photo-actions">
+            <button class="btn btn-ghost" data-action="cover" type="button">Definir capa</button>
+            <button class="btn btn-ghost" data-action="rename" type="button">Renomear</button>
+            <a class="btn btn-ghost" href="${safeUrl}" target="_blank" rel="noopener">Ver</a>
+            <button class="btn btn-danger" data-action="delete" type="button">Excluir</button>
+          </div>
+        </details>
       </article>
     `;
   }).join("");
