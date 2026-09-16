@@ -119,7 +119,7 @@ function renderQuote() {
   const contractor = state.contractor || {};
   document.title = `${quote.number || "Orçamento"} | Marcel Conde Fotografia`;
   quoteNumber.textContent = `${quote.number || "Orçamento"} · versão ${quote.version || 1}`;
-  quoteTitle.textContent = quote.title || "Serviço fotográfico";
+  quoteTitle.textContent = `${quote.isTest ? "[TESTE — sem validade contratual] " : ""}${quote.title || "Serviço fotográfico"}`;
   quoteDescription.textContent = quote.serviceDescription || "";
   quoteStatus.textContent = statusText(quote.status);
   quoteStatus.className = `client-status ${quote.status || "published"}`;

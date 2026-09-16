@@ -1,10 +1,10 @@
 (function () {
-  const storageKey = "mc_theme";
+  const storageKey = "mc_theme_session";
   const root = document.documentElement;
 
   function getSavedTheme() {
     try {
-      return localStorage.getItem(storageKey);
+      return sessionStorage.getItem(storageKey);
     } catch {
       return "";
     }
@@ -12,7 +12,7 @@
 
   function saveTheme(theme) {
     try {
-      localStorage.setItem(storageKey, theme);
+      sessionStorage.setItem(storageKey, theme);
     } catch {
       // Theme still applies for the current page even when storage is unavailable.
     }
@@ -160,6 +160,10 @@
 
       :root[data-theme="light"] .theme-toggle__icon {
         color: rgba(38,35,31,0.70);
+      }
+
+      :root[data-theme="light"] .theme-toggle[data-active-theme="light"] .theme-toggle__icon--sun {
+        color: #fff;
       }
 
       @media (max-width: 720px) {

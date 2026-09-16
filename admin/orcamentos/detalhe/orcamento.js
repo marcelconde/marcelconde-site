@@ -170,7 +170,7 @@ function defaultQuote() {
 
 function clientOptions() {
   quoteClient.innerHTML = `<option value="">Selecione um cliente</option>${state.clients.map((client) => (
-    `<option value="${escapeHtml(client.id)}">${escapeHtml(client.name || client.email || "Cliente")} · ${escapeHtml(client.email || "sem e-mail")}</option>`
+    `<option value="${escapeHtml(client.id)}">${client.isTest ? "[TESTE] " : ""}${escapeHtml(client.name || client.email || "Cliente")} · ${escapeHtml(client.email || "sem e-mail")}</option>`
   )).join("")}`;
 }
 
@@ -340,26 +340,30 @@ function renderEvents() {
     <small>Código ${escapeHtml(acceptance.code || "")} · Hash ${escapeHtml(acceptance.hash || "")}</small>`;
 }
 
+function isQuoteLocked() {
+  return state.quote?.status === "accepted" && state.quote?.isTest !== true;
+}
+
 function renderHeader() {
   const [label, tone] = statusMeta(state.quote.status);
   const client = state.clients.find((item) => item.id === state.quote.clientId);
   quoteNumberLabel.textContent = state.quote.number || "Novo orçamento";
   quoteTitleLabel.textContent = state.quote.title || "Nova proposta";
-  quoteMeta.textContent = `${client?.name || "Cliente não selecionado"} · ${label}${state.quote.validUntil ? ` · validade ${formatDate(state.quote.validUntil)}` : ""}`;
+  quoteMeta.textContent = `${state.quote.isTest ? "TESTE · " : ""}${client?.name || "Cliente não selecionado"} · ${label}${state.quote.validUntil ? ` · validade ${formatDate(state.quote.validUntil)}` : ""}`;
   quoteStatusStat.textContent = label;
   quoteVersionStat.textContent = state.quote.version || 0;
   quoteStatusBadge.textContent = label;
   quoteStatusBadge.className = `status-badge ${tone}`;
 
   const hasId = Boolean(state.quote.id);
-  const accepted = state.quote.status === "accepted";
+  const accepted = isQuoteLocked();
   const published = ["published", "viewed", "accepted", "expired"].includes(state.quote.status);
   openQuoteBtn.classList.toggle("disabled", !published);
   openQuoteBtn.href = published ? `/clientes/orcamento/?id=${encodeURIComponent(state.quote.id)}` : "#";
   downloadPdfBtn.disabled = !hasId;
   deleteQuoteBtn.disabled = !hasId || accepted;
-  createGalleryBtn.hidden = !accepted || !state.quote.clientId;
-  createGalleryBtn.href = accepted
+  createGalleryBtn.hidden = state.quote.status !== "accepted" || !state.quote.clientId;
+  createGalleryBtn.href = state.quote.status === "accepted"
     ? `/admin/galerias/?client=${encodeURIComponent(state.quote.clientId)}&title=${encodeURIComponent(state.quote.title || "Galeria")}`
     : "/admin/galerias/";
   publishQuoteBtn.disabled = accepted;
@@ -441,8 +445,8 @@ async function saveQuote({ silent = false } = {}) {
     return state.quote;
   } finally {
     state.saving = false;
-    saveQuoteBtn.disabled = state.quote?.status === "accepted";
-    saveQuoteBtn.textContent = state.quote?.status === "accepted" ? "Contrato bloqueado" : "Salvar rascunho";
+    saveQuoteBtn.disabled = isQuoteLocked();
+    saveQuoteBtn.textContent = isQuoteLocked() ? "Contrato bloqueado" : "Salvar rascunho";
   }
 }
 
@@ -456,7 +460,7 @@ quoteForm.addEventListener("submit", async (event) => {
 });
 
 publishQuoteBtn.addEventListener("click", async () => {
-  if (state.quote?.status === "accepted") return;
+  if (isQuoteLocked()) return;
   publishQuoteBtn.disabled = true;
   publishQuoteBtn.textContent = "Publicando...";
   try {
@@ -473,8 +477,8 @@ publishQuoteBtn.addEventListener("click", async () => {
   } catch (err) {
     showToast(err.message || "Erro ao publicar orçamento.", 6000);
   } finally {
-    publishQuoteBtn.disabled = state.quote?.status === "accepted";
-    if (state.quote?.status !== "accepted") publishQuoteBtn.textContent = "Reenviar versão";
+    publishQuoteBtn.disabled = isQuoteLocked();
+    if (!isQuoteLocked()) publishQuoteBtn.textContent = "Reenviar versão";
   }
 });
 
@@ -502,7 +506,7 @@ downloadPdfBtn.addEventListener("click", async () => {
 });
 
 deleteQuoteBtn.addEventListener("click", async () => {
-  if (!state.quote?.id || state.quote.status === "accepted") return;
+  if (!state.quote?.id || isQuoteLocked()) return;
   if (!confirm(`Apagar definitivamente o orçamento ${state.quote.number || ""}?`)) return;
   deleteQuoteBtn.disabled = true;
   try {

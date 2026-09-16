@@ -18,6 +18,7 @@ const statGalleries = $("#statGalleries");
 const clientList = $("#clientList");
 const clientForm = $("#clientForm");
 const formTitle = $("#formTitle");
+const clientIsTest = $("#clientIsTest");
 const clientName = $("#clientName");
 const clientEmail = $("#clientEmail");
 const clientPhone = $("#clientPhone");
@@ -170,6 +171,8 @@ async function getJson(path, options = {}) {
 
 function clearForm() {
   state.selectedClient = null;
+  clientIsTest.checked = false;
+  clientIsTest.disabled = false;
   formTitle.textContent = "Novo cliente";
   clientName.value = "";
   clientEmail.value = "";
@@ -199,7 +202,9 @@ function clearForm() {
 function selectClient(id) {
   state.selectedClient = state.clients.find((client) => client.id === id) || null;
   if (!state.selectedClient) return;
-  formTitle.textContent = "Editar cliente";
+  clientIsTest.checked = state.selectedClient.isTest === true;
+  clientIsTest.disabled = true;
+  formTitle.textContent = clientIsTest.checked ? "Editar cliente de teste" : "Editar cliente";
   clientName.value = state.selectedClient.name || "";
   clientEmail.value = state.selectedClient.email || "";
   clientPhone.value = state.selectedClient.phone || "";
@@ -239,7 +244,7 @@ function renderClients() {
     const active = state.selectedClient?.id === client.id ? " active" : "";
     return `
       <button class="private-list-item${active}" type="button" data-client-id="${escapeHtml(client.id)}">
-        <strong>${escapeHtml(client.name || "Cliente")}</strong>
+        <strong>${escapeHtml(client.name || "Cliente")}${client.isTest ? ' <span class="status-badge">Teste</span>' : ""}</strong>
         <small>${escapeHtml(client.email || "sem e-mail")} · ${galleries} galeria(s) · ${quotes} orçamento(s)</small>
         <small>${escapeHtml(client.phone || "")}</small>
       </button>
@@ -274,6 +279,7 @@ clientForm.addEventListener("submit", async (event) => {
   try {
     const payload = {
       id: state.selectedClient?.id || undefined,
+      isTest: clientIsTest.checked,
       name: clientName.value.trim(),
       email: clientEmail.value.trim(),
       phone: clientPhone.value.trim(),
@@ -299,6 +305,8 @@ clientForm.addEventListener("submit", async (event) => {
     if (existingIndex >= 0) state.clients[existingIndex] = savedClient;
     else state.clients.unshift(savedClient);
     state.selectedClient = savedClient;
+    clientIsTest.checked = savedClient.isTest === true;
+    clientIsTest.disabled = true;
     deleteClientBtn.disabled = false;
     newQuoteBtn.classList.remove("disabled");
     newQuoteBtn.href = `/admin/orcamentos/detalhe/?client=${encodeURIComponent(savedClient.id)}`;
@@ -328,13 +336,17 @@ deleteClientBtn.addEventListener("click", async () => {
   const linkedMessage = linkedGalleries || linkedQuotes
     ? `\n\nEste cliente tem ${linkedGalleries} galeria(s) e ${linkedQuotes} orçamento(s) vinculados. Remova ou transfira esses registros antes.`
     : "";
-  if (linkedGalleries || linkedQuotes) {
+  if (!client.isTest && (linkedGalleries || linkedQuotes)) {
     showToast("Cliente com registros vinculados não pode ser apagado.");
     alert(`Não é possível apagar "${client.name || client.email}" agora.${linkedMessage}`);
     return;
   }
 
-  const confirmed = confirm(
+  const confirmName = client.isTest ? prompt(
+    `Apagar o cliente de teste "${client.name}" e seus ${linkedQuotes} orçamento(s), inclusive aceitos?\n\nAs ${linkedGalleries} galeria(s) serão preservadas, sem cliente vinculado.\n\nDigite ${client.name} para confirmar:`
+  ) : undefined;
+  if (client.isTest && confirmName !== client.name) return;
+  const confirmed = client.isTest || confirm(
     `Apagar definitivamente o cliente "${client.name || client.email}"?\n\n` +
     "O acesso dele à área do cliente também será removido. Esta ação não pode ser desfeita."
   );
@@ -346,10 +358,11 @@ deleteClientBtn.addEventListener("click", async () => {
   try {
     await getJson("/private/client/delete", {
       method: "POST",
-      body: JSON.stringify({ clientId: client.id }),
+      body: JSON.stringify({ clientId: client.id, confirmName }),
     });
     state.clients = state.clients.filter((item) => item.id !== client.id);
     clearForm();
+    await loadData();
     showToast("Cliente apagado.");
   } catch (err) {
     showToast(err.message || "Erro ao apagar cliente.");

@@ -805,6 +805,7 @@ function quoteClientSnapshot(client = {}) {
   return {
     id: client.id || "",
     name: client.name || "Cliente",
+    isTest: client.isTest === true,
     email: normalizeEmail(client.email || ""),
     phone: client.phone || "",
     document: client.document || "",
@@ -816,6 +817,7 @@ function quoteClientSnapshot(client = {}) {
 function quotePublishedSnapshot(env, quote = {}, client = {}) {
   const totals = calculateQuoteTotals(quote);
   return {
+    isTest: quote.isTest === true,
     quoteId: quote.id,
     number: quote.number,
     version: Number(quote.version || 1),
@@ -844,6 +846,7 @@ function publicQuote(quote = {}) {
   const totals = calculateQuoteTotals(quote);
   return {
     id: quote.id,
+    isTest: quote.isTest === true,
     number: quote.number,
     clientId: quote.clientId,
     title: quote.title,
@@ -906,12 +909,26 @@ async function listPrivateQuotes(env) {
   return quotes.filter(Boolean).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 }
 
+async function isTestQuote(env, quote = {}) {
+  if (quote.isTest !== true || !quote.clientId) return false;
+  const client = await readKvJson(env, privateClientKey(quote.clientId), null);
+  return client?.isTest === true;
+}
+
 async function savePrivateQuote(env, input = {}) {
   if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
   const now = new Date().toISOString();
   const id = String(input.id || `orc_${randomToken(9)}`).replace(/[^a-zA-Z0-9_-]/g, "");
   const existing = await readKvJson(env, privateQuoteKey(id), {});
-  if (existing.status === "accepted") {
+  const clientId = String(input.clientId ?? existing.clientId ?? "");
+  const client = clientId ? await readKvJson(env, privateClientKey(clientId), null) : null;
+  if (clientId && !client) throw Object.assign(new Error("Cliente não encontrado."), { status: 400 });
+  const isTest = client?.isTest === true;
+  if (existing.id && (existing.isTest === true) !== isTest) {
+    throw Object.assign(new Error("Não é possível transferir orçamentos entre clientes reais e de teste."), { status: 409 });
+  }
+  const editableTest = await isTestQuote(env, existing);
+  if (existing.status === "accepted" && !editableTest) {
     throw Object.assign(
       new Error("Um contrato aceito não pode ser alterado. Duplique-o para criar uma nova versão."),
       { status: 409 }
@@ -928,7 +945,8 @@ async function savePrivateQuote(env, input = {}) {
     ...existing,
     id,
     number: existing.number || `ORC-${new Date().getFullYear()}-${randomToken(4).slice(0, 6).toUpperCase()}`,
-    clientId: String(input.clientId ?? existing.clientId ?? ""),
+    clientId,
+    isTest,
     title: cleanDisplayName(input.title ?? existing.title ?? "Ensaio fotográfico"),
     serviceDescription: cleanGalleryText(input.serviceDescription ?? existing.serviceDescription ?? "", 5000),
     serviceDate: String(input.serviceDate ?? existing.serviceDate ?? "").slice(0, 10),
@@ -943,8 +961,9 @@ async function savePrivateQuote(env, input = {}) {
     clauses: normalizeQuoteClauses(input.clauses ?? existing.clauses ?? defaultQuoteClauses()),
     notesForClient: cleanGalleryText(input.notesForClient ?? existing.notesForClient ?? "", 1600),
     internalNotes: cleanGalleryText(input.internalNotes ?? existing.internalNotes ?? "", 1600),
-    status: ["published", "viewed"].includes(existing.status) ? "draft" : (existing.status || "draft"),
-    publishedSnapshot: ["published", "viewed"].includes(existing.status) ? null : (existing.publishedSnapshot || null),
+    status: ["published", "viewed"].includes(existing.status) || editableTest ? "draft" : (existing.status || "draft"),
+    publishedSnapshot: ["published", "viewed"].includes(existing.status) || editableTest ? null : (existing.publishedSnapshot || null),
+    ...(editableTest ? { acceptance: null, acceptedAt: null, publishedAt: null, viewedAt: null, publishedHash: null, acceptanceEmails: null } : {}),
     createdAt: existing.createdAt || now,
     updatedAt: now,
   };
@@ -960,18 +979,16 @@ async function deletePrivateQuote(env, quoteId) {
   const id = String(quoteId || "").trim();
   const quote = await readKvJson(env, privateQuoteKey(id), null);
   if (!quote) return null;
-  if (quote.status === "accepted") {
+  if (quote.status === "accepted" && !(await isTestQuote(env, quote))) {
     throw Object.assign(
       new Error("Contratos aceitos devem ser preservados e não podem ser apagados."),
       { status: 409 }
     );
   }
+  await env.LIKES_KV.delete(privateQuoteEventsKey(id));
+  await env.LIKES_KV.delete(privateQuoteKey(id));
   const index = await readKvJson(env, privateQuotesIndexKey(), []);
-  await Promise.all([
-    env.LIKES_KV.delete(privateQuoteKey(id)),
-    env.LIKES_KV.delete(privateQuoteEventsKey(id)),
-    writeKvJson(env, privateQuotesIndexKey(), index.filter((item) => item !== id)),
-  ]);
+  await writeKvJson(env, privateQuotesIndexKey(), index.filter((item) => item !== id));
   return quote;
 }
 
@@ -1020,9 +1037,16 @@ async function savePrivateClient(env, input = {}) {
   const now = new Date().toISOString();
   const id = String(input.id || `cli_${randomToken(9)}`).replace(/[^a-zA-Z0-9_-]/g, "");
   const existing = await readKvJson(env, privateClientKey(id), {});
+  if (input.isTest !== undefined && typeof input.isTest !== "boolean") {
+    throw Object.assign(new Error("Tipo de cliente inválido."), { status: 400 });
+  }
+  if (existing.id && input.isTest !== undefined && input.isTest !== (existing.isTest === true)) {
+    throw Object.assign(new Error("O tipo real ou teste é definido na criação e não pode ser alterado."), { status: 409 });
+  }
   const client = {
     ...existing,
     id,
+    isTest: existing.id ? existing.isTest === true : input.isTest === true,
     name: cleanDisplayName(input.name || existing.name || "Cliente"),
     email: normalizeEmail(input.email || existing.email || ""),
     phone: cleanDisplayName(input.phone || existing.phone || ""),
@@ -1127,7 +1151,7 @@ async function savePrivateGallery(env, input = {}) {
   return gallery;
 }
 
-async function deletePrivateClient(env, clientId) {
+async function deletePrivateClient(env, clientId, options = {}) {
   if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
   const id = String(clientId || "").trim();
   if (!id) throw new Error("Cliente inválido.");
@@ -1139,7 +1163,20 @@ async function deletePrivateClient(env, clientId) {
   const linkedGalleries = galleries.filter((gallery) => gallery.clientId === id);
   const quotes = await listPrivateQuotes(env);
   const linkedQuotes = quotes.filter((quote) => quote.clientId === id);
-  if (linkedGalleries.length || linkedQuotes.length) {
+  if (client.isTest === true) {
+    if (options.confirmName !== client.name) {
+      throw Object.assign(new Error("Digite o nome do cliente de teste para confirmar a limpeza."), { status: 400 });
+    }
+    // Refuse to delete any real contract, even if inconsistent data links it to a test client.
+    if (linkedQuotes.some((quote) => quote.isTest !== true)) {
+      throw Object.assign(new Error("Há orçamentos reais vinculados. Transfira-os antes de apagar o cliente de teste."), { status: 409 });
+    }
+    for (const quote of linkedQuotes) await deletePrivateQuote(env, quote.id);
+    // Keep gallery images and settings. Only remove the deleted test client's access.
+    for (const gallery of linkedGalleries) {
+      await writeKvJson(env, privateGalleryKey(gallery.id), { ...gallery, clientId: "", updatedAt: new Date().toISOString() });
+    }
+  } else if (linkedGalleries.length || linkedQuotes.length) {
     throw Object.assign(
       new Error("Este cliente possui galerias ou orçamentos vinculados. Remova ou transfira esses registros antes."),
       {
@@ -1150,16 +1187,13 @@ async function deletePrivateClient(env, clientId) {
     );
   }
 
-  const index = await readKvJson(env, privateClientsIndexKey(), []);
   const clientEmail = normalizeEmail(client.email || "");
   const otherClients = (await listPrivateClients(env)).filter((item) => item.id !== id);
   const emailStillUsed = clientEmail && otherClients.some((item) => normalizeEmail(item.email || "") === clientEmail);
-  const deleteOps = [
-    env.LIKES_KV.delete(privateClientKey(id)),
-    writeKvJson(env, privateClientsIndexKey(), index.filter((item) => item !== id)),
-  ];
-  if (clientEmail && !emailStillUsed) deleteOps.push(env.LIKES_KV.delete(clientUserKey(clientEmail)));
-  await Promise.allSettled(deleteOps);
+  if (clientEmail && !emailStillUsed) await env.LIKES_KV.delete(clientUserKey(clientEmail));
+  await env.LIKES_KV.delete(privateClientKey(id));
+  const index = await readKvJson(env, privateClientsIndexKey(), []);
+  await writeKvJson(env, privateClientsIndexKey(), index.filter((item) => item !== id));
 
   return client;
 }
@@ -2229,7 +2263,7 @@ async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, acce
   const html = emailLayout(env, {
     preheader: `Seu orçamento ${quote.number || ""} está disponível para análise.`,
     eyebrow: "Orçamento e contrato",
-    title: "Seu orçamento está pronto",
+    title: quote.isTest ? "Orçamento de teste — sem validade contratual" : "Seu orçamento está pronto",
     intro: `Olá ${clientName}, preparei o orçamento para <strong>${emailHtml(quote.title || "o serviço solicitado")}</strong>.`,
     body: `<p style="margin:0 0 12px;">Valor total: <strong>${emailHtml(total)}</strong></p>
       <p style="margin:0;">Confira o escopo, as formas de pagamento e todas as cláusulas. Se estiver de acordo, o aceite é feito na própria página.</p>
@@ -2245,7 +2279,7 @@ async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, acce
   });
   return sendResendMessage(env, {
     to: [email],
-    subject: `Orçamento ${quote.number || ""} — ${quote.title || "Marcel Conde Fotografia"}`,
+    subject: `${quote.isTest ? "[TESTE] " : ""}Orçamento ${quote.number || ""} — ${quote.title || "Marcel Conde Fotografia"}`,
     html,
   });
 }
@@ -2331,6 +2365,7 @@ function buildQuotePdf(env, quote = {}, client = {}, acceptance = null) {
     y -= 15;
   };
 
+  if (quote.isTest === true) draw("DOCUMENTO DE TESTE - SEM VALIDADE CONTRATUAL", { font: "F2", size: 11, gap: 12 });
   draw(snapshot.contractor?.name || brandName(env), { font: "F3", size: 17, leading: 21, color: "0.33 0.25 0.16", gap: 3 });
   draw(`ORÇAMENTO E CONTRATO DE PRESTAÇÃO DE SERVIÇOS | ${snapshot.number || quote.number || ""}`, { font: "F2", size: 8.5, leading: 12, color: "0.45 0.40 0.34", gap: 8 });
   rule();
@@ -2393,7 +2428,7 @@ function buildQuotePdf(env, quote = {}, client = {}, acceptance = null) {
 
   pages.forEach((commands, index) => {
     commands.unshift(`BT /F2 7.5 Tf 0.45 0.40 0.34 rg 46 815 Td (${pdfEscapeText(snapshot.number || quote.number || "ORÇAMENTO")}) Tj ET`);
-    commands.push(`BT /F1 7.5 Tf 0.45 0.40 0.34 rg 46 28 Td (${pdfEscapeText(`${brandName(env)} | Página ${index + 1} de ${pages.length}`)}) Tj ET`);
+    commands.push(`BT /F1 7.5 Tf 0.45 0.40 0.34 rg 46 28 Td (${pdfEscapeText(`${quote.isTest ? "TESTE | " : ""}${brandName(env)} | Página ${index + 1} de ${pages.length}`)}) Tj ET`);
   });
 
   const objects = [];
@@ -2438,7 +2473,7 @@ async function sendQuoteAcceptedEmails(env, quote = {}, client = {}, acceptance 
   const clientHtml = emailLayout(env, {
     preheader: `Seu aceite do orçamento ${quote.number || ""} foi registrado.`,
     eyebrow: "Contrato aceito",
-    title: "Aceite confirmado",
+    title: quote.isTest ? "Aceite de teste — sem validade contratual" : "Aceite confirmado",
     intro: `Olá ${emailHtml(client.name || client.email)}, o aceite do orçamento <strong>${emailHtml(quote.number || "")}</strong> foi registrado com sucesso.`,
     body: `<p style="margin:0 0 12px;">Serviço: <strong>${emailHtml(quote.title || "")}</strong><br>Valor: <strong>${emailHtml(total)}</strong></p><p style="margin:0;">A cópia do contrato aceito está anexada a este e-mail.</p>`,
     ctaLabel: "Consultar na área do cliente",
@@ -2449,7 +2484,7 @@ async function sendQuoteAcceptedEmails(env, quote = {}, client = {}, acceptance 
   const adminHtml = emailLayout(env, {
     preheader: `${client.name || client.email} aceitou o orçamento ${quote.number || ""}.`,
     eyebrow: "Novo aceite",
-    title: "Orçamento aprovado",
+    title: quote.isTest ? "Orçamento de teste aprovado" : "Orçamento aprovado",
     intro: `<strong>${emailHtml(client.name || client.email)}</strong> aceitou o orçamento <strong>${emailHtml(quote.number || "")}</strong>.`,
     body: `<p style="margin:0 0 12px;">Serviço: ${emailHtml(quote.title || "")}<br>Valor: <strong>${emailHtml(total)}</strong><br>Data do aceite: ${emailHtml(formatQuoteDate(acceptance.acceptedAt, true))}</p><p style="margin:0;">A cópia aceita está anexada.</p>`,
     ctaLabel: "Abrir orçamento no admin",
@@ -2461,13 +2496,13 @@ async function sendQuoteAcceptedEmails(env, quote = {}, client = {}, acceptance 
   const [clientResult, adminResult] = await Promise.allSettled([
     sendResendMessage(env, {
       to: [client.email],
-      subject: `Contrato aceito — ${quote.number || quote.title || "Orçamento"}`,
+      subject: `${quote.isTest ? "[TESTE] " : ""}Contrato aceito — ${quote.number || quote.title || "Orçamento"}`,
       html: clientHtml,
       attachments: [attachment],
     }),
     sendResendMessage(env, {
       to: [adminEmail(env)],
-      subject: `Orçamento aprovado por ${client.name || client.email} — ${quote.number || ""}`,
+      subject: `${quote.isTest ? "[TESTE] " : ""}Orçamento aprovado por ${client.name || client.email} — ${quote.number || ""}`,
       html: adminHtml,
       attachments: [attachment],
     }),
@@ -3947,7 +3982,12 @@ export default {
       const { error, user } = await requireAdminUser(request, env);
       if (error) return error;
       const body = await readJson(request);
-      const client = await savePrivateClient(env, body);
+      let client;
+      try {
+        client = await savePrivateClient(env, body);
+      } catch (err) {
+        return errorJson(err.message || "Erro ao salvar cliente.", err.status || 500);
+      }
       const access = await getClientAccessSummary(env, client.email);
       await appendAuditLog(env, request, user, body.id ? "editar_cliente_privado" : "criar_cliente_privado", "private_clients", { clientId: client.id, email: client.email });
       return json({ client, access, temporaryPassword: "" }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
@@ -4022,7 +4062,7 @@ export default {
 
       const body = await readJson(request);
       try {
-        const client = await deletePrivateClient(env, body.id || body.clientId);
+        const client = await deletePrivateClient(env, body.id || body.clientId, { confirmName: body.confirmName });
         if (!client) return errorJson("Cliente não encontrado.", 404);
 
         await appendAuditLog(env, request, user, "excluir_cliente_privado", "private_clients", {
@@ -4105,7 +4145,7 @@ export default {
       const id = String(body.id || body.quoteId || "").trim();
       const quote = await readKvJson(env, privateQuoteKey(id), null);
       if (!quote) return errorJson("Orçamento não encontrado.", 404);
-      if (quote.status === "accepted") return errorJson("Este orçamento já foi aceito e não pode ser republicado.", 409);
+      if (quote.status === "accepted" && !(await isTestQuote(env, quote))) return errorJson("Este orçamento já foi aceito e não pode ser republicado.", 409);
       const client = quote.clientId ? await readKvJson(env, privateClientKey(quote.clientId), null) : null;
       if (!client?.email) return errorJson("Vincule um cliente com e-mail antes de publicar.", 400);
       if (!normalizeQuoteItems(quote.items || []).length) return errorJson("Adicione ao menos um item ao orçamento.", 400);

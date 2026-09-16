@@ -130,7 +130,7 @@ function renderQuotes() {
         </span>
         <span class="quote-card-main">
           <strong>${escapeHtml(quote.title || "Serviço fotográfico")}</strong>
-          <small>${escapeHtml(client?.name || "Cliente não vinculado")}</small>
+          <small>${quote.isTest ? "[TESTE] " : ""}${escapeHtml(client?.name || "Cliente não vinculado")}</small>
         </span>
         <span class="quote-card-footer">
           <strong>${escapeHtml(formatMoney(quote.totalCents))}</strong>
