@@ -48,7 +48,7 @@
         <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar">↻</button>
       </section>
 
-      <section class="library-toolbar" aria-label="Criar galeria">
+      <section class="library-toolbar" aria-label="Criar e buscar galerias">
         <label for="quickTitle">
           Nova galeria
           <span>Crie a galeria aqui; os detalhes serão editados na próxima página.</span>
@@ -57,6 +57,11 @@
           <input id="quickTitle" type="text" placeholder="Ex: Beatriz Formatura">
           <button class="btn btn-primary" id="quickCreateBtn" type="button">Criar galeria</button>
         </div>
+        <label class="gallery-search-field" for="gallerySearch">
+          Buscar galeria
+          <span>Digite nome, cliente, slug ou ID da galeria.</span>
+          <input id="gallerySearch" type="search" placeholder="Ex: ASICS, Katarina ou gal_ZDT..." autocomplete="off">
+        </label>
       </section>
 
       <section class="gallery-card-grid" id="galleryList" aria-label="Galerias disponíveis"></section>

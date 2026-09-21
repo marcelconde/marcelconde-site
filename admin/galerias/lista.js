@@ -19,6 +19,7 @@ const galleryList = $("#galleryList");
 const refreshBtn = $("#refreshBtn");
 const quickTitle = $("#quickTitle");
 const quickCreateBtn = $("#quickCreateBtn");
+const gallerySearch = $("#gallerySearch");
 const toastEl = $("#toast");
 
 function getToken() {
@@ -111,6 +112,8 @@ function renderStats() {
 
 function renderGalleries() {
   renderStats();
+  const search = normalizeSearch(gallerySearch.value);
+  const galleries = state.galleries.filter((gallery) => galleryMatchesSearch(gallery, search));
   if (!state.galleries.length) {
     galleryList.innerHTML = `
       <div class="library-empty">
@@ -121,7 +124,17 @@ function renderGalleries() {
     return;
   }
 
-  galleryList.innerHTML = state.galleries.map((gallery) => {
+  if (!galleries.length) {
+    galleryList.innerHTML = `
+      <div class="library-empty">
+        <strong>Nenhuma galeria encontrada.</strong>
+        <span>Busque por título, cliente, slug ou ID.</span>
+      </div>
+    `;
+    return;
+  }
+
+  galleryList.innerHTML = galleries.map((gallery) => {
     const photoCount = countValue(gallery, ["photoCount", "photosCount", "imageCount", "imagesCount"]);
     const selectedCount = countValue(gallery, ["selectedCount", "selectionCount", "selectedPhotosCount"]);
     return `
@@ -129,6 +142,7 @@ function renderGalleries() {
         <span class="gallery-status">${escapeHtml(statusLabel(gallery.status))}</span>
         <strong>${escapeHtml(gallery.title || "Galeria")}</strong>
         <small>${escapeHtml(galleryClientName(gallery))}</small>
+        <span class="gallery-id" title="ID da galeria">ID: ${escapeHtml(gallery.id || "—")}</span>
         <em>/clientes/galeria/?slug=${escapeHtml(gallery.slug || "")}</em>
         <div class="gallery-card-metrics">
           <span>${photoCount || "—"} fotos</span>
@@ -137,6 +151,24 @@ function renderGalleries() {
       </a>
     `;
   }).join("");
+}
+
+function normalizeSearch(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function galleryMatchesSearch(gallery, search) {
+  if (!search) return true;
+  return [
+    gallery.id,
+    gallery.title,
+    gallery.slug,
+    galleryClientName(gallery),
+  ].some((value) => normalizeSearch(value).includes(search));
 }
 
 async function createGallery() {
@@ -195,6 +227,7 @@ quickCreateBtn.addEventListener("click", createGallery);
 quickTitle.addEventListener("keydown", (event) => {
   if (event.key === "Enter") createGallery();
 });
+gallerySearch.addEventListener("input", renderGalleries);
 
 const suggestedTitle = new URLSearchParams(location.search).get("title") || "";
 if (suggestedTitle) quickTitle.value = suggestedTitle;

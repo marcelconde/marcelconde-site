@@ -306,6 +306,53 @@ function imageLabel(publicId = "") {
   return image?.filename || image?.display_name || String(publicId || "").split("/").pop() || "foto";
 }
 
+function imageByPublicId(publicId = "") {
+  return state.images.find((image) => image.public_id === publicId) || null;
+}
+
+function eventIcon(action = "") {
+  if (action === "favoritar_foto") return "♥";
+  if (action === "remover_favorito") return "−";
+  if (action === "selecionar_todas") return "✓";
+  if (action === "concluir_selecao") return "✓";
+  if (action === "pix_criado" || action === "pix_aprovado") return "R$";
+  if (action === "admin_enviou_foto") return "↑";
+  if (action.includes("excluir")) return "×";
+  if (action.includes("abriu")) return "◉";
+  return "•";
+}
+
+function eventTitle(event = {}) {
+  if (isSelectionChangeEvent(event)) return selectionEventTitle(event);
+  const labels = {
+    cliente_abriu_galeria: "Cliente abriu a galeria",
+    admin_enviou_foto: "Foto adicionada à galeria",
+    admin_editou_galeria: "Configurações da galeria atualizadas",
+    admin_publicou_galeria: "Galeria publicada",
+    admin_entregou_galeria: "Entrega final publicada",
+  };
+  return labels[event.action] || String(event.action || "Atividade").replace(/_/g, " ");
+}
+
+function eventPhotoIds(event = {}) {
+  const details = event.details || {};
+  return [...new Set([
+    ...selectionEventPhotoIds(event),
+    ...(details.publicIds || []),
+    details.publicId,
+  ].filter(Boolean))].slice(0, 6);
+}
+
+function renderEventPhotos(publicIds = []) {
+  const photos = publicIds.map(imageByPublicId).filter(Boolean);
+  if (!photos.length) return "";
+  return `<div class="activity-photo-strip" aria-label="Fotos relacionadas">${photos.map((image) => `
+    <figure title="${escapeHtml(imageLabel(image.public_id))}">
+      <img src="${escapeHtml(cloudUrl(image.url, "w_160,h_160,c_fill,q_auto,f_auto"))}" alt="${escapeHtml(imageLabel(image.public_id))}" loading="lazy" decoding="async">
+    </figure>
+  `).join("")}</div>`;
+}
+
 function isSelectionChangeEvent(event = {}) {
   return [
     "favoritar_foto",
@@ -628,12 +675,17 @@ function renderEvents() {
     return;
   }
   eventList.innerHTML = `
-    <div class="event-list-inner">
+    <div class="event-list-inner activity-timeline">
       ${state.events.slice(0, 40).map((event) => `
-        <div class="event-row">
-          <strong>${escapeHtml(event.action || "evento")}</strong>
-          <small>${escapeHtml(formatDate(event.createdAt))} · ${escapeHtml(event.actorEmail || "cliente")}</small>
-        </div>
+        <article class="event-row activity-row">
+          <span class="activity-icon" aria-hidden="true">${escapeHtml(eventIcon(event.action || ""))}</span>
+          <div class="activity-content">
+            <strong>${escapeHtml(eventTitle(event))}</strong>
+            <span>${escapeHtml(isSelectionChangeEvent(event) ? selectionEventDetail(event) : "Atividade registrada na galeria.")}</span>
+            ${renderEventPhotos(eventPhotoIds(event))}
+          </div>
+          <time>${escapeHtml(formatDate(event.createdAt))}<br>${escapeHtml(event.actorEmail || event.actorName || "Administrador")}</time>
+        </article>
       `).join("")}
     </div>
   `;
@@ -675,17 +727,15 @@ function renderSelectionLog() {
       (details.removedSinceLastConfirmation || []).length > 0;
     const photoIds = [...new Set(selectionEventPhotoIds(event))].slice(0, 8);
     return `
-      <article class="selection-log-row${isRevision ? " is-revision" : ""}">
-        <div>
+      <article class="selection-log-row activity-row${isRevision ? " is-revision" : ""}">
+        <span class="activity-icon" aria-hidden="true">${escapeHtml(eventIcon(event.action || ""))}</span>
+        <div class="activity-content">
           <strong>${escapeHtml(selectionEventTitle(event))}</strong>
           <span>${escapeHtml(selectionEventDetail(event))}</span>
-          ${photoIds.length ? `
-            <div class="selection-log-files">
-              ${photoIds.map((publicId) => `<em>${escapeHtml(imageLabel(publicId))}</em>`).join("")}
-            </div>
-          ` : ""}
+          ${renderEventPhotos(photoIds)}
+          ${photoIds.length ? `<div class="selection-log-files">${photoIds.map((publicId) => `<em>${escapeHtml(imageLabel(publicId))}</em>`).join("")}</div>` : ""}
         </div>
-        <small>${escapeHtml(formatDate(event.createdAt))}<br>${escapeHtml(event.actorEmail || event.actorName || "cliente")}</small>
+        <time>${escapeHtml(formatDate(event.createdAt))}<br>${escapeHtml(event.actorEmail || event.actorName || "cliente")}</time>
       </article>
     `;
   }).join("");
