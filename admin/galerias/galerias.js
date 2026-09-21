@@ -19,6 +19,9 @@ const state = {
   events: [],
   selectedForDeletion: new Set(),
   loadingGallery: false,
+  uploads: [],
+  uploading: false,
+  userEmail: "",
 };
 
 const currentUserLabel = $("#currentUserLabel");
@@ -199,37 +202,11 @@ async function preparePhotoForCloudinary(file, onStatus = () => {}) {
     { maxEdge: 2400, quality: 0.8 },
   ];
 
-  let bestBlob = null;
   for (const attempt of attempts) {
     const blob = await compressImageFile(file, attempt.maxEdge, attempt.quality);
     if (blob.size <= CONFIG.cloudinaryUploadTarget) {
-      if (!bestBlob || blob.size > bestBlob.size) bestBlob = blob;
-      if (blob.size >= 8 * 1024 * 1024) {
-        onStatus(`Otimizada para ${formatFileSize(blob.size)} com ${Math.round(attempt.quality * 100)}% de qualidade.`);
-        return new File([blob], jpgFileName(file.name), {
-          type: "image/jpeg",
-          lastModified: file.lastModified,
-        });
-      }
-    }
-  }
-
-  if (bestBlob) {
-    onStatus(`Otimizada para ${formatFileSize(bestBlob.size)} com qualidade mínima de 80%.`);
-    return new File([bestBlob], jpgFileName(file.name), {
-      type: "image/jpeg",
-      lastModified: file.lastModified,
-    });
-  }
-
-  for (const attempt of attempts) {
-    const blob = await compressImageFile(file, attempt.maxEdge, attempt.quality);
-    if (blob.size <= CONFIG.cloudinaryUploadLimit) {
       onStatus(`Otimizada para ${formatFileSize(blob.size)} com ${Math.round(attempt.quality * 100)}% de qualidade.`);
-      return new File([blob], jpgFileName(file.name), {
-        type: "image/jpeg",
-        lastModified: file.lastModified,
-      });
+      return new File([blob], jpgFileName(file.name), { type: "image/jpeg", lastModified: file.lastModified });
     }
   }
 
@@ -526,9 +503,12 @@ function renderGalleries() {
 }
 
 function renderSelectedGallery() {
-  const gallery = state.selectedGallery;
+  const draft = readDraft();
+  const gallery = state.selectedGallery ? { ...state.selectedGallery, ...draft } : null;
+  saveGalleryBtn.textContent = Object.keys(draft).length ? "Salvar alterações" : "Salvar galeria";
+  document.getElementById("galleryDraftStatus").textContent = Object.keys(draft).length ? "Rascunho guardado nesta aba. Salve para aplicar ao cliente." : "";
   renderStats();
-  uploadBtn.disabled = !gallery || !fileInput.files.length;
+  renderQueue();
 
   if (!gallery) {
     galleryTitle.textContent = "Selecione uma galeria";
@@ -561,7 +541,7 @@ function renderSelectedGallery() {
 
   const client = state.clients.find((item) => item.id === gallery.clientId);
   galleryTitle.textContent = gallery.title || "Galeria privada";
-  galleryMeta.textContent = `${client?.name || "Sem cliente"} · ${state.images.length} fotos · ${state.selection.length}/${gallery.selectionLimit || 0} selecionadas`;
+  galleryMeta.textContent = `${client?.name || "Sem cliente"} · ${state.images.length} fotos · ${state.selection.length} selecionadas · ${gallery.selectionLimit || 0} inclusas`;
   gallerySlugLabel.textContent = `clientes/${gallery.slug}`;
 
   galleryClient.value = gallery.clientId || "";
@@ -569,7 +549,7 @@ function renderSelectedGallery() {
   galleryName.value = gallery.title || "";
   gallerySlug.value = gallery.slug || "";
   gallerySubtitle.value = gallery.subtitle || "";
-  selectionLimit.value = gallery.selectionLimit ?? 15;
+  selectionLimit.value = gallery.selectionLimit ?? 0;
   extraPhotoPrice.value = centsToCurrencyInput(gallery.extraPhotoPriceCents ?? 0);
   allPhotosDiscount.value = gallery.allPhotosDiscountPercent || 0;
   quantityDiscountEnabled.checked = gallery.quantityDiscountEnabled === true;
@@ -586,7 +566,7 @@ function renderSelectedGallery() {
   renderWatermarkPreview();
 
   const url = galleryUrl(gallery);
-  openGalleryBtn.href = url;
+  openGalleryBtn.href = "#";
   openGalleryBtn.classList.remove("disabled");
   publishGalleryBtn.classList.remove("disabled");
   publishGalleryBtn.disabled = false;
@@ -735,7 +715,8 @@ async function selectGallery(id) {
 
 async function loadData() {
   const me = await getJson("/auth/me");
-  currentUserLabel.textContent = me.user?.email || "";
+  state.userEmail = me.user?.email || "";
+  currentUserLabel.textContent = state.userEmail;
   const data = await getJson("/private/galleries");
   state.clients = data.clients || [];
   state.galleries = data.galleries || [];
@@ -762,6 +743,9 @@ async function loadData() {
 }
 
 async function saveGallery(payload) {
+  const savedDraftKey = draftKey();
+  let savedDraft = null;
+  try { savedDraft = sessionStorage.getItem(savedDraftKey); } catch {}
   const data = await getJson("/private/galleries", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -775,7 +759,12 @@ async function saveGallery(payload) {
     clearGalleryMediaState();
   }
 
-  await selectGallery(data.gallery.id);
+  try {
+    if (sessionStorage.getItem(savedDraftKey) === savedDraft) sessionStorage.removeItem(savedDraftKey);
+  } catch {}
+  state.selectedGallery = data.gallery;
+  // Use the acknowledged save directly; a second fetch is both slower and can be stale.
+  renderSelectedGallery();
   return data.gallery;
 }
 
@@ -804,6 +793,50 @@ function currentGalleryPayload() {
   };
 }
 
+function draftKey() {
+  return `mc_gallery_draft:${state.userEmail}:${state.selectedGallery?.id || detailGalleryId}`;
+}
+
+function readDraft() {
+  try { return JSON.parse(sessionStorage.getItem(draftKey()) || "null") || {}; }
+  catch { return {}; }
+}
+
+function rememberDraft() {
+  if (!state.selectedGallery) return;
+  try { sessionStorage.setItem(draftKey(), JSON.stringify(currentGalleryPayload())); }
+  catch { showToast("Não foi possível guardar rascunho neste navegador. Salve antes de sair."); }
+  saveGalleryBtn.textContent = "Salvar alterações";
+  document.getElementById("galleryDraftStatus").textContent = "Rascunho guardado nesta aba. Salve para aplicar ao cliente.";
+}
+
+galleryForm.addEventListener("input", rememberDraft);
+galleryForm.addEventListener("change", rememberDraft);
+window.addEventListener("beforeunload", (event) => {
+  if (state.uploading || state.uploads.some(item => item.status === "pending")) {
+    event.preventDefault();
+    event.returnValue = "";
+  }
+});
+
+openGalleryBtn.addEventListener("click", async (event) => {
+  event.preventDefault();
+  if (!state.selectedGallery) return;
+  // Open during the gesture so the browser does not block the preview as a popup.
+  const preview = window.open("about:blank", "_blank");
+  if (preview) preview.opener = null;
+  try {
+    const data = await getJson("/private/gallery/preview", {
+      method: "POST", body: JSON.stringify({ galleryId: state.selectedGallery.id }),
+    });
+    if (preview) preview.location.replace(data.url);
+    else location.href = data.url;
+  } catch (err) {
+    preview?.close();
+    showToast(err.message || "Não foi possível abrir a prévia.");
+  }
+});
+
 quickCreateBtn?.addEventListener("click", async () => {
   const title = quickTitle.value.trim();
   if (!title) return showToast("Digite um título para a galeria.");
@@ -813,7 +846,7 @@ quickCreateBtn?.addEventListener("click", async () => {
       title,
       slug: slugify(title),
       message: `Olá,\n\nFoi um prazer registrar este momento especial.\n\nSelecione suas fotos favoritas usando o coração exibido sobre cada imagem.`,
-      selectionLimit: 15,
+      selectionLimit: 0,
       extraPhotoPriceCents: 0,
       allPhotosDiscountPercent: 0,
       quantityDiscountEnabled: false,
@@ -851,6 +884,7 @@ watermarkFile.addEventListener("change", async () => {
 
     watermarkLogo.value = uploaded.secure_url || uploaded.url || "";
     watermarkEnabled.checked = true;
+    rememberDraft();
     showToast("Marca d'água enviada. Salve a galeria para aplicar.");
   } catch (err) {
     showToast(err.message || "Erro ao enviar marca d'água.");
@@ -866,6 +900,7 @@ watermarkFile.addEventListener("change", async () => {
 watermarkPositionGrid.querySelectorAll("[data-watermark-position]").forEach((button) => {
   button.addEventListener("click", () => {
     updateWatermarkPosition(button.dataset.watermarkPosition);
+    rememberDraft();
     renderWatermarkPreview();
   });
 });
@@ -904,7 +939,7 @@ galleryForm.addEventListener("submit", async (event) => {
     showToast(err.message || "Erro ao salvar galeria.");
   } finally {
     saveGalleryBtn.disabled = false;
-    saveGalleryBtn.textContent = "Salvar galeria";
+    saveGalleryBtn.textContent = Object.keys(readDraft()).length ? "Salvar alterações" : "Salvar galeria";
   }
 });
 
@@ -922,37 +957,49 @@ galleryForm.addEventListener("submit", async (event) => {
   });
 });
 
-dropzone.addEventListener("drop", (event) => {
-  fileInput.files = event.dataTransfer.files;
-  renderQueue();
+dropzone.addEventListener("drop", (event) => addFiles(event.dataTransfer.files));
+fileInput.addEventListener("change", () => {
+  addFiles(fileInput.files);
+  fileInput.value = "";
 });
 
-fileInput.addEventListener("change", renderQueue);
+function addFiles(files) {
+  if (!state.selectedGallery) return;
+  for (const file of files) {
+    const duplicate = state.uploads.some(item => item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified);
+    if (duplicate) continue;
+    state.uploads.push({
+      id: crypto.randomUUID(), file, status: "pending", progress: 0,
+      galleryId: state.selectedGallery.id,
+      phase: galleryStatus.value === "final" ? "final" : "selection",
+      useAsCover: firstAsCover.checked && state.uploads.length === 0,
+      note: formatFileSize(file.size),
+    });
+  }
+  renderQueue();
+}
 
 function renderQueue() {
-  uploadBtn.disabled = !state.selectedGallery || !fileInput.files.length;
-  const phaseLabel = galleryStatus.value === "final" ? "Entrega final" : "Seleção";
-  uploadQueue.innerHTML = [...fileInput.files].map((file) => `
-    <div class="queue-row" data-file="${escapeHtml(file.name)}">
-      <div>
-        <span>${escapeHtml(file.name)}</span>
-        <small>${escapeHtml(phaseLabel)} · ${escapeHtml(formatFileSize(file.size))}${file.size > CONFIG.cloudinaryUploadTarget ? " · otimização até ~9 MB" : ""}</small>
-      </div>
-      <div class="queue-bar"><span></span></div>
+  uploadBtn.disabled = !state.selectedGallery || state.uploading || !state.uploads.some(item => ["pending", "error"].includes(item.status));
+  uploadQueue.innerHTML = state.uploads.map(item => `
+    <div class="queue-row" data-file="${item.id}">
+      <div><span>${escapeHtml(item.file.name)}</span><small>${item.phase === "final" ? "Entrega final" : "Seleção"} · ${escapeHtml(item.note)}</small></div>
+      <div class="queue-bar"><span style="width:${item.progress}%"></span></div>
     </div>
   `).join("");
 }
 
-function setQueueProgress(fileName, percent) {
-  const row = [...uploadQueue.querySelectorAll(".queue-row")]
-    .find((item) => item.dataset.file === fileName);
+function setQueueProgress(id, percent) {
+  const item = state.uploads.find(item => item.id === id);
+  if (item) item.progress = percent;
+  const row = uploadQueue.querySelector(`[data-file="${id}"]`);
   if (row) row.querySelector(".queue-bar span").style.width = `${percent}%`;
 }
 
-function setQueueNote(fileName, message) {
-  const row = [...uploadQueue.querySelectorAll(".queue-row")]
-    .find((item) => item.dataset.file === fileName);
-  const note = row?.querySelector("small");
+function setQueueNote(id, message) {
+  const item = state.uploads.find(item => item.id === id);
+  if (item) item.note = message;
+  const note = uploadQueue.querySelector(`[data-file="${id}"] small`);
   if (note) note.textContent = message;
 }
 
@@ -972,7 +1019,9 @@ function uploadToCloudinary(signature, file, onProgress) {
       onProgress(Math.min(92, 35 + Math.round((event.loaded / event.total) * 57)));
     };
     xhr.onload = () => {
-      const data = JSON.parse(xhr.responseText || "{}");
+      let data;
+      try { data = JSON.parse(xhr.responseText || "{}"); }
+      catch { reject(new Error("Cloudinary retornou uma resposta inválida.")); return; }
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new Error(data?.error?.message || `Cloudinary ${xhr.status}`));
         return;
@@ -986,55 +1035,59 @@ function uploadToCloudinary(signature, file, onProgress) {
 }
 
 uploadBtn.addEventListener("click", async () => {
-  const files = [...fileInput.files];
-  if (!state.selectedGallery || !files.length) return;
-
-  uploadBtn.disabled = true;
+  if (!state.selectedGallery || state.uploading) return;
+  state.uploading = true;
+  state.uploads.filter(item => item.status === "error").forEach(item => { item.status = "pending"; });
   uploadBtn.textContent = "Enviando...";
-
-  try {
-    const phase = galleryStatus.value === "final" ? "final" : "selection";
-    for (const [index, file] of files.entries()) {
-      setQueueProgress(file.name, 12);
-      const uploadFile = await preparePhotoForCloudinary(file, (message) => setQueueNote(file.name, message));
-      setQueueProgress(file.name, 20);
-      const signature = await getJson("/private/gallery/upload-signature", {
-        method: "POST",
-        body: JSON.stringify({
-          galleryId: state.selectedGallery.id,
-          displayName: fileBaseName(file.name),
-          phase,
-        }),
-      });
-      setQueueProgress(file.name, 35);
-      const uploaded = await uploadToCloudinary(signature, uploadFile, (percent) => setQueueProgress(file.name, percent));
-      await getJson("/private/gallery/register-image", {
-        method: "POST",
-        body: JSON.stringify({
-          galleryId: state.selectedGallery.id,
-          public_id: uploaded.public_id,
-          url: uploaded.secure_url,
-          display_name: uploaded.display_name || fileBaseName(file.name),
-          original_filename: file.name,
-          width: uploaded.width,
-          height: uploaded.height,
-          format: uploaded.format,
-          phase,
-          useAsCover: firstAsCover.checked && index === 0,
-        }),
-      });
-      setQueueProgress(file.name, 100);
+  renderQueue();
+  // Transfers overlap; registration stays ordered to preserve gallery metadata.
+  let registration = Promise.resolve();
+  const consume = async () => {
+    let item;
+    while ((item = state.uploads.find(entry => entry.status === "pending"))) {
+      item.status = "uploading";
+      const { file, id, galleryId, phase } = item;
+      try {
+        if (!item.uploaded) {
+          setQueueProgress(id, 12);
+          const uploadFile = await preparePhotoForCloudinary(file, message => setQueueNote(id, message));
+          const signature = await getJson("/private/gallery/upload-signature", {
+            method: "POST", body: JSON.stringify({ galleryId, displayName: fileBaseName(file.name), phase }),
+          });
+          item.uploaded = await uploadToCloudinary(signature, uploadFile, percent => setQueueProgress(id, percent));
+        }
+        const uploaded = item.uploaded;
+        const register = registration.then(() => getJson("/private/gallery/register-image", {
+          method: "POST",
+          body: JSON.stringify({
+            galleryId, public_id: uploaded.public_id, url: uploaded.secure_url,
+            display_name: uploaded.display_name || fileBaseName(file.name), original_filename: file.name,
+            width: uploaded.width, height: uploaded.height, format: uploaded.format,
+            phase, useAsCover: item.useAsCover,
+          }),
+        }));
+        registration = register.catch(() => {});
+        const data = await register;
+        state.images = [data.image, ...state.images.filter(image => image.public_id !== data.image.public_id)];
+        item.status = "done";
+        setQueueProgress(id, 100);
+        setQueueNote(id, "Enviada");
+        renderPhotos();
+        renderStats();
+      } catch (err) {
+        item.status = "error";
+        setQueueNote(id, err.message || "Falha. Clique em enviar para tentar novamente.");
+      }
     }
-
-    fileInput.value = "";
-    uploadQueue.innerHTML = "";
-    await selectGallery(state.selectedGallery.id);
-    showToast("Upload concluído.");
-  } catch (err) {
-    showToast(err.message || "Erro no upload.");
+  };
+  try {
+    await Promise.all([consume(), consume()]);
+    const failed = state.uploads.filter(item => item.status === "error").length;
+    showToast(failed ? `${failed} foto(s) falharam. Envie novamente para tentar só as pendentes.` : "Upload concluído.");
   } finally {
-    uploadBtn.disabled = !fileInput.files.length;
+    state.uploading = false;
     uploadBtn.textContent = "Enviar fotos";
+    renderQueue();
   }
 });
 

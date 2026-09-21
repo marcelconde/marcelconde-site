@@ -234,14 +234,78 @@ function publicClientUser(user = {}) {
   };
 }
 
+function usesGalleryDatabase(env, key) {
+  return Boolean(env.GALLERY_DB) && /^(?:private_gallery(?:_|:)|private_galleries_index$|private_client:|private_clients_index$|admin_audit_logs$)/.test(key);
+}
+
 async function readKvJson(env, key, fallback) {
+  if (usesGalleryDatabase(env, key)) {
+    let row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(key).first();
+    if (!row) {
+      const raw = env.LIKES_KV ? await env.LIKES_KV.get(key) : null;
+      let legacy = null;
+      if (raw !== null) { try { legacy = JSON.parse(raw); } catch { legacy = raw; } }
+      // Import once. Concurrent imports must never replace a newer D1 write.
+      await env.GALLERY_DB.prepare("INSERT OR IGNORE INTO gallery_records (key, value) VALUES (?, ?)")
+        .bind(key, JSON.stringify(legacy)).run();
+      row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(key).first();
+    }
+    return JSON.parse(row.value) ?? fallback;
+  }
   if (!env.LIKES_KV) return fallback;
-  return (await env.LIKES_KV.get(key, "json")) || fallback;
+  return (await env.LIKES_KV.get(key, "json")) ?? fallback;
 }
 
 async function writeKvJson(env, key, value, options) {
+  if (usesGalleryDatabase(env, key)) {
+    return env.GALLERY_DB.prepare("INSERT INTO gallery_records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(key, JSON.stringify(value)).run();
+  }
   if (!env.LIKES_KV) throw new Error("LIKES_KV not configured");
   return env.LIKES_KV.put(key, JSON.stringify(value), options);
+}
+
+async function deleteGalleryRecord(env, key) {
+  if (usesGalleryDatabase(env, key)) await writeKvJson(env, key, null);
+  if (env.LIKES_KV) await env.LIKES_KV.delete(key);
+}
+
+async function changeStoredIds(env, key, changes) {
+  const current = await readKvJson(env, key, []);
+  if (usesGalleryDatabase(env, key)) {
+    // Each statement changes only its own photo, without replacing concurrent favorites.
+    await env.GALLERY_DB.prepare(`
+      UPDATE gallery_records SET value = (
+        SELECT json_group_array(value) FROM (
+          SELECT value FROM json_each(CASE WHEN gallery_records.value = 'null' THEN '[]' ELSE gallery_records.value END)
+          WHERE value NOT IN (SELECT json_extract(value, '$.publicId') FROM json_each(?))
+          UNION ALL
+          SELECT json_extract(value, '$.publicId') FROM json_each(?) WHERE json_extract(value, '$.selected') = 1
+        )
+      ) WHERE key = ?
+    `).bind(JSON.stringify(changes), JSON.stringify(changes), key).run();
+    return readKvJson(env, key, []);
+  }
+  const next = new Set(current);
+  changes.forEach(({ publicId, selected }) => selected ? next.add(publicId) : next.delete(publicId));
+  await writeKvJson(env, key, [...next]);
+  return [...next];
+}
+
+async function changeGalleryFavorites(env, galleryId, changes) {
+  return changeStoredIds(env, privateGallerySelectionKey(galleryId), changes);
+}
+
+async function prependStoredEvent(env, key, event, limit) {
+  const events = await readKvJson(env, key, []);
+  if (usesGalleryDatabase(env, key)) {
+    await env.GALLERY_DB.prepare(`UPDATE gallery_records SET value = (
+      SELECT json_group_array(json(value)) FROM (
+        SELECT ? AS value UNION ALL
+        SELECT value FROM json_each(CASE WHEN gallery_records.value = 'null' THEN '[]' ELSE gallery_records.value END) LIMIT ?
+      )
+    ) WHERE key = ?`).bind(JSON.stringify(event), limit, key).run();
+  } else await writeKvJson(env, key, [event, ...events].slice(0, limit));
 }
 
 async function getUserEmails(env) {
@@ -350,8 +414,7 @@ async function requireSuperAdmin(request, env) {
 
 async function appendAuditLog(env, request, user, action, entity, details = {}) {
   try {
-    const logs = await readKvJson(env, auditLogKey(), []);
-    logs.unshift({
+    const event = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       createdAt: new Date().toISOString(),
       userEmail: user?.email || null,
@@ -362,8 +425,8 @@ async function appendAuditLog(env, request, user, action, entity, details = {}) 
       details,
       ip: request.headers.get("CF-Connecting-IP") || "",
       userAgent: request.headers.get("User-Agent") || "",
-    });
-    await writeKvJson(env, auditLogKey(), logs.slice(0, 200));
+    };
+    await prependStoredEvent(env, auditLogKey(), event, 200);
   } catch (err) {
     console.error("Audit log failed:", err);
   }
@@ -438,9 +501,9 @@ function normalizePercent(value = 0) {
   return Math.round(clampNumber(value, 0, 95, 0) * 100) / 100;
 }
 
-function normalizeSelectionLimit(value, fallback = 15) {
+function normalizeSelectionLimit(value, fallback = 0) {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return Math.max(0, Math.min(Math.round(Number(fallback) || 15), 2000));
+  if (!Number.isFinite(parsed)) return Math.max(0, Math.min(Math.round(Number(fallback) || 0), 2000));
   return Math.max(0, Math.min(Math.round(parsed), 2000));
 }
 
@@ -637,8 +700,8 @@ function csvEscape(value = "") {
 async function appendPrivateGalleryEvent(env, request, galleryId, action, details = {}, actor = {}) {
   try {
     if (!env.LIKES_KV || !galleryId) return;
-    const events = await readKvJson(env, privateGalleryEventsKey(galleryId), []);
-    events.unshift({
+    const key = privateGalleryEventsKey(galleryId);
+    const event = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       action,
       details,
@@ -647,8 +710,8 @@ async function appendPrivateGalleryEvent(env, request, galleryId, action, detail
       createdAt: new Date().toISOString(),
       ip: request.headers.get("CF-Connecting-IP") || "",
       userAgent: request.headers.get("User-Agent") || "",
-    });
-    await writeKvJson(env, privateGalleryEventsKey(galleryId), events.slice(0, 500));
+    };
+    await prependStoredEvent(env, key, event, 500);
   } catch (err) {
     console.error("Private gallery event failed:", err);
   }
@@ -1010,7 +1073,7 @@ function shouldRepairGalleryToEditing(gallery = {}, latestPayment = null, events
 
 async function getPrivateGalleryLatestPayment(env, galleryId = "") {
   if (!env.LIKES_KV || !galleryId) return null;
-  const latestPaymentId = await env.LIKES_KV.get(privateGalleryLatestPaymentKey(galleryId));
+  const latestPaymentId = await readKvJson(env, privateGalleryLatestPaymentKey(galleryId), "");
   if (!latestPaymentId) return null;
   return readKvJson(env, privateGalleryPaymentKey(latestPaymentId), null);
 }
@@ -1066,8 +1129,7 @@ async function savePrivateClient(env, input = {}) {
     updatedAt: now,
   };
   await writeKvJson(env, privateClientKey(id), client);
-  const index = await readKvJson(env, privateClientsIndexKey(), []);
-  await writeKvJson(env, privateClientsIndexKey(), [...new Set([id, ...index])]);
+  if (!existing.id) await changeStoredIds(env, privateClientsIndexKey(), [{ publicId: id, selected: true }]);
   return client;
 }
 
@@ -1108,12 +1170,12 @@ async function savePrivateGallery(env, input = {}) {
   const gallery = {
     ...existing,
     id,
-    clientId: String(input.clientId || existing.clientId || ""),
+    clientId: String(input.clientId ?? existing.clientId ?? ""),
     slug,
     title,
-    subtitle: cleanGalleryText(input.subtitle || existing.subtitle || "", 180),
-    message: cleanGalleryText(input.message || existing.message || "", 1200),
-    selectionLimit: normalizeSelectionLimit(input.selectionLimit ?? existing.selectionLimit, existing.selectionLimit ?? 15),
+    subtitle: cleanGalleryText(input.subtitle ?? existing.subtitle ?? "", 180),
+    message: cleanGalleryText(input.message ?? existing.message ?? "", 1200),
+    selectionLimit: normalizeSelectionLimit(input.selectionLimit ?? existing.selectionLimit, existing.selectionLimit ?? 0),
     ...commerce,
     status: requestedStatus,
     allowDownload: requestedStatus === "final",
@@ -1137,17 +1199,14 @@ async function savePrivateGallery(env, input = {}) {
   }
 
   await writeKvJson(env, privateGalleryKey(id), gallery);
-  await writeKvJson(env, privateGalleryBySlugKey(slug), id);
-  if (previousSlug && previousSlug !== slug) await env.LIKES_KV.delete(privateGalleryBySlugKey(previousSlug));
+  if (previousSlug !== slug) await writeKvJson(env, privateGalleryBySlugKey(slug), id);
+  if (previousSlug && previousSlug !== slug) await deleteGalleryRecord(env, privateGalleryBySlugKey(previousSlug));
   if (reopeningSelection) {
-    await Promise.all([
-      writeKvJson(env, privateGallerySelectionKey(id), []),
-      env.LIKES_KV.delete(privateGalleryLatestPaymentKey(id)),
-    ]);
+    // Reopening changes the workflow, never the customer's saved favorites.
+    await deleteGalleryRecord(env, privateGalleryLatestPaymentKey(id));
   }
 
-  const index = await readKvJson(env, privateGalleriesIndexKey(), []);
-  await writeKvJson(env, privateGalleriesIndexKey(), [...new Set([id, ...index])]);
+  if (!existing.id) await changeStoredIds(env, privateGalleriesIndexKey(), [{ publicId: id, selected: true }]);
   return gallery;
 }
 
@@ -1191,9 +1250,8 @@ async function deletePrivateClient(env, clientId, options = {}) {
   const otherClients = (await listPrivateClients(env)).filter((item) => item.id !== id);
   const emailStillUsed = clientEmail && otherClients.some((item) => normalizeEmail(item.email || "") === clientEmail);
   if (clientEmail && !emailStillUsed) await env.LIKES_KV.delete(clientUserKey(clientEmail));
-  await env.LIKES_KV.delete(privateClientKey(id));
-  const index = await readKvJson(env, privateClientsIndexKey(), []);
-  await writeKvJson(env, privateClientsIndexKey(), index.filter((item) => item !== id));
+  await deleteGalleryRecord(env, privateClientKey(id));
+  await changeStoredIds(env, privateClientsIndexKey(), [{ publicId: id, selected: false }]);
 
   return client;
 }
@@ -1234,13 +1292,13 @@ async function deletePrivateGallery(env, galleryId) {
 
   const index = await readKvJson(env, privateGalleriesIndexKey(), []);
   const deleteOps = [
-    env.LIKES_KV.delete(privateGalleryKey(id)),
-    env.LIKES_KV.delete(privateGalleryImagesKey(id)),
-    env.LIKES_KV.delete(privateGallerySelectionKey(id)),
-    env.LIKES_KV.delete(privateGalleryEventsKey(id)),
-    env.LIKES_KV.delete(privateGalleryLatestPaymentKey(id)),
-    env.LIKES_KV.delete(privateGalleryBySlugKey(gallery.slug || "")),
-    writeKvJson(env, privateGalleriesIndexKey(), index.filter((item) => item !== id)),
+    deleteGalleryRecord(env, privateGalleryKey(id)),
+    deleteGalleryRecord(env, privateGalleryImagesKey(id)),
+    deleteGalleryRecord(env, privateGallerySelectionKey(id)),
+    deleteGalleryRecord(env, privateGalleryEventsKey(id)),
+    deleteGalleryRecord(env, privateGalleryLatestPaymentKey(id)),
+    deleteGalleryRecord(env, privateGalleryBySlugKey(gallery.slug || "")),
+    changeStoredIds(env, privateGalleriesIndexKey(), [{ publicId: id, selected: false }]),
   ];
 
   await Promise.allSettled(deleteOps);
@@ -1772,6 +1830,20 @@ async function getCurrentClient(request, env) {
 }
 
 async function requireClientGalleryAccess(request, env, gallery) {
+  const token = getBearerToken(request);
+  if (token.startsWith("preview_")) {
+    const preview = await readKvJson(env, `gallery_preview:${token}`, null);
+    const path = new URL(request.url).pathname;
+    const readable = ["/client-gallery", "/client-gallery/download", "/client-gallery/download-all", "/client-gallery/download-list"];
+    if (!preview || preview.expiresAt <= Date.now() || preview.galleryId !== gallery?.id) {
+      return { error: errorJson("Prévia expirada. Abra novamente pelo admin.", 401) };
+    }
+    if (request.method !== "GET" || !readable.includes(path)) {
+      return { error: errorJson("A prévia do administrador é somente leitura.", 403) };
+    }
+    return { preview: true, client: { email: preview.email, name: "Administrador" }, linkedClient: null };
+  }
+
   const session = await getCurrentClient(request, env);
   if (!session) return { error: errorJson("Faça login para acessar esta galeria.", 401) };
   if (session.mustChangePassword === true) {
@@ -2666,8 +2738,7 @@ async function completePrivateGallerySelection(env, request, gallery, client, im
   const previousStatus = gallery.status || "selection";
   const nextStatus = previousStatus === "final" ? "final" : "editing";
 
-  await writeKvJson(env, privateGallerySelectionKey(gallery.id), cleanSelection);
-
+  // The confirmed/payment snapshot is separate from favorites added while payment was pending.
   const nextGallery = {
     ...gallery,
     status: nextStatus,
@@ -2776,6 +2847,9 @@ async function createMercadoPagoPixPayment(env, request, payment, gallery, clien
   }
 
   const tx = data.point_of_interaction?.transaction_data || {};
+  if (["rejected", "cancelled", "refunded", "charged_back"].includes(data.status) || !tx.qr_code) {
+    throw new Error(`Mercado Pago não disponibilizou Pix: ${data.status || "unknown"} / ${data.status_detail || "missing_qr_code"}`);
+  }
   return {
     providerPaymentId: String(data.id || ""),
     providerStatus: data.status || "",
@@ -2854,7 +2928,7 @@ async function approveMercadoPagoPayment(env, request, providerPaymentId) {
   };
 
   if (mpPayment.status !== "approved") {
-    nextPayment.status = mpPayment.status === "rejected" || mpPayment.status === "cancelled" ? "rejected" : "pending";
+    nextPayment.status = ["rejected", "cancelled", "refunded", "charged_back"].includes(mpPayment.status) ? "rejected" : "pending";
     await writeKvJson(env, privateGalleryPaymentKey(payment.id), nextPayment);
     return { ok: true, approved: false, payment: nextPayment };
   }
@@ -3463,12 +3537,12 @@ export default {
         return item;
       });
 
-      if (cursor === 0) {
+      if (cursor === 0 && !access.preview && !url.searchParams.has("summary")) {
         ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, "cliente_abriu_galeria", { slug }, access.client));
       }
 
       return json({
-        gallery: publicPrivateGallery(gallery, images, selection),
+        gallery: { ...publicPrivateGallery(gallery, images, selection), adminPreview: Boolean(access.preview), selectionOwnerId: gallery.clientId || access.client.email },
         images: page,
         paging: {
           cursor,
@@ -3479,7 +3553,7 @@ export default {
       }, 200, { "Cache-Control": "no-store" });
     }
 
-    if (url.pathname === "/client-gallery/favorite" && request.method === "POST") {
+    if (["/client-gallery/favorite", "/client-gallery/favorites"].includes(url.pathname) && request.method === "POST") {
       const body = await readJson(request);
       const slug = slugify(body.slug || "");
       const publicId = sanitizePublicId(body.publicId || body.public_id || "");
@@ -3490,11 +3564,12 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
-      if (!publicId) return errorJson("Foto inválida.", 400);
-
+      const changes = url.pathname.endsWith("/favorites") ? body.changes : [{ publicId, selected }];
+      if (!Array.isArray(changes) || !changes.length || changes.length > 100) return errorJson("Seleção inválida.", 400);
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
-      if (!images.some((image) => image.public_id === publicId)) {
-        return errorJson("Foto não pertence a esta galeria.", 400);
+      const allowedIds = new Set(images.map(image => image.public_id));
+      if (changes.some(change => !change || !allowedIds.has(change.publicId) || typeof change.selected !== "boolean") || new Set(changes.map(change => change.publicId)).size !== changes.length) {
+        return errorJson("Foto não pertence a esta galeria ou seleção inválida.", 400, { invalidPublicIds: changes.filter(change => change && !allowedIds.has(change.publicId)).map(change => change.publicId) });
       }
 
       const limit = Number(gallery.selectionLimit || 0);
@@ -3502,17 +3577,10 @@ export default {
       const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, current);
       const beforeSelection = uniquePublicIds(current);
 
-      let next = current.filter((item) => item !== publicId);
-
-      if (selected) {
-        next.push(publicId);
-      }
-
-      next = uniquePublicIds(next);
+      const next = await changeGalleryFavorites(env, gallery.id, changes);
       const diff = selectionDiff(beforeSelection, next);
       const lockedDiff = selectionDiff(lockedSelection, next);
-      await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
-      await appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", {
+      ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", {
         publicId,
         wasSelectionCompleted: Boolean(gallery.selectionCompletedAt),
         wasConfirmedBefore: lockedSelection.includes(publicId),
@@ -3522,7 +3590,7 @@ export default {
         removedPublicIds: diff.removedPublicIds,
         addedSinceLastConfirmation: lockedDiff.addedPublicIds,
         removedSinceLastConfirmation: lockedDiff.removedPublicIds,
-      }, access.client);
+      }, access.client));
 
       return json({
         ok: true,
@@ -3546,8 +3614,8 @@ export default {
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const current = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
       const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, current);
-      const next = images.map((image) => image.public_id).filter(Boolean);
-      await writeKvJson(env, privateGallerySelectionKey(gallery.id), next);
+      const ids = images.map((image) => image.public_id).filter(Boolean);
+      const next = ids.length ? await changeGalleryFavorites(env, gallery.id, ids.map(publicId => ({ publicId, selected: true }))) : [];
       await appendPrivateGalleryEvent(env, request, gallery.id, "selecionar_todas", {
         totalSelected: next.length,
       }, access.client);
@@ -3658,7 +3726,7 @@ export default {
         if (savedPayment.providerPaymentId) {
           await env.LIKES_KV.put(mercadoPagoPaymentKey(savedPayment.providerPaymentId), savedPayment.id, { expirationTtl: 60 * 60 * 24 * 7 });
         }
-        await env.LIKES_KV.put(privateGalleryLatestPaymentKey(gallery.id), savedPayment.id, { expirationTtl: 60 * 60 * 24 * 7 });
+        await writeKvJson(env, privateGalleryLatestPaymentKey(gallery.id), savedPayment.id, { expirationTtl: 60 * 60 * 24 * 7 });
         await appendPrivateGalleryEvent(env, request, gallery.id, "pix_criado", {
           paymentId: savedPayment.id,
           providerPaymentId: savedPayment.providerPaymentId,
@@ -4243,11 +4311,23 @@ export default {
       });
     }
 
+    if (url.pathname === "/private/gallery/preview" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      const gallery = await readKvJson(env, privateGalleryKey(String(body.galleryId || "")), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const token = `preview_${randomToken(36)}`;
+      await writeKvJson(env, `gallery_preview:${token}`, {
+        galleryId: gallery.id, email: user.email, expiresAt: Date.now() + 3600000,
+      }, { expirationTtl: 3600 });
+      return json({ url: `${clientGalleryUrl(env, gallery.slug)}#preview=${encodeURIComponent(token)}` }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/private/galleries" && request.method === "GET") {
       const { error } = await requireAdminUser(request, env);
       if (error) return error;
-      const galleries = await listPrivateGalleries(env);
-      const clients = await listPrivateClients(env);
+      const [galleries, clients] = await Promise.all([listPrivateGalleries(env), listPrivateClients(env)]);
       return json({ galleries, clients }, 200, { "Cache-Control": "no-store" });
     }
 
@@ -4268,9 +4348,11 @@ export default {
 
       let gallery = await readKvJson(env, privateGalleryKey(id), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
-      const images = await readKvJson(env, privateGalleryImagesKey(id), []);
-      const selection = await readKvJson(env, privateGallerySelectionKey(id), []);
-      const events = await readKvJson(env, privateGalleryEventsKey(id), []);
+      const [images, selection, events] = await Promise.all([
+        readKvJson(env, privateGalleryImagesKey(id), []),
+        readKvJson(env, privateGallerySelectionKey(id), []),
+        readKvJson(env, privateGalleryEventsKey(id), []),
+      ]);
       gallery = await repairPrivateGalleryProgress(env, gallery, await getPrivateGalleryLatestPayment(env, gallery.id), events);
       return json({ gallery, images, selection, events: events.slice(0, 120) }, 200, { "Cache-Control": "no-store" });
     }
@@ -4426,7 +4508,7 @@ export default {
         overwrite: "false",
       };
       const signature = await signCloudinaryParams(params, apiSecret);
-      await appendAuditLog(env, request, user, "preparar_upload_galeria_privada", "private_galleries", { galleryId, phase, displayName });
+      ctx.waitUntil(appendAuditLog(env, request, user, "preparar_upload_galeria_privada", "private_galleries", { galleryId, phase, displayName }));
 
       return json({
         cloudName,
@@ -4496,17 +4578,27 @@ export default {
       };
 
       const next = [image, ...images.filter((item) => item.public_id !== publicId)];
-      await writeKvJson(env, privateGalleryImagesKey(galleryId), next);
+      if (env.GALLERY_DB) {
+        await env.GALLERY_DB.prepare(`UPDATE gallery_records SET value = (
+          SELECT json_group_array(json(value)) FROM (
+            SELECT ? AS value UNION ALL
+            SELECT value FROM json_each(CASE WHEN gallery_records.value = 'null' THEN '[]' ELSE gallery_records.value END) WHERE json_extract(value, '$.public_id') != ?
+          )
+        ) WHERE key = ?`).bind(JSON.stringify(image), publicId, privateGalleryImagesKey(galleryId)).run();
+      } else await writeKvJson(env, privateGalleryImagesKey(galleryId), next);
 
       if (body.useAsCover === true || !gallery.coverUrl) {
         gallery.coverUrl = image.url;
         gallery.coverPublicId = image.public_id;
         gallery.updatedAt = new Date().toISOString();
-        await writeKvJson(env, privateGalleryKey(galleryId), gallery);
+        if (env.GALLERY_DB) {
+          await env.GALLERY_DB.prepare("UPDATE gallery_records SET value = json_set(value, '$.coverUrl', ?, '$.coverPublicId', ?, '$.updatedAt', ?) WHERE key = ?")
+            .bind(gallery.coverUrl, gallery.coverPublicId, gallery.updatedAt, privateGalleryKey(galleryId)).run();
+        } else await writeKvJson(env, privateGalleryKey(galleryId), gallery);
       }
 
-      await appendAuditLog(env, request, user, "registrar_foto_galeria_privada", "private_galleries", { galleryId, publicId });
-      await appendPrivateGalleryEvent(env, request, galleryId, "admin_enviou_foto", { publicId }, user);
+      ctx.waitUntil(appendAuditLog(env, request, user, "registrar_foto_galeria_privada", "private_galleries", { galleryId, publicId }));
+      ctx.waitUntil(appendPrivateGalleryEvent(env, request, galleryId, "admin_enviou_foto", { publicId }, user));
 
       return json({ image, gallery }, 201, { "Cache-Control": "no-store" });
     }

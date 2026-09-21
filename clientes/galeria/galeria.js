@@ -7,6 +7,15 @@ const CONFIG = {
 const params = new URLSearchParams(location.search);
 const slug = params.get("slug") || "";
 const inviteToken = params.get("convite") || "";
+const previewKey = `mc_gallery_preview:${slug}`;
+let previewToken = new URLSearchParams(location.hash.slice(1)).get("preview") || "";
+try {
+  if (previewToken) {
+    sessionStorage.setItem(previewKey, previewToken);
+    history.replaceState(null, "", location.pathname + location.search);
+  } else previewToken = sessionStorage.getItem(previewKey) || "";
+} catch {}
+
 
 const state = {
   gallery: null,
@@ -17,6 +26,13 @@ const state = {
   currentImage: null,
   payment: null,
   paymentPoll: null,
+  pending: new Map(),
+  syncPromise: null,
+  draftLoaded: false,
+  selectionVersion: 0,
+  refreshing: false,
+  bulkSelecting: false,
+
 };
 
 const galleryHero = document.getElementById("galleryHero");
@@ -99,7 +115,7 @@ function showCompletionStatus() {
 }
 
 function getToken() {
-  return localStorage.getItem(CONFIG.tokenKey) || "";
+  return previewToken || localStorage.getItem(CONFIG.tokenKey) || "";
 }
 
 function loginRedirect() {
@@ -118,11 +134,12 @@ async function api(path, options = {}) {
   const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {
+    if (previewToken) throw new Error("Prévia expirada. Abra novamente pelo admin.");
     localStorage.removeItem(CONFIG.tokenKey);
     loginRedirect();
     throw new Error("Faça login para acessar esta galeria.");
   }
-  if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(data.error || `Erro ${res.status}`), { status: res.status, details: data });
   return data;
 }
 
@@ -198,9 +215,9 @@ function updateCounters() {
   if (pricing.needsMoreIncludedPhotos) {
     galleryLimit.textContent = `Selecione pelo menos ${limit} fotos para concluir.`;
   } else if (pricing.extraCount > 0) {
-    galleryLimit.textContent = `${pricing.extraCount} foto${pricing.extraCount > 1 ? "s" : ""} extra${pricing.extraCount > 1 ? "s" : ""} adicionada${pricing.extraCount > 1 ? "s" : ""}.`;
+    galleryLimit.textContent = limit === 0 ? `${total} foto(s) para comprar.` : `${pricing.extraCount} foto${pricing.extraCount > 1 ? "s" : ""} extra${pricing.extraCount > 1 ? "s" : ""} adicionada${pricing.extraCount > 1 ? "s" : ""}.`;
   } else {
-    galleryLimit.textContent = limit ? `Pacote com ${limit} fotos inclusas.` : "Sem limite de seleção definido.";
+    galleryLimit.textContent = limit ? `Pacote com ${limit} fotos inclusas.` : "Escolha as fotos que deseja comprar. Nenhuma foto inclusa previamente.";
   }
   renderPricingSummary();
 }
@@ -257,7 +274,7 @@ function renderPricingSummary() {
   const discountLine = pricing.discountCents > 0
     ? `<div class="pricing-line"><span>${escapeHtml(pricing.discountLabel || "Desconto")}</span><strong>-${formatCurrency(pricing.discountCents)}</strong></div>`
     : "";
-  const extraLabel = pricing.additionalSelection ? "Novas fotos extras" : "Fotos extras";
+  const extraLabel = pricing.additionalSelection ? "Novas fotos extras" : pricing.includedPhotos ? "Fotos extras" : "Fotos para comprar";
   const totalLabel = pricing.additionalSelection ? "Total adicional" : "Total a pagar";
 
   pricingSummary.innerHTML = `
@@ -265,7 +282,7 @@ function renderPricingSummary() {
     <div class="pricing-line"><span>Selecionadas</span><strong>${Number(pricing.selectedTotal || 0)}</strong></div>
     ${additionalLine}
     <div class="pricing-line"><span>${extraLabel}</span><strong>${Number(pricing.extraCount || 0)} × ${formatCurrency(pricing.unitPriceCents || 0)}</strong></div>
-    <div class="pricing-line"><span>Subtotal extras</span><strong>${formatCurrency(pricing.subtotalCents || 0)}</strong></div>
+    <div class="pricing-line"><span>Subtotal</span><strong>${formatCurrency(pricing.subtotalCents || 0)}</strong></div>
     ${discountLine}
     <div class="pricing-line total"><span>${totalLabel}</span><strong>${formatCurrency(pricing.totalCents || 0)}</strong></div>
   `;
@@ -278,8 +295,10 @@ function renderHeader() {
   gallerySubtitle.textContent = gallery.subtitle || "";
   galleryMessage.textContent = gallery.message || "";
   renderHeroCarousel();
-  completeBtn.classList.toggle("hidden", Boolean(gallery.allowDownload));
-  selectAllBtn.classList.toggle("hidden", Boolean(gallery.allowDownload));
+  completeBtn.classList.toggle("hidden", Boolean(gallery.allowDownload || previewToken));
+  selectAllBtn.classList.toggle("hidden", Boolean(gallery.allowDownload || previewToken));
+  completeBtn.textContent = gallery.pricing?.requiresPayment ? "Comprar fotos selecionadas" : "Confirmar seleção";
+  document.getElementById("adminPreviewNotice").hidden = !previewToken;
   downloadAllBtn.classList.toggle("hidden", !gallery.allowDownload);
   updateCounters();
 }
@@ -288,7 +307,7 @@ function renderImages(images) {
   const wm = watermarkStyle();
   const html = images.map((image) => {
     const selected = state.selected.has(image.public_id);
-    const selectionCompleted = isSelectionCompleted();
+    const selectionCompleted = isSelectionCompleted() || Boolean(previewToken) || state.bulkSelecting;
     const action = state.gallery?.allowDownload
       ? `<button class="download-btn" type="button" aria-label="Baixar foto">Baixar</button>`
       : `<button class="heart-btn ${selected ? "selected" : ""}" type="button" aria-label="${selectionCompleted ? "Seleção concluída" : "Selecionar foto"}" ${selectionCompleted ? "disabled" : ""}>${selected ? "♥" : "♡"}</button>`;
@@ -307,12 +326,17 @@ function renderImages(images) {
 async function loadBatch() {
   if (state.loading || state.nextCursor === null) return;
   state.loading = true;
+  const selectionVersion = state.selectionVersion;
   loadSentinel.textContent = "Carregando fotos...";
 
   try {
     const data = await api(`/client-gallery?slug=${encodeURIComponent(slug)}&cursor=${state.nextCursor || 0}&limit=${CONFIG.batchSize}`);
+    const staleSelection = selectionVersion !== state.selectionVersion || Boolean(state.syncPromise);
+    const currentPricing = state.gallery?.pricing;
     state.gallery = data.gallery;
-    state.selected = new Set(data.gallery.selectedPublicIds || []);
+    if (staleSelection && currentPricing) state.gallery.pricing = currentPricing;
+    restorePendingSelection();
+    if (!staleSelection) acceptSelection(data.gallery.selectedPublicIds || []);
     state.images.push(...(data.images || []));
     state.nextCursor = data.paging.nextCursor;
 
@@ -326,7 +350,8 @@ async function loadBatch() {
       return;
     }
     renderImages(data.images || []);
-    updateCounters();
+    updatePhotoButtons();
+    if (state.pending.size) flushSelection();
     loadSentinel.textContent = state.nextCursor === null ? "Todas as fotos foram carregadas." : "Carregar mais fotos";
   } catch (err) {
     galleryTitle.textContent = "Galeria indisponível";
@@ -359,7 +384,7 @@ function updatePhotoButtons(publicIdFilter = "") {
     const selected = state.selected.has(publicId);
     button.classList.toggle("selected", selected);
     button.textContent = selected ? "♥" : "♡";
-    button.disabled = isSelectionCompleted();
+    button.disabled = isSelectionCompleted() || Boolean(previewToken) || state.bulkSelecting;
     button.setAttribute("aria-label", isSelectionCompleted() ? "Seleção concluída" : "Selecionar foto");
   });
 
@@ -367,25 +392,129 @@ function updatePhotoButtons(publicIdFilter = "") {
     const selected = state.selected.has(state.currentImage.public_id);
     lightboxHeart.classList.toggle("selected", selected);
     lightboxHeart.textContent = selected ? "♥" : "♡";
-    lightboxHeart.disabled = isSelectionCompleted();
+    lightboxHeart.disabled = isSelectionCompleted() || Boolean(previewToken) || state.bulkSelecting;
   }
   updateCounters();
 }
 
-async function toggleFavorite(publicId, shouldSelect) {
-  if (state.gallery?.allowDownload) return;
+function selectionDraftKey() {
+  return `mc_selection_pending:${state.gallery?.selectionOwnerId}:${state.gallery?.id}`;
+}
+
+function persistPendingSelection() {
+  if (previewToken || !state.gallery) return;
   try {
-    const data = await api("/client-gallery/favorite", {
-      method: "POST",
-      body: JSON.stringify({ slug, publicId, selected: shouldSelect }),
-    });
-    state.selected = new Set(data.selectedPublicIds || []);
-    if (data.pricing) state.gallery.pricing = data.pricing;
-    updatePhotoButtons(publicId);
-  } catch (err) {
-    showToast(err.message || "Não foi possível selecionar esta foto.");
+    if (state.pending.size) localStorage.setItem(selectionDraftKey(), JSON.stringify([...state.pending]));
+    else localStorage.removeItem(selectionDraftKey());
+  } catch {
+    showToast("Armazenamento local indisponível. Aguarde a seleção ser salva antes de sair.");
   }
 }
+
+function restorePendingSelection() {
+  if (state.draftLoaded || previewToken || !state.gallery) return;
+  if (state.gallery.allowDownload) { state.draftLoaded = true; return; }
+  state.draftLoaded = true;
+  try {
+    const entries = JSON.parse(localStorage.getItem(selectionDraftKey()) || "[]");
+    state.pending = new Map(entries.filter(([id, value]) => typeof id === "string" && typeof value?.selected === "boolean"));
+  } catch { state.pending = new Map(); }
+}
+
+function acceptSelection(ids) {
+  state.selected = new Set(ids);
+  if (!state.gallery?.allowDownload) state.pending.forEach((value, id) => value.selected ? state.selected.add(id) : state.selected.delete(id));
+}
+
+function selectionSyncLabel(message) {
+  document.getElementById("selectionSyncStatus").textContent = message;
+}
+
+function flushSelection() {
+  if (state.syncPromise) return state.syncPromise;
+  if (previewToken || !state.pending.size) return Promise.resolve(true);
+  if (state.gallery?.status === "final") {
+    selectionSyncLabel("Seleção encerrada. Alterações pendentes não foram aplicadas.");
+    return Promise.resolve(false);
+  }
+  state.syncPromise = (async () => {
+    try {
+      while (state.pending.size) {
+        const batch = [...state.pending].slice(0, 100);
+        selectionSyncLabel("Salvando seleção…");
+        const data = await api("/client-gallery/favorites", {
+          method: "POST",
+          body: JSON.stringify({ slug, changes: batch.map(([publicId, value]) => ({ publicId, selected: value.selected })) }),
+        });
+        batch.forEach(([id, value]) => {
+          if (state.pending.get(id) === value) state.pending.delete(id);
+        });
+        persistPendingSelection();
+        acceptSelection(data.selectedPublicIds || []);
+        if (data.pricing) state.gallery.pricing = data.pricing;
+        state.selectionVersion++;
+        updatePhotoButtons();
+      }
+      selectionSyncLabel("Seleção salva automaticamente. Confirme quando terminar.");
+      return true;
+    } catch (err) {
+      if (err.status === 400 && Array.isArray(err.details?.invalidPublicIds)) {
+        err.details.invalidPublicIds.forEach(id => { state.pending.delete(id); state.selected.delete(id); });
+        persistPendingSelection();
+        updatePhotoButtons();
+        showToast("Fotos removidas da galeria saíram da seleção pendente.");
+      }
+      selectionSyncLabel("Seleção guardada neste aparelho. Falta sincronizar; tentaremos novamente.");
+      return false;
+    } finally { state.syncPromise = null; }
+  })();
+  return state.syncPromise;
+}
+
+function toggleFavorite(publicId, shouldSelect) {
+  if (previewToken || state.bulkSelecting || state.gallery?.allowDownload || isSelectionCompleted()) return;
+  state.pending.set(publicId, { selected: shouldSelect });
+  state.selectionVersion++;
+  if (shouldSelect) state.selected.add(publicId); else state.selected.delete(publicId);
+  persistPendingSelection();
+  updatePhotoButtons(publicId);
+  selectionSyncLabel("Salvando seleção…");
+  clearTimeout(toggleFavorite.timer);
+  toggleFavorite.timer = setTimeout(flushSelection, 180);
+}
+
+async function refreshGallerySettings() {
+  if (!state.gallery || state.loading || state.refreshing || state.syncPromise || state.bulkSelecting || document.hidden) return;
+  if (state.pending.size) await flushSelection();
+  const version = state.selectionVersion;
+  state.refreshing = true;
+  try {
+    const data = await api(`/client-gallery?slug=${encodeURIComponent(slug)}&limit=1&summary=1`);
+    if (version !== state.selectionVersion) return;
+    const phaseChanged = Boolean(state.gallery.allowDownload) !== Boolean(data.gallery.allowDownload);
+    const appearanceChanged = JSON.stringify(state.gallery.watermark) !== JSON.stringify(data.gallery.watermark);
+    state.gallery = data.gallery;
+    acceptSelection(data.gallery.selectedPublicIds || []);
+    if (phaseChanged || (!state.images.length && data.gallery.totalImages > 0 && !showCompletionStatus())) {
+      state.images = [];
+      state.nextCursor = 0;
+      photoGrid.innerHTML = "";
+      await loadBatch();
+    } else if (appearanceChanged) {
+      photoGrid.innerHTML = "";
+      renderImages(state.images);
+    }
+    renderHeader();
+    updatePhotoButtons();
+  } catch { /* Preserve the current gallery during temporary network failures. */ }
+  finally { state.refreshing = false; }
+}
+
+window.addEventListener("online", () => flushSelection().then(refreshGallerySettings));
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) flushSelection().then(refreshGallerySettings);
+});
+setInterval(refreshGallerySettings, 15000);
 
 function triggerDownload(url, fileName = "foto.jpg") {
   const link = document.createElement("a");
@@ -409,6 +538,7 @@ async function downloadImage(image) {
   if (!image?.downloadUrl) return showToast("Download ainda não liberado para esta foto.");
   triggerDownload(image.downloadUrl, image.filename || image.display_name || "foto.jpg");
   try {
+    if (previewToken) return;
     await api("/client-gallery/download-event", {
       method: "POST",
       body: JSON.stringify({ slug, publicId: image.public_id }),
@@ -468,7 +598,8 @@ lightboxHeart.addEventListener("click", () => {
 });
 
 completeBtn.addEventListener("click", async () => {
-  if (!state.gallery) return;
+  if (!state.gallery || previewToken) return;
+  if (!(await flushSelection())) { showToast("Aguarde salvar sua seleção antes de confirmar."); return; }
   if (!state.selected.size) {
     showToast("Selecione pelo menos uma foto antes de concluir.");
     return;
@@ -497,12 +628,19 @@ completeBtn.addEventListener("click", async () => {
     updatePhotoButtons();
     showToast("Seleção concluída. Fotos em edição.");
   } catch (err) {
-    showToast(err.message || "Não foi possível concluir a seleção.");
+    if (err.status === 402 && err.details?.pricing) {
+      state.gallery.pricing = err.details.pricing;
+      updateCounters();
+      await createPixPayment();
+    } else showToast(err.message || "Não foi possível concluir a seleção.");
   }
 });
 
 selectAllBtn.addEventListener("click", async () => {
-  if (!state.gallery || state.gallery.allowDownload) return;
+  if (!state.gallery || state.gallery.allowDownload || previewToken) return;
+  if (!(await flushSelection())) { showToast("Aguarde salvar sua seleção antes de selecionar todas."); return; }
+  state.bulkSelecting = true;
+  updatePhotoButtons();
   selectAllBtn.disabled = true;
   selectAllBtn.textContent = "Selecionando...";
   try {
@@ -510,13 +648,16 @@ selectAllBtn.addEventListener("click", async () => {
       method: "POST",
       body: JSON.stringify({ slug }),
     });
-    state.selected = new Set(data.selectedPublicIds || []);
+    acceptSelection(data.selectedPublicIds || []);
+    state.selectionVersion++;
     if (data.pricing) state.gallery.pricing = data.pricing;
     updatePhotoButtons();
     showToast("Todas as fotos foram selecionadas.");
   } catch (err) {
     showToast(err.message || "Não foi possível selecionar todas.");
   } finally {
+    state.bulkSelecting = false;
+    updatePhotoButtons();
     selectAllBtn.disabled = false;
     selectAllBtn.textContent = "Selecionar todas";
   }
@@ -541,9 +682,9 @@ function setPaymentModalState(status, message = "") {
   paymentCard.classList.toggle("is-approved", approved);
   paymentCard.classList.toggle("is-rejected", rejected);
   paymentSuccess.classList.toggle("hidden", !approved);
-  paymentQr.classList.toggle("hidden", approved);
-  paymentCopy.classList.toggle("hidden", approved);
-  copyPaymentCode.classList.toggle("hidden", approved);
+  paymentQr.classList.toggle("hidden", approved || rejected);
+  paymentCopy.classList.toggle("hidden", approved || rejected);
+  copyPaymentCode.classList.toggle("hidden", approved || rejected);
   paymentStatus.classList.toggle("is-approved", approved);
   paymentStatus.classList.toggle("is-rejected", rejected);
 

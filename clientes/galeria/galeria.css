@@ -677,3 +677,23 @@ body.selection-processing .workflow-status {
   background: rgba(20,20,19,0.64);
   color: rgba(244,241,235,0.74);
 }
+
+/* Keep status messages clear of the fixed navigation on desktop and mobile. */
+.gallery-notice {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 21;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.96);
+  color: #fff;
+  text-align: center;
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.gallery-notice:empty, .gallery-notice[hidden] { display: none; }

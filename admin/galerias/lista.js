@@ -155,7 +155,7 @@ async function createGallery() {
         slug: slugify(title),
         status: "selection",
         message: `Olá,\n\nFoi um prazer registrar este momento especial.\n\nSelecione suas fotos favoritas usando o coração exibido sobre cada imagem.`,
-        selectionLimit: 15,
+        selectionLimit: 0,
         extraPhotoPriceCents: 0,
         allPhotosDiscountPercent: 0,
         quantityDiscountEnabled: false,
