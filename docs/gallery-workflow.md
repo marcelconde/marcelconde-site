@@ -36,9 +36,9 @@ Referência: https://developers.cloudflare.com/kv/concepts/how-kv-works/
 
 ## Bradesco
 
-A integração atual continua sendo Mercado Pago. Conta PJ Bradesco, por si só, não habilita cobrança via API. A integração Bradesco não foi ativada porque ainda falta habilitação bancária.
+A integração atual continua sendo Mercado Pago. Em 22/09/2026, o produto "Pix - geração de QR Code" aparecia como inscrito no Portal Bradesco Developers, mas a conta não tinha aplicação registrada nem credencial disponível. A inscrição no produto, por si só, não conclui a integração. O catálogo visível não oferecia checkout de cartão de crédito ou débito para recebimentos.
 
-Solicitar ao gerente/canal empresarial acesso à API Pix de cobrança, documentação aplicável à conta, ambientes de homologação/produção, credenciais, requisitos de certificado e recebimento de notificações. Portal oficial: https://developers.bradesco.com.br/
+Registrar a aplicação para a API Pix, concluir os requisitos do produto, obter credenciais e certificados no portal, e homologar os ambientes de teste e produção. Para cartões, confirmar e contratar um produto de adquirência/checkout específico antes de desenhar sua integração. Portal oficial: https://developers.bradesco.com.br/
 
 Com acesso liberado, implementar e homologar criação de cobrança, consulta de status, autenticação, validação de notificações, expiração, idempotência e conciliação de valor/identificador. Configurar certificados e secrets diretamente no ambiente apropriado, nunca em Git ou mensagens. Cobranças Mercado Pago existentes devem continuar sendo conciliadas durante a troca.
 
