@@ -25,6 +25,7 @@ const quoteDiscountRow = $("#quoteDiscountRow");
 const quoteDiscount = $("#quoteDiscount");
 const quoteTotal = $("#quoteTotal");
 const quotePayments = $("#quotePayments");
+const quoteReserveLine = $("#quoteReserveLine");
 const quotePaymentTerms = $("#quotePaymentTerms");
 const quoteClauses = $("#quoteClauses");
 const quoteClientNote = $("#quoteClientNote");
@@ -148,6 +149,10 @@ function renderQuote() {
 
   quotePayments.innerHTML = (quote.paymentMethods || []).map((method) => `
     <div><strong>${escapeHtml(method.label || "Pagamento")}</strong><span>${escapeHtml(method.details || "")}</span></div>`).join("");
+  quoteReserveLine.hidden = !quote.reservePercent;
+  quoteReserveLine.textContent = quote.reservePercent
+    ? `Entrada mínima para reserva: ${quote.reservePercent}% (${formatMoney(quote.reserveAmountCents)}).`
+    : "";
   quotePaymentTerms.textContent = quote.paymentTerms || "";
 
   quoteClauses.innerHTML = (quote.clauses || []).map((clause, index) => `

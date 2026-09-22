@@ -59,6 +59,8 @@ const quoteSubtotal = $("#quoteSubtotal");
 const quoteDiscountTotal = $("#quoteDiscountTotal");
 const quoteGrandTotal = $("#quoteGrandTotal");
 const quotePayments = $("#quotePayments");
+const quoteReservePercent = $("#quoteReservePercent");
+const quoteReservePreview = $("#quoteReservePreview");
 const quotePaymentTerms = $("#quotePaymentTerms");
 const quoteClauses = $("#quoteClauses");
 const quoteClientNotes = $("#quoteClientNotes");
@@ -159,7 +161,8 @@ function defaultQuote() {
     discountType: "none",
     discountValue: 0,
     paymentMethods: [{ id: `payment_${Date.now()}`, type: "pix", label: "PIX", details: "Dados para pagamento enviados após a aprovação." }],
-    paymentTerms: "30% na reserva da data e o saldo restante até o dia do trabalho.",
+    reservePercent: 30,
+    paymentTerms: "Saldo restante até o dia do trabalho.",
     clauses: DEFAULT_CLAUSES.map((clause) => ({ ...clause })),
     notesForClient: "",
     internalNotes: "",
@@ -284,6 +287,10 @@ function updateTotals() {
   quoteDiscountTotal.textContent = `− ${formatMoney(totals.discountCents)}`;
   quoteGrandTotal.textContent = formatMoney(totals.totalCents);
   quoteTotalStat.textContent = formatMoney(totals.totalCents);
+  const percent = Number(quoteReservePercent.value);
+  quoteReservePreview.textContent = quoteReservePercent.value && Number.isFinite(percent) && percent > 0 && percent <= 100
+    ? `Entrada: ${formatMoney(Math.round(totals.totalCents * percent / 100))}. Saldo: ${formatMoney(totals.totalCents - Math.round(totals.totalCents * percent / 100))}.`
+    : "Deixe vazio se não houver entrada.";
 }
 
 function payloadFromForm() {
@@ -302,6 +309,7 @@ function payloadFromForm() {
       ? Math.round(Number(quoteDiscountValue.value || 0) * 100)
       : Number(quoteDiscountValue.value || 0),
     paymentMethods: collectPayments(),
+    reservePercent: quoteReservePercent.value.trim() || null,
     paymentTerms: quotePaymentTerms.value.trim(),
     clauses: collectClauses(),
     notesForClient: quoteClientNotes.value.trim(),
@@ -394,6 +402,7 @@ function populateForm() {
     ? (Number(state.quote.discountValue || 0) / 100).toFixed(2)
     : Number(state.quote.discountValue || 0);
   quotePaymentTerms.value = state.quote.paymentTerms || "";
+  quoteReservePercent.value = state.quote.reservePercent ?? "";
   quoteClientNotes.value = state.quote.notesForClient || "";
   renderItems();
   renderPayments();
@@ -568,6 +577,7 @@ quoteDiscountType.addEventListener("change", () => {
   updateTotals();
 });
 quoteDiscountValue.addEventListener("input", updateTotals);
+quoteReservePercent.addEventListener("input", updateTotals);
 
 quoteServiceDateUndefined.addEventListener("change", () => {
   quoteServiceDate.disabled = quoteServiceDateUndefined.checked;

@@ -809,6 +809,12 @@ function normalizeQuotePaymentMethods(methods = []) {
     .filter((method) => method.label);
 }
 
+function quoteReserve(quote = {}, totalCents = calculateQuoteTotals(quote).totalCents) {
+  const percent = Number(quote.reservePercent);
+  if (quote.reservePercent === null || quote.reservePercent === undefined || quote.reservePercent === "" || !Number.isFinite(percent) || percent <= 0 || percent > 100) return null;
+  return { percent, amountCents: Math.round(totalCents * percent / 100) };
+}
+
 function normalizeQuoteClauses(clauses = []) {
   const source = Array.isArray(clauses) && clauses.length ? clauses : defaultQuoteClauses();
   return source
@@ -879,6 +885,7 @@ function quoteClientSnapshot(client = {}) {
 
 function quotePublishedSnapshot(env, quote = {}, client = {}) {
   const totals = calculateQuoteTotals(quote);
+  const reserve = quoteReserve(quote, totals.totalCents);
   return {
     isTest: quote.isTest === true,
     quoteId: quote.id,
@@ -898,6 +905,7 @@ function quotePublishedSnapshot(env, quote = {}, client = {}) {
     totalCents: totals.totalCents,
     paymentMethods: normalizeQuotePaymentMethods(quote.paymentMethods || []),
     paymentTerms: cleanGalleryText(quote.paymentTerms || "", 1600),
+    reservePercent: reserve?.percent ?? null,
     clauses: normalizeQuoteClauses(quote.clauses || []),
     notesForClient: cleanGalleryText(quote.notesForClient || "", 1600),
     client: quoteClientSnapshot(client),
@@ -907,6 +915,7 @@ function quotePublishedSnapshot(env, quote = {}, client = {}) {
 
 function publicQuote(quote = {}) {
   const totals = calculateQuoteTotals(quote);
+  const reserve = quoteReserve(quote, totals.totalCents);
   return {
     id: quote.id,
     isTest: quote.isTest === true,
@@ -926,6 +935,8 @@ function publicQuote(quote = {}) {
     totalCents: totals.totalCents,
     paymentMethods: normalizeQuotePaymentMethods(quote.paymentMethods || []),
     paymentTerms: quote.paymentTerms || "",
+    reservePercent: reserve?.percent ?? null,
+    reserveAmountCents: reserve?.amountCents ?? null,
     clauses: normalizeQuoteClauses(quote.clauses || []),
     notesForClient: quote.notesForClient || "",
     status: effectiveQuoteStatus(quote),
@@ -1003,6 +1014,11 @@ async function savePrivateQuote(env, input = {}) {
     discountType: input.discountType ?? existing.discountType ?? "none",
     discountValue: input.discountValue ?? existing.discountValue ?? 0,
   });
+  const reserveInput = Object.prototype.hasOwnProperty.call(input, "reservePercent") ? input.reservePercent : existing.reservePercent ?? null;
+  const reservePercent = reserveInput === "" || reserveInput === null ? null : Number(reserveInput);
+  if (reservePercent !== null && (!Number.isFinite(reservePercent) || reservePercent <= 0 || reservePercent > 100 || Math.abs(Math.round(reservePercent * 100) - reservePercent * 100) > 1e-8)) {
+    throw Object.assign(new Error("Informe um percentual de reserva entre 0,01% e 100%."), { status: 400 });
+  }
   const defaultValidity = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const quote = {
     ...existing,
@@ -1021,6 +1037,7 @@ async function savePrivateQuote(env, input = {}) {
     discountValue: totals.discountValue,
     paymentMethods: normalizeQuotePaymentMethods(input.paymentMethods ?? existing.paymentMethods ?? defaultQuotePaymentMethods()),
     paymentTerms: cleanGalleryText(input.paymentTerms ?? existing.paymentTerms ?? "", 1600),
+    reservePercent,
     clauses: normalizeQuoteClauses(input.clauses ?? existing.clauses ?? defaultQuoteClauses()),
     notesForClient: cleanGalleryText(input.notesForClient ?? existing.notesForClient ?? "", 1600),
     internalNotes: cleanGalleryText(input.internalNotes ?? existing.internalNotes ?? "", 1600),
@@ -2471,6 +2488,8 @@ function buildQuotePdf(env, quote = {}, client = {}, acceptance = null) {
   (snapshot.paymentMethods || []).forEach((method) => {
     draw(`${method.label}${method.details ? `: ${method.details}` : ""}`, { size: 9.5, leading: 14 });
   });
+  const reserve = quoteReserve(snapshot, snapshot.totalCents);
+  if (reserve) draw(`Reserva mínima: ${reserve.percent}% (${formatCurrencyFromCents(reserve.amountCents)})`, { font: "F2", size: 9.5, leading: 14 });
   if (snapshot.paymentTerms) draw(snapshot.paymentTerms, { size: 9.5, leading: 14 });
   y -= 10;
 

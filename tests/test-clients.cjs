@@ -115,3 +115,21 @@ test('test PDF is clearly marked, while regular documents are unchanged', async 
   assert(pdf.includes('TESTE | '));
   assert(!Buffer.from(a.buildQuotePdf(a.env, { ...quote, isTest: false }, client)).toString('latin1').includes('DOCUMENTO DE TESTE'));
 });
+
+test('quote reservation percentage is explicit, calculated after discount and absent on legacy quotes', async () => {
+  const a = app();
+  const client = await a.savePrivateClient(a.env, { name: 'Client' });
+  const quote = await a.savePrivateQuote(a.env, {
+    clientId: client.id,
+    items: [{ description: 'Ensaio', quantity: 1, unitPriceCents: 30000 }],
+    reservePercent: 30,
+  });
+  assert.equal(a.publicQuote(quote).reserveAmountCents, 9000);
+  assert(Buffer.from(a.buildQuotePdf(a.env, quote, client)).toString('latin1').includes('Reserva mínima: 30%'));
+  await a.savePrivateQuote(a.env, { id: quote.id, discountType: 'fixed', discountValue: 10000 });
+  assert.equal(a.publicQuote(a.read('private_quote:' + quote.id)).reserveAmountCents, 6000);
+  await a.savePrivateQuote(a.env, { id: quote.id, reservePercent: null });
+  assert.equal(a.publicQuote(a.read('private_quote:' + quote.id)).reserveAmountCents, null);
+  assert.equal(a.publicQuote({ items: quote.items }).reservePercent, null);
+  assert.equal((await a.request('/private/quotes', { id: quote.id, reservePercent: 101 })).status, 400);
+});

@@ -171,6 +171,11 @@
             </div>
             <div class="quote-payment-list" id="quotePayments"></div>
             <label class="full quote-payment-terms">
+              Entrada mínima para reservar (%)
+              <input id="quoteReservePercent" type="number" min="0.01" max="100" step="0.01" inputmode="decimal" placeholder="Ex: 30">
+              <small id="quoteReservePreview">Deixe vazio se não houver entrada.</small>
+            </label>
+            <label class="full quote-payment-terms">
               Condições e vencimentos
               <textarea id="quotePaymentTerms" placeholder="Ex: 30% na reserva e 70% até a data do ensaio"></textarea>
             </label>
@@ -208,6 +213,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/admin/orcamentos/detalhe/orcamento.js?v=20260915-03"></script>
+  <script src="/admin/orcamentos/detalhe/orcamento.js?v=20260922-01"></script>
 </body>
 </html>
