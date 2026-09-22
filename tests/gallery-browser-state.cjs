@@ -109,3 +109,21 @@ test('failed registration retries the uploaded asset without uploading the file 
   assert.equal(a.run('transfers'),1);
   assert.equal(a.run('registrations'),2);
 });
+
+test('gallery view is stored per gallery and lightbox navigation follows photo order',async()=>{
+  const store=new Map();
+  const a=browser('clientes/galeria/galeria.js',store);
+  a.run(`state.gallery={id:'g',pricing:{},status:'selection'};state.images=[
+    {public_id:'a',url:'https://example.test/a.jpg'},
+    {public_id:'b',url:'https://example.test/b.jpg'},
+    {public_id:'c',url:'https://example.test/c.jpg'}
+  ];state.nextCursor=null;setGalleryView('list');openLightbox(state.images[1]);`);
+  assert.equal(a.run('state.view'),'list');
+  assert.equal(store.get('mc_gallery_view:g'),'list');
+  await a.run('moveLightbox(1)');
+  assert.equal(a.run('state.currentImage.public_id'),'c');
+  await a.run('moveLightbox(1)');
+  assert.equal(a.run('state.currentImage.public_id'),'a');
+  await a.run('moveLightbox(-1)');
+  assert.equal(a.run('state.currentImage.public_id'),'c');
+});

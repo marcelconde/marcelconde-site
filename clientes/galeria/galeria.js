@@ -32,6 +32,7 @@ const state = {
   selectionVersion: 0,
   refreshing: false,
   bulkSelecting: false,
+  view: "grid",
 
 };
 
@@ -53,6 +54,9 @@ const lightbox = document.getElementById("lightbox");
 const lightboxStage = document.getElementById("lightboxStage");
 const lightboxClose = document.getElementById("lightboxClose");
 const lightboxHeart = document.getElementById("lightboxHeart");
+const lightboxPrev = document.getElementById("lightboxPrev");
+const lightboxNext = document.getElementById("lightboxNext");
+const lightboxCount = document.getElementById("lightboxCount");
 const paymentModal = document.getElementById("paymentModal");
 const paymentCard = paymentModal.querySelector(".payment-card");
 const paymentClose = document.getElementById("paymentClose");
@@ -95,6 +99,29 @@ function showToast(message) {
   toastEl.classList.add("show");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toastEl.classList.remove("show"), 3200);
+}
+
+function galleryViewKey() {
+  return `mc_gallery_view:${state.gallery?.id || slug}`;
+}
+
+function setGalleryView(view, persist = true) {
+  const validView = ["grid", "large", "list"].includes(view) ? view : "grid";
+  state.view = validView;
+  photoGrid.dataset.view = validView;
+  document.querySelectorAll("[data-gallery-view]").forEach((button) => {
+    const active = button.dataset.galleryView === validView;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  if (persist) {
+    try { localStorage.setItem(galleryViewKey(), validView); } catch { /* Visual preference is optional. */ }
+  }
+}
+
+function restoreGalleryView() {
+  try { setGalleryView(localStorage.getItem(galleryViewKey()) || "grid", false); }
+  catch { setGalleryView("grid", false); }
 }
 
 function isSelectionCompleted() {
@@ -294,6 +321,7 @@ function renderHeader() {
   galleryTitle.textContent = gallery.title || "Galeria privada";
   gallerySubtitle.textContent = gallery.subtitle || "";
   galleryMessage.textContent = gallery.message || "";
+  restoreGalleryView();
   renderHeroCarousel();
   completeBtn.classList.toggle("hidden", Boolean(gallery.allowDownload || previewToken));
   selectAllBtn.classList.toggle("hidden", Boolean(gallery.allowDownload || previewToken));
@@ -575,16 +603,47 @@ function openLightbox(image) {
     ${watermarkStyle()}
   `;
   lightbox.classList.remove("hidden");
+  renderLightboxNavigation();
   updatePhotoButtons();
+}
+
+function currentImageIndex() {
+  return state.images.findIndex((image) => image.public_id === state.currentImage?.public_id);
+}
+
+async function moveLightbox(step) {
+  const index = currentImageIndex();
+  if (index < 0) return;
+  let nextIndex = index + step;
+  if (nextIndex < 0) nextIndex = state.images.length - 1;
+  if (nextIndex >= state.images.length && state.nextCursor !== null) {
+    await loadBatch();
+  }
+  nextIndex = index + step;
+  if (nextIndex < 0) nextIndex = state.images.length - 1;
+  if (nextIndex >= state.images.length) nextIndex = 0;
+  openLightbox(state.images[nextIndex]);
+}
+
+function renderLightboxNavigation() {
+  const index = currentImageIndex();
+  const total = state.gallery?.totalImages || state.images.length;
+  const hasPhotos = state.images.length > 1;
+  lightboxPrev.disabled = !hasPhotos;
+  lightboxNext.disabled = !hasPhotos && state.nextCursor === null;
+  lightboxCount.textContent = index >= 0 ? `${index + 1} de ${total}` : "";
 }
 
 function closeLightbox() {
   state.currentImage = null;
   lightbox.classList.add("hidden");
   lightboxStage.innerHTML = "";
+  lightboxCount.textContent = "";
 }
 
 lightboxClose.addEventListener("click", closeLightbox);
+lightboxPrev.addEventListener("click", () => moveLightbox(-1));
+lightboxNext.addEventListener("click", () => moveLightbox(1));
 lightbox.addEventListener("click", (event) => {
   if (event.target === lightbox) closeLightbox();
 });
@@ -595,6 +654,17 @@ lightboxHeart.addEventListener("click", () => {
     return;
   }
   toggleFavorite(state.currentImage.public_id, !state.selected.has(state.currentImage.public_id));
+});
+
+document.addEventListener("keydown", (event) => {
+  if (lightbox.classList.contains("hidden")) return;
+  if (event.key === "Escape") closeLightbox();
+  if (event.key === "ArrowLeft") moveLightbox(-1);
+  if (event.key === "ArrowRight") moveLightbox(1);
+});
+
+document.querySelectorAll("[data-gallery-view]").forEach((button) => {
+  button.addEventListener("click", () => setGalleryView(button.dataset.galleryView));
 });
 
 completeBtn.addEventListener("click", async () => {

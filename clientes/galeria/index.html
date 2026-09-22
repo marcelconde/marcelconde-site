@@ -42,6 +42,14 @@
 
     <section class="gallery-body">
       <section class="workflow-status" id="workflowStatus" hidden></section>
+      <div class="gallery-viewbar" id="galleryViewbar" aria-label="Modo de visualização">
+        <span>Visualização</span>
+        <div class="view-switcher" role="group" aria-label="Escolher visualização das fotos">
+          <button type="button" data-gallery-view="grid" aria-pressed="true" title="Grade">Grade</button>
+          <button type="button" data-gallery-view="large" aria-pressed="false" title="Grade maior">Maior</button>
+          <button type="button" data-gallery-view="list" aria-pressed="false" title="Lista">Lista</button>
+        </div>
+      </div>
       <div class="photo-grid" id="photoGrid"></div>
       <div class="load-sentinel" id="loadSentinel">Carregando fotos...</div>
     </section>
@@ -49,7 +57,10 @@
 
   <div class="lightbox hidden" id="lightbox">
     <button class="lightbox-close" id="lightboxClose" type="button">Fechar</button>
+    <button class="lightbox-nav lightbox-prev" id="lightboxPrev" type="button" aria-label="Foto anterior">‹</button>
+    <button class="lightbox-nav lightbox-next" id="lightboxNext" type="button" aria-label="Próxima foto">›</button>
     <button class="lightbox-heart" id="lightboxHeart" type="button">♡</button>
+    <p class="lightbox-count" id="lightboxCount" aria-live="polite"></p>
     <div class="lightbox-stage" id="lightboxStage"></div>
   </div>
 
@@ -76,6 +87,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/clientes/galeria/galeria.js?v=20260920-02"></script>
+  <script src="/clientes/galeria/galeria.js?v=20260922-01"></script>
 </body>
 </html>
