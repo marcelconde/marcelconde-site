@@ -61,6 +61,27 @@ test('adding files during upload appends without losing active progress or dupli
   assert.equal(a.run('state.uploads[2].status'),'pending');
 });
 
+test('admin photo filter shows only client picks and bulk selection stays within visible photos',()=>{
+  const a=browser('admin/galerias/galerias.js');
+  a.run(`state.selectedGallery={id:'g'};state.images=[
+    {public_id:'chosen',filename:'chosen.jpg',url:'https://example.test/chosen.jpg'},
+    {public_id:'other',filename:'other.jpg',url:'https://example.test/other.jpg'}
+  ];state.selection=['chosen'];renderPhotos();`);
+  assert.match(a.element('#photoGrid').innerHTML,/chosen.jpg/);
+  assert.match(a.element('#photoGrid').innerHTML,/other.jpg/);
+  a.element('#showClientSelectedPhotosBtn').listeners.click();
+  assert.match(a.element('#photoGrid').innerHTML,/chosen.jpg/);
+  assert.doesNotMatch(a.element('#photoGrid').innerHTML,/other.jpg/);
+  a.element('#selectAllPhotosBtn').listeners.click();
+  assert.deepEqual(Array.from(a.run('[...state.selectedForDeletion]')),['chosen']);
+  a.element('#showAllPhotosBtn').listeners.click();
+  assert.deepEqual(Array.from(a.run('[...state.selectedForDeletion]')),[]);
+  assert.match(a.element('#photoGrid').innerHTML,/other.jpg/);
+  a.run('state.selection=[];');
+  a.element('#showClientSelectedPhotosBtn').listeners.click();
+  assert.match(a.element('#photoGrid').innerHTML,/Nenhuma foto selecionada/);
+});
+
 test('offline favorites survive reload and replay after authentication without erasing server favorites',async()=>{
   const store=new Map();store.set('mc_client_token','client');
   const a=browser('clientes/galeria/galeria.js',store,async()=>{throw Error('offline');});

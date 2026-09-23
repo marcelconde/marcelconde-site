@@ -18,6 +18,7 @@ const state = {
   selection: [],
   events: [],
   selectedForDeletion: new Set(),
+  photoFilter: "all",
   loadingGallery: false,
   uploads: [],
   uploading: false,
@@ -75,6 +76,10 @@ const selectionLogPanel = $("#selectionLogPanel");
 const selectionLogSummary = $("#selectionLogSummary");
 const selectionLogList = $("#selectionLogList");
 const shareLink = $("#shareLink");
+const photoFilters = $("#photoFilters");
+const showAllPhotosBtn = $("#showAllPhotosBtn");
+const showClientSelectedPhotosBtn = $("#showClientSelectedPhotosBtn");
+const photoFilterSummary = $("#photoFilterSummary");
 const photoBulkActions = $("#photoBulkActions");
 const bulkCount = $("#bulkCount");
 const selectAllPhotosBtn = $("#selectAllPhotosBtn");
@@ -435,8 +440,14 @@ function clearGalleryMediaState() {
   state.selectedForDeletion.clear();
 }
 
+function visiblePhotos() {
+  if (state.photoFilter === "all") return state.images;
+  const selected = new Set(state.selection);
+  return state.images.filter((image) => selected.has(image.public_id));
+}
+
 function syncDeletionSelection() {
-  const validIds = new Set(state.images.map((image) => image.public_id).filter(Boolean));
+  const validIds = new Set(visiblePhotos().map((image) => image.public_id).filter(Boolean));
   state.selectedForDeletion.forEach((publicId) => {
     if (!validIds.has(publicId)) state.selectedForDeletion.delete(publicId);
   });
@@ -445,7 +456,7 @@ function syncDeletionSelection() {
 function renderPhotoBulkActions() {
   if (!photoBulkActions) return;
 
-  const total = state.images.length;
+  const total = visiblePhotos().length;
   const count = state.selectedForDeletion.size;
   photoBulkActions.hidden = !state.selectedGallery || !total;
   if (photoBulkActions.hidden) return;
@@ -454,7 +465,7 @@ function renderPhotoBulkActions() {
     ? `${count} foto${count > 1 ? "s" : ""} selecionada${count > 1 ? "s" : ""} para excluir.`
     : "Selecione fotos para excluir em lote.";
 
-  selectAllPhotosBtn.textContent = count === total ? "Desmarcar todas" : "Selecionar todas";
+  selectAllPhotosBtn.textContent = count === total ? "Desmarcar exibidas" : "Selecionar exibidas";
   selectAllPhotosBtn.disabled = !total;
   clearSelectedPhotosBtn.disabled = !count;
   deleteSelectedPhotosBtn.disabled = !count;
@@ -634,6 +645,16 @@ function renderSelectedGallery() {
 }
 
 function renderPhotos() {
+  const selected = new Set(state.selection);
+  const selectedCount = state.images.filter((image) => selected.has(image.public_id)).length;
+  photoFilters.hidden = !state.selectedGallery || state.loadingGallery;
+  showAllPhotosBtn.textContent = `Todas (${state.images.length})`;
+  showClientSelectedPhotosBtn.textContent = `Selecionadas pelo cliente (${selectedCount})`;
+  showAllPhotosBtn.setAttribute("aria-pressed", String(state.photoFilter === "all"));
+  showClientSelectedPhotosBtn.setAttribute("aria-pressed", String(state.photoFilter === "selected"));
+  photoFilterSummary.textContent = state.photoFilter === "selected"
+    ? `${selectedCount} de ${state.images.length} fotos exibidas`
+    : `${state.images.length} fotos exibidas`;
   if (state.loadingGallery) {
     state.selectedForDeletion.clear();
     photoGrid.innerHTML = `<div class="empty-state"><span>Carregando fotos desta galeria...</span></div>`;
@@ -649,9 +670,14 @@ function renderPhotos() {
   }
 
   syncDeletionSelection();
-  const selected = new Set(state.selection);
   const deleting = state.selectedForDeletion;
-  photoGrid.innerHTML = state.images.map((image) => `
+  const displayed = visiblePhotos();
+  if (!displayed.length) {
+    photoGrid.innerHTML = `<div class="empty-state"><span>Nenhuma foto selecionada pelo cliente até agora.</span></div>`;
+    renderPhotoBulkActions();
+    return;
+  }
+  photoGrid.innerHTML = displayed.map((image) => `
     <article class="gallery-photo-card${deleting.has(image.public_id) ? " marked" : ""}" data-public-id="${escapeHtml(image.public_id || "")}">
       <label class="photo-select" title="Selecionar foto">
         <input type="checkbox" data-select-image="${escapeHtml(image.public_id)}" aria-label="Selecionar foto" ${deleting.has(image.public_id) ? "checked" : ""}>
@@ -1189,16 +1215,27 @@ async function deleteSelectedImages() {
 }
 
 selectAllPhotosBtn.addEventListener("click", () => {
-  if (!state.images.length) return;
-  if (state.selectedForDeletion.size === state.images.length) {
+  const displayed = visiblePhotos();
+  if (!displayed.length) return;
+  if (state.selectedForDeletion.size === displayed.length) {
     state.selectedForDeletion.clear();
   } else {
-    state.images.forEach((image) => {
+    displayed.forEach((image) => {
       if (image.public_id) state.selectedForDeletion.add(image.public_id);
     });
   }
   syncDeletionSelectionToDom();
 });
+
+function setPhotoFilter(filter) {
+  if (state.photoFilter === filter) return;
+  state.photoFilter = filter;
+  state.selectedForDeletion.clear();
+  renderPhotos();
+}
+
+showAllPhotosBtn.addEventListener("click", () => setPhotoFilter("all"));
+showClientSelectedPhotosBtn.addEventListener("click", () => setPhotoFilter("selected"));
 
 clearSelectedPhotosBtn.addEventListener("click", () => {
   state.selectedForDeletion.clear();

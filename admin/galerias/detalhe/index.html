@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260716-02">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260923-01">
 </head>
 <body class="gallery-detail-page">
   <div class="admin-shell" id="adminShell">
@@ -102,6 +102,11 @@
                 <button class="btn btn-ghost" id="refreshBtn" type="button">Atualizar</button>
               </div>
               <div class="private-copy" id="shareLink">Carregando link da galeria...</div>
+              <div class="gallery-photo-filters" id="photoFilters" role="group" aria-label="Filtrar fotos" hidden>
+                <button class="btn btn-ghost btn-small" id="showAllPhotosBtn" type="button" aria-pressed="true">Todas</button>
+                <button class="btn btn-ghost btn-small" id="showClientSelectedPhotosBtn" type="button" aria-pressed="false">Selecionadas pelo cliente</button>
+                <span id="photoFilterSummary" role="status" aria-live="polite"></span>
+              </div>
               <div class="photo-bulk-actions" id="photoBulkActions" hidden>
                 <span id="bulkCount">Selecione fotos para excluir em lote.</span>
                 <div>
@@ -309,6 +314,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/admin/galerias/galerias.js?v=20260920-02"></script>
+  <script src="/admin/galerias/galerias.js?v=20260923-01"></script>
 </body>
 </html>

@@ -433,6 +433,30 @@
   word-break: break-all;
 }
 
+.gallery-photo-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.gallery-photo-filters[hidden] {
+  display: none;
+}
+
+.gallery-photo-filters .btn[aria-pressed="true"] {
+  border-color: var(--line-strong);
+  background: rgba(184,149,106,0.2);
+  color: var(--ink);
+}
+
+.gallery-photo-filters > span {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .photo-bulk-actions {
   margin-top: 14px;
   border: 1px solid rgba(184,149,106,0.28);
