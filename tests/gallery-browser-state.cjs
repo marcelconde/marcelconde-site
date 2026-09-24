@@ -99,6 +99,21 @@ test('offline favorites survive reload and replay after authentication without e
   assert.deepEqual(Array.from(b.run('[...state.selected]')).sort(),['a','b','c']);
 });
 
+test('a payment lock restores the server selection instead of presenting it as an offline save',async()=>{
+  const store=new Map();store.set('mc_client_token','client');
+  let call=0;
+  const a=browser('clientes/galeria/galeria.js',store,async()=>{
+    call++;
+    if(call===1) return new Response(JSON.stringify({error:'Há um pagamento em andamento. Conclua ou cancele a cobrança antes de alterar as fotos.'}),{status:409});
+    return new Response(JSON.stringify({gallery:{id:'g',selectedPublicIds:['a'],pricing:{}}}));
+  });
+  a.run(`state.gallery={id:'g',selectionOwnerId:'c',pricing:{},status:'selection'};toggleFavorite('b',true);`);
+  await a.run('flushSelection()');
+  assert.deepEqual(Array.from(a.run('[...state.selected]')),['a']);
+  assert.equal(a.run('state.pending.size'),0);
+  assert.match(a.element('#selectionSyncStatus').textContent,/cobrança pendente/);
+});
+
 test('click during an in-flight save remains queued after the older response',async()=>{
   const store=new Map();store.set('mc_client_token','client');
   const resolvers=[];

@@ -97,6 +97,24 @@ test('a pending Asaas charge freezes gallery favorites and completion', async ()
     { slug: 'race', changes: [{ publicId: 'b', selected: true }] }, 'client-token')).status, 200);
 });
 
+test('a client can retrieve an in-progress gallery charge without creating another one', async () => {
+  const a = app();
+  const payment = {
+    id: 'pay_1', provider: 'asaas', environment: 'sandbox', status: 'creating',
+    galleryId: 'g', gallerySlug: 'race', amountCents: 1000,
+  };
+  await a.env.GALLERY_DB.prepare('INSERT INTO gallery_records (key, value) VALUES (?, ?)')
+    .bind('asaas_intent:gallery:g', JSON.stringify({ paymentId: payment.id, payment, status: 'creating' })).run();
+  await a.writeKvJson(a.env, 'private_gallery_payment:pay_1', payment);
+
+  const response = await a.request('/client-gallery/payment/current?slug=race', undefined, 'client-token');
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.payment.id, 'pay_1');
+  assert.equal(body.payment.status, 'creating');
+  assert.equal(body.payment.amountCents, 1000);
+});
+
 test('admin preview is gallery-scoped, expires and cannot mutate selection or generate payment', async () => {
   const a = app();
   assert.equal((await a.request('/private/gallery/preview',{galleryId:'g'},'bad')).status,401);

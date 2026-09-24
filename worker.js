@@ -4399,6 +4399,29 @@ export default {
       }
     }
 
+    if (url.pathname === "/client-gallery/payment/current" && request.method === "GET") {
+      const slug = slugify(url.searchParams.get("slug") || "");
+      const gallery = await getPrivateGalleryBySlug(env, slug);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      if (access.preview) return json({ ok: true, payment: null }, 200, { "Cache-Control": "no-store" });
+
+      const latestId = await readKvJson(env, privateGalleryLatestPaymentKey(gallery.id), null);
+      const latest = latestId ? await readKvJson(env, privateGalleryPaymentKey(latestId), null) : null;
+      const intent = env.GALLERY_DB ? await readAsaasIntent(env, `gallery:${gallery.id}`) : null;
+      const payment = latest || (intent?.paymentId
+        ? await readKvJson(env, privateGalleryPaymentKey(intent.paymentId), null) || intent.payment
+        : null);
+      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      return json({
+        ok: true,
+        payment: payment && ["creating", "pending", "approved"].includes(payment.status) ? publicPayment(payment) : null,
+        pricing: calculateSelectionPricing(gallery, images, selection),
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/client-gallery/payment/status" && request.method === "GET") {
       const paymentId = String(url.searchParams.get("id") || "").trim();
       if (!paymentId) return errorJson("Pagamento inválido.", 400);

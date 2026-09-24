@@ -25,6 +25,7 @@ const state = {
   loading: false,
   currentImage: null,
   payment: null,
+  pendingPayment: null,
   paymentPoll: null,
   pending: new Map(),
   syncPromise: null,
@@ -48,6 +49,7 @@ const workflowStatus = document.getElementById("workflowStatus");
 const photoGrid = document.getElementById("photoGrid");
 const loadSentinel = document.getElementById("loadSentinel");
 const completeBtn = document.getElementById("completeBtn");
+const pendingPaymentBtn = document.getElementById("pendingPaymentBtn");
 const selectAllBtn = document.getElementById("selectAllBtn");
 const downloadAllBtn = document.getElementById("downloadAllBtn");
 const lightbox = document.getElementById("lightbox");
@@ -331,11 +333,23 @@ function renderHeader() {
   restoreGalleryView();
   renderHeroCarousel();
   completeBtn.classList.toggle("hidden", Boolean(gallery.allowDownload || previewToken));
+  pendingPaymentBtn.classList.toggle("hidden", Boolean(gallery.allowDownload || previewToken || !state.pendingPayment));
   selectAllBtn.classList.toggle("hidden", Boolean(gallery.allowDownload || previewToken));
   completeBtn.textContent = gallery.pricing?.requiresPayment ? "Comprar fotos selecionadas" : "Confirmar seleção";
   document.getElementById("adminPreviewNotice").hidden = !previewToken;
   downloadAllBtn.classList.toggle("hidden", !gallery.allowDownload);
   updateCounters();
+}
+
+async function loadPendingPayment() {
+  if (previewToken || !state.gallery || state.gallery.allowDownload) return;
+  try {
+    const data = await api(`/client-gallery/payment/current?slug=${encodeURIComponent(slug)}`);
+    state.pendingPayment = data.payment?.status === "approved" ? null : (data.payment || null);
+    renderHeader();
+  } catch {
+    // A payment lookup must not prevent the client from viewing the gallery.
+  }
 }
 
 function renderImages(images) {
@@ -375,7 +389,10 @@ async function loadBatch() {
     state.images.push(...(data.images || []));
     state.nextCursor = data.paging.nextCursor;
 
-    if (state.images.length === data.images.length) renderHeader();
+    if (state.images.length === data.images.length) {
+      renderHeader();
+      loadPendingPayment();
+    }
     if (showCompletionStatus()) {
       state.images = [];
       state.nextCursor = null;
@@ -498,6 +515,25 @@ function flushSelection() {
         persistPendingSelection();
         updatePhotoButtons();
         showToast("Fotos removidas da galeria saíram da seleção pendente.");
+      }
+      if (err.status === 409 && /pagamento em andamento|cobrança/i.test(err.message || "")) {
+        // A charge locks its exact selection. Do not leave a local edit that would
+        // later make the amount and the selected photos disagree.
+        state.pending.clear();
+        persistPendingSelection();
+        try {
+          const current = await api(`/client-gallery?slug=${encodeURIComponent(slug)}&cursor=0&limit=1&summary=1`);
+          if (current.gallery) {
+            state.gallery = { ...state.gallery, ...current.gallery };
+            acceptSelection(current.gallery.selectedPublicIds || []);
+          }
+        } catch { /* Keep the visible server state if a refresh is unavailable. */ }
+        state.pendingPayment ||= { status: "pending" };
+        renderHeader();
+        updatePhotoButtons();
+        selectionSyncLabel("A seleção está bloqueada por uma cobrança pendente. Abra “Ver cobrança pendente” para continuar.");
+        showToast("Há uma cobrança pendente para estas fotos.");
+        return false;
       }
       selectionSyncLabel("Seleção guardada neste aparelho. Falta sincronizar; tentaremos novamente.");
       return false;
@@ -821,7 +857,7 @@ function askPaymentDocument() {
   });
 }
 
-async function createPixPayment() {
+async function createPixPayment(existingDocument = "") {
   completeBtn.disabled = true;
   completeBtn.textContent = "Preparando pagamento...";
   try {
@@ -830,13 +866,16 @@ async function createPixPayment() {
       method: "POST",
       body: JSON.stringify({ slug, document }),
     });
-    try {
-      data = await create();
-    } catch (err) {
-      if (!/CPF ou CNPJ/.test(err.message || "")) throw err;
-      const document = await askPaymentDocument();
-      if (!document) throw new Error("CPF ou CNPJ necessário para continuar.");
-      data = await create(document.trim());
+    if (existingDocument) data = await create(existingDocument.trim());
+    else {
+      try {
+        data = await create();
+      } catch (err) {
+        if (!/CPF ou CNPJ/.test(err.message || "")) throw err;
+        const document = await askPaymentDocument();
+        if (!document) throw new Error("CPF ou CNPJ necessário para continuar.");
+        data = await create(document.trim());
+      }
     }
     if (!data.paymentRequired) {
       const completed = await api("/client-gallery/complete", {
@@ -851,6 +890,8 @@ async function createPixPayment() {
       return;
     }
     if (data.pricing) state.gallery.pricing = data.pricing;
+    state.pendingPayment = data.payment || null;
+    renderHeader();
     openPaymentModal(data.payment, data.pricing || state.gallery.pricing || {});
   } catch (err) {
     showToast(err.message || "Não foi possível gerar o pagamento.");
@@ -859,6 +900,35 @@ async function createPixPayment() {
     completeBtn.textContent = "Concluir seleção";
   }
 }
+
+pendingPaymentBtn.addEventListener("click", async () => {
+  pendingPaymentBtn.disabled = true;
+  try {
+    const data = await api(`/client-gallery/payment/current?slug=${encodeURIComponent(slug)}`);
+    const payment = data.payment;
+    state.pendingPayment = payment || null;
+    renderHeader();
+    if (!payment) {
+      showToast("Não há cobrança pendente para esta seleção.");
+      return;
+    }
+    if (payment.status === "approved") {
+      showToast("Esta cobrança já foi aprovada. Atualize a galeria para concluir a seleção.");
+      return;
+    }
+    if (payment.ticketUrl || payment.qrCode) {
+      openPaymentModal(payment, data.pricing || state.gallery.pricing || {});
+      return;
+    }
+    const document = await askPaymentDocument();
+    if (!document) return;
+    await createPixPayment(document);
+  } catch (err) {
+    showToast(err.message || "Não foi possível abrir a cobrança pendente.");
+  } finally {
+    pendingPaymentBtn.disabled = false;
+  }
+});
 
 function startPaymentPolling(paymentId) {
   if (state.paymentPoll) clearInterval(state.paymentPoll);
