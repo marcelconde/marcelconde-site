@@ -3870,7 +3870,9 @@ export default {
         return errorJson("Tipo de cliente e orçamento incompatíveis.", 409);
       }
       const environment = asaasEnvironmentForClient(linkedClient);
-      const paymentRequired = snapshot.totalCents > 0;
+      // Until production Asaas is enabled, preserve the existing real-client
+      // acceptance flow. Test clients always require Sandbox payment.
+      const paymentRequired = snapshot.totalCents > 0 && (linkedClient.isTest === true || Boolean(env.ASAAS_API_KEY));
       if (paymentRequired && ![11, 14].includes(signerDocument.replace(/\D/g, "").length)) {
         return errorJson("Informe um CPF ou CNPJ válido para pagar o orçamento.", 400);
       }
@@ -4242,6 +4244,56 @@ export default {
       }
       if (!pricing.requiresPayment) {
         return json({ ok: true, paymentRequired: false, pricing }, 200, { "Cache-Control": "no-store" });
+      }
+      if (access.linkedClient?.isTest !== true && !env.ASAAS_API_KEY) {
+        const previousId = await readKvJson(env, privateGalleryLatestPaymentKey(gallery.id), null);
+        const previous = previousId ? await readKvJson(env, privateGalleryPaymentKey(previousId), null) : null;
+        if (previous && ["creating", "pending", "approved"].includes(previous.status)) {
+          if (previous.provider === "mercadopago" && previous.status === "pending"
+            && previous.amountCents === pricing.totalCents
+            && JSON.stringify(previous.selectedPublicIds || []) === JSON.stringify([...new Set(selection)])) {
+            return json({ ok: true, paymentRequired: true, pricing, payment: publicPayment(previous) }, 200, { "Cache-Control": "no-store" });
+          }
+          return errorJson("Já existe uma cobrança para esta galeria. Conclua-a antes de gerar outra.", 409);
+        }
+        const now = Date.now();
+        const payment = {
+          id: `pay_${randomToken(12)}`,
+          provider: "mercadopago",
+          status: "pending",
+          galleryId: gallery.id,
+          gallerySlug: gallery.slug,
+          clientEmail: normalizeEmail(access.linkedClient?.email || access.client?.email || ""),
+          clientName: access.linkedClient?.name || access.client?.name || "Cliente",
+          selectedPublicIds: [...new Set(selection)],
+          pricing,
+          amountCents: pricing.totalCents,
+          createdAt: new Date(now).toISOString(),
+          updatedAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + 1000 * 60 * 30).toISOString(),
+        };
+        try {
+          const mp = await createMercadoPagoPixPayment(env, request, payment, gallery, access.linkedClient || access.client);
+          const saved = {
+            ...payment,
+            providerPaymentId: mp.providerPaymentId,
+            providerStatus: mp.providerStatus,
+            providerStatusDetail: mp.rawStatus,
+            qrCode: mp.qrCode,
+            qrCodeBase64: mp.qrCodeBase64,
+            ticketUrl: mp.ticketUrl,
+          };
+          await writeKvJson(env, privateGalleryPaymentKey(saved.id), saved, { expirationTtl: 60 * 60 * 24 * 7 });
+          await env.LIKES_KV.put(mercadoPagoPaymentKey(saved.providerPaymentId), saved.id, { expirationTtl: 60 * 60 * 24 * 7 });
+          await writeKvJson(env, privateGalleryLatestPaymentKey(gallery.id), saved.id, { expirationTtl: 60 * 60 * 24 * 7 });
+          await appendPrivateGalleryEvent(env, request, gallery.id, "pix_criado", {
+            paymentId: saved.id, providerPaymentId: saved.providerPaymentId, pricing,
+          }, access.client);
+          return json({ ok: true, paymentRequired: true, pricing, payment: publicPayment(saved) }, 200, { "Cache-Control": "no-store" });
+        } catch (err) {
+          console.error("Mercado Pago create payment error:", err);
+          return errorJson("Não foi possível gerar o Pix agora.", 502);
+        }
       }
       if (!access.linkedClient) return errorJson("Cliente da galeria não encontrado.", 409);
       const environment = asaasEnvironmentForClient(access.linkedClient);

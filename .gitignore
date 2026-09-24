@@ -1,3 +1,4 @@
 node_modules
+.wrangler/
 # Claude Code worktrees
 .claude/worktrees/

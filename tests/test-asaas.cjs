@@ -71,8 +71,47 @@ function setup(charge, fetchImpl) {
   return { reconcile: context.reconcile, createCharge: context.createCharge, recover: context.recover,
     clientEnvironment: context.clientEnvironment, worker: context.worker,
     env: { LIKES_KV: kv, GALLERY_DB: db, ASAAS_SANDBOX_API_KEY: 'test-only' },
+    stubQuoteAccess() {
+      vm.runInContext(`
+        requireClientQuoteAccess = async (_request, env, quote) => {
+          const client = await readKvJson(env, privateClientKey(quote.clientId), null);
+          return { client, linkedClient: client };
+        };
+        buildQuotePdf = () => new Uint8Array();
+        sendQuoteAcceptedEmails = async () => ({ client: null, admin: null, errors: [] });
+      `, context);
+    },
     seed, read, dbRows };
 }
+
+test('quote acceptance uses Sandbox for test clients and keeps real clients on the existing flow until PJ activation', async () => {
+  for (const [isTest, productionKey, expectedStatus] of [
+    [true, false, 'pending_payment'],
+    [false, false, 'accepted'],
+    [false, true, 'pending_payment'],
+  ]) {
+    const app = setup({});
+    app.stubQuoteAccess();
+    if (productionKey) app.env.ASAAS_API_KEY = 'production-key';
+    app.seed('private_client:client_1', {
+      id: 'client_1', name: 'Cliente Teste', email: 'client@example.test', isTest,
+    });
+    app.seed('private_quote:quote_1', {
+      id: 'quote_1', clientId: 'client_1', isTest, status: 'published', version: 1,
+      publishedSnapshot: { totalCents: 30000, version: 1 },
+    });
+    const response = await app.worker.fetch(new Request('https://example.test/client-quote/accept', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: 'quote_1', name: 'Cliente Teste', document: '12345678901',
+        confirmContract: true, confirmElectronicSignature: true,
+      }),
+    }), app.env, {});
+    assert.equal(response.status, 200);
+    assert.equal(app.read('private_quote:quote_1').status, expectedStatus);
+    assert.equal((await response.json()).paymentRequired, expectedStatus === 'pending_payment' || undefined);
+  }
+});
 
 function seedTestQuote(app, quote = {}) {
   app.seed('private_client:client_1', { id: 'client_1', isTest: true });

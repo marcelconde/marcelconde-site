@@ -1,0 +1,21 @@
+{
+  "name": "cloudinary",
+  "main": "worker.js",
+  "compatibility_date": "2026-01-12",
+  "kv_namespaces": [
+    {
+      "binding": "LIKES_KV",
+      "id": "f68d8566cb5e49128e8fce90bbd87ffa"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "GALLERY_DB",
+      "database_name": "marcelconde-gallery",
+      "database_id": "62099a46-d8c8-43dc-ae42-67ffd2ad3d63"
+    }
+  ],
+  "vars": {
+    "CLOUDINARY_CLOUD_NAME": "djv98mqfz"
+  }
+}
