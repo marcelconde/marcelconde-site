@@ -2988,6 +2988,14 @@ async function readAsaasIntent(env, scope) {
   return row ? JSON.parse(row.value) : null;
 }
 
+async function hasAsaasIntentForPayment(env, paymentId) {
+  if (!env.GALLERY_DB || !paymentId) return false;
+  const row = await env.GALLERY_DB.prepare(
+    "SELECT key FROM gallery_records WHERE key LIKE 'asaas_intent:%' AND json_extract(value, '$.payment.id') = ? LIMIT 1"
+  ).bind(paymentId).first();
+  return Boolean(row);
+}
+
 async function galleryAsaasPaymentPending(env, galleryId) {
   if (!env.GALLERY_DB) return false;
   const intent = await readAsaasIntent(env, `gallery:${galleryId}`);
@@ -3531,6 +3539,19 @@ export default {
       if (!providerPaymentId) return errorJson("Missing Asaas payment id", 400);
       try {
         const result = await reconcileAsaasPayment(env, request, providerPaymentId, environment);
+        if (result.reason === "payment_not_found") {
+          // One Asaas account may also receive Fotop payments. Acknowledge
+          // unrelated events, but retry a site charge that reached us before
+          // its provider ID was saved in KV.
+          let localPaymentId = String(body?.payment?.externalReference || "").trim();
+          if (!localPaymentId) {
+            const charge = await asaasRequest(env, environment, `/payments/${encodeURIComponent(providerPaymentId)}`);
+            localPaymentId = String(charge.externalReference || "").trim();
+          }
+          if (!await hasAsaasIntentForPayment(env, localPaymentId)) {
+            return json({ ok: true, ignored: true }, 200, { "Cache-Control": "no-store" });
+          }
+        }
         if (!result.ok) return errorJson("Asaas payment pending reconciliation", 503);
         return json({ ok: true }, 200, { "Cache-Control": "no-store" });
       } catch (err) {

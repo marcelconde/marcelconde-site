@@ -26,7 +26,7 @@ Configurar no Asaas webhooks de cobranças com esses tokens, separados por ambie
 - Produção: `https://api.marcelconde.com.br/payments/asaas/webhook`
 - Sandbox: `https://api.marcelconde.com.br/payments/asaas/sandbox/webhook`
 
-Eventos de cobrança devem incluir pagamento confirmado, recebido, recusado, excluído e estornado. O Worker autentica cada webhook pelo cabeçalho `asaas-access-token` e consulta o pagamento diretamente no ambiente correto. Se o webhook falhar, a consulta de status na página do cliente também tenta conciliar. Não remover os secrets do Mercado Pago enquanto houver cobranças antigas pendentes.
+Eventos de cobrança devem incluir pagamento confirmado, recebido, recusado, excluído e estornado. O Worker autentica cada webhook pelo cabeçalho `asaas-access-token`, ignora cobranças de outras integrações da mesma conta e consulta as cobranças do site diretamente no ambiente correto. Se o webhook falhar, a consulta de status na página do cliente também tenta conciliar. Não remover os secrets do Mercado Pago enquanto houver cobranças antigas pendentes.
 
 ## Publicação e validação
 

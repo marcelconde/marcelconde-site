@@ -13,6 +13,12 @@ function setup(charge, fetchImpl) {
       return {
         bind(...values) { params = values; return this; },
         async first() {
+          if (sql.startsWith('SELECT key FROM gallery_records WHERE key LIKE')) {
+            for (const [key, value] of dbRows) {
+              if (key.startsWith('asaas_intent:') && JSON.parse(value)?.payment?.id === params[0]) return { key };
+            }
+            return null;
+          }
           assert.match(sql, /^SELECT value/);
           return dbRows.has(params[0]) ? { value: dbRows.get(params[0]) } : null;
         },
@@ -204,12 +210,24 @@ test('production and Sandbox webhooks require their own access tokens', async ()
   app.env.ASAAS_SANDBOX_WEBHOOK_TOKEN = 'sandbox-token';
   const webhook = (path, token) => app.worker.fetch(new Request(`https://example.test${path}`, {
     method: 'POST', headers: { 'asaas-access-token': token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ payment: { id: 'unknown' } }),
+    body: JSON.stringify({ payment: { id: 'unknown', externalReference: 'fotop-payment' } }),
   }), app.env, {});
   assert.equal((await webhook('/payments/asaas/webhook', 'sandbox-token')).status, 401);
   assert.equal((await webhook('/payments/asaas/sandbox/webhook', 'production-token')).status, 401);
-  assert.equal((await webhook('/payments/asaas/webhook', 'production-token')).status, 503);
-  assert.equal((await webhook('/payments/asaas/sandbox/webhook', 'sandbox-token')).status, 503);
+  assert.equal((await webhook('/payments/asaas/webhook', 'production-token')).status, 200);
+  assert.equal((await webhook('/payments/asaas/sandbox/webhook', 'sandbox-token')).status, 200);
+});
+
+test('Sandbox webhook ignores other integrations but retries a site charge before KV mapping is saved', async () => {
+  const app = setup({});
+  app.env.ASAAS_SANDBOX_WEBHOOK_TOKEN = 'sandbox-token';
+  const webhook = externalReference => app.worker.fetch(new Request('https://example.test/payments/asaas/sandbox/webhook', {
+    method: 'POST', headers: { 'asaas-access-token': 'sandbox-token', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payment: { id: 'pay_other', externalReference } }),
+  }), app.env, {});
+  assert.equal((await webhook('fotop-transaction')).status, 200);
+  app.dbRows.set('asaas_intent:quote:quote_1', JSON.stringify({ payment: { id: 'qpay_site' } }));
+  assert.equal((await webhook('qpay_site')).status, 503);
 });
 
 test('paid Asaas charge with wrong amount or reference never approves the quote', async () => {
