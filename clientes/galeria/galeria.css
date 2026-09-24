@@ -716,6 +716,13 @@ body.selection-processing .workflow-status {
   resize: vertical;
 }
 
+.payment-cancel {
+  display: block;
+  margin-top: 14px;
+  border-color: var(--danger);
+  color: var(--ink);
+}
+
 .payment-status {
   margin-bottom: 0;
 }

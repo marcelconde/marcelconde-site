@@ -38,4 +38,6 @@ Referência: https://developers.cloudflare.com/kv/concepts/how-kv-works/
 
 Novas cobranças usam Asaas, separando produção para clientes reais e Sandbox para clientes de teste. O checkout hospedado mostra os meios habilitados na conta; a API de cobrança permite Pix, boleto e cartão de crédito, mas não oferece débito nesse fluxo. Cobranças antigas do Mercado Pago continuam conciliáveis. Implantação, secrets e validação: `docs/asaas-payments.md`.
 
+Cobranças pendentes de fotos extras podem ser canceladas na galeria pelo cliente ou na seção Seleção do admin. O cancelamento confirma o estado com o provedor, encerra apenas a cobrança escolhida e preserva as fotos marcadas; o cliente pode retirar algumas e gerar uma nova cobrança. Pagamentos aprovados não usam esse fluxo.
+
 A API Pix do Bradesco foi apenas inscrita no portal; não foi integrada ao site. Ela não oferece o checkout de cartão solicitado.

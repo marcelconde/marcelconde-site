@@ -23,7 +23,7 @@ function app() {
   const tasks = [];
   const context = vm.createContext({ crypto: webcrypto, Request, Response, Headers, URL, AbortController, TextEncoder, TextDecoder, btoa, atob, console, setTimeout, clearTimeout, fetch: () => { throw Error('Unexpected external request'); } });
   const source = fs.readFileSync(require.resolve('../worker.js'), 'utf8').replace('export default {', 'globalThis.worker = {');
-  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, createMercadoPagoPixPayment};', context);
+  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, createMercadoPagoPixPayment, claimAsaasIntent};', context);
   const env = { LIKES_KV: kv, GALLERY_DB: database, ADMIN_KEY: 'local-test-key' };
   const seed = (key, value) => data.set(key, JSON.stringify(value));
   const request = (path, body, token = 'local-test-key') => context.worker.fetch(new Request('https://example.test' + path, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : {body: JSON.stringify(body)}) }), env, {waitUntil(p) { tasks.push(p); }});
@@ -115,6 +115,130 @@ test('a client can retrieve an in-progress gallery charge without creating anoth
   assert.equal(body.payment.amountCents, 1000);
 });
 
+test('client cancels only the pending Asaas charge for its gallery, then can change photos and create another', async () => {
+  const a = app();
+  a.env.ASAAS_SANDBOX_API_KEY = 'sandbox-test-key';
+  const payment = {
+    id: 'pay_local', provider: 'asaas', providerPaymentId: 'pay_remote', environment: 'sandbox',
+    galleryId: 'g', status: 'pending', amountCents: 1000, selectedPublicIds: ['a'],
+  };
+  await a.writeKvJson(a.env, 'private_gallery_payment:pay_local', payment);
+  await a.writeKvJson(a.env, 'private_gallery_latest_payment:g', payment.id);
+  await a.env.GALLERY_DB.prepare('INSERT INTO gallery_records (key, value) VALUES (?, ?)')
+    .bind('asaas_intent:gallery:g', JSON.stringify({ paymentId: payment.id, payment, status: 'pending' })).run();
+  const calls = [];
+  a.context.fetch = async (url, options = {}) => {
+    calls.push(options.method || 'GET');
+    assert.match(url, /api-sandbox\.asaas\.com\/v3\/payments\/pay_remote$/);
+    assert.equal(options.headers.access_token, 'sandbox-test-key');
+    return new Response(JSON.stringify(options.method === 'DELETE' ? { deleted: true } : {
+      id: 'pay_remote', externalReference: 'pay_local', value: 10, status: 'PENDING',
+    }));
+  };
+  assert.equal((await a.request('/client-gallery/payment/cancel', { slug: 'race', paymentId: payment.id }, 'wrong')).status, 401);
+  assert.equal((await a.request('/client-gallery/payment/cancel', { slug: 'race', paymentId: 'other' }, 'client-token')).status, 409);
+  assert.deepEqual(calls, []);
+
+  const response = await a.request('/client-gallery/payment/cancel', { slug: 'race', paymentId: payment.id }, 'client-token');
+  assert.equal(response.status, 200, await response.text());
+  assert.equal(a.data.has('private_gallery_payment:pay_local'), false); // Gallery payments live in D1.
+  assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:pay_local', null)).status, 'cancelled');
+  assert.equal((await a.env.GALLERY_DB.prepare('SELECT value FROM gallery_records WHERE key = ?')
+    .bind('asaas_intent:gallery:g').first()).value.includes('"status":"cancelled"'), true);
+  assert.deepEqual(calls, ['GET', 'DELETE']);
+  const current = await a.request('/client-gallery/payment/current?slug=race', undefined, 'client-token');
+  assert.equal((await current.json()).payment, null);
+  assert.equal((await a.request('/client-gallery/favorites',
+    { slug: 'race', changes: [{ publicId: 'a', selected: false }] }, 'client-token')).status, 200);
+  assert.equal(await a.claimAsaasIntent(a.env, 'gallery:g', { id: 'pay_new' }), true);
+});
+
+test('admin can cancel a specific pending Mercado Pago charge, but cannot cancel another gallery or a paid charge', async () => {
+  const a = app();
+  a.env.MERCADO_PAGO_ACCESS_TOKEN = 'mp-test-key';
+  const payment = {
+    id: 'pay_mp_local', provider: 'mercadopago', providerPaymentId: '987', galleryId: 'g',
+    status: 'pending', amountCents: 1000, selectedPublicIds: ['a'],
+  };
+  await a.writeKvJson(a.env, 'private_gallery_payment:pay_mp_local', payment);
+  await a.writeKvJson(a.env, 'private_gallery_latest_payment:g', payment.id);
+  assert.equal((await a.request('/client-gallery/favorites',
+    { slug: 'race', changes: [{ publicId: 'a', selected: false }] }, 'client-token')).status, 409);
+  assert.equal((await a.request('/private/galleries', { id: 'g', selectionLimit: 0 })).status, 409);
+  const calls = [];
+  a.context.fetch = async (url, options = {}) => {
+    calls.push(options.method || 'GET');
+    assert.equal(url, 'https://api.mercadopago.com/v1/payments/987');
+    assert.equal(options.headers.Authorization, 'Bearer mp-test-key');
+    return new Response(JSON.stringify({ id: 987, external_reference: payment.id,
+      transaction_amount: 10, status: options.method === 'PUT' ? 'cancelled' : 'pending' }));
+  };
+  assert.equal((await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: payment.id }, 'wrong')).status, 401);
+  assert.equal((await a.request('/private/gallery/payment/cancel', { galleryId: 'other', paymentId: payment.id })).status, 404);
+  assert.deepEqual(calls, []);
+  const response = await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: payment.id });
+  assert.equal(response.status, 200, await response.text());
+  assert.deepEqual(calls, ['GET', 'PUT']);
+  assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:pay_mp_local', null)).status, 'cancelled');
+  assert.equal((await a.request('/client-gallery/favorites',
+    { slug: 'race', changes: [{ publicId: 'a', selected: false }] }, 'client-token')).status, 200);
+  const second = await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: payment.id });
+  assert.equal(second.status, 200);
+  assert.deepEqual(calls, ['GET', 'PUT']);
+
+  const paid = { ...payment, id: 'pay_paid', providerPaymentId: '988', status: 'approved' };
+  await a.writeKvJson(a.env, 'private_gallery_payment:pay_paid', paid);
+  await a.writeKvJson(a.env, 'private_gallery_latest_payment:g', paid.id);
+  assert.equal((await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: paid.id })).status, 409);
+  assert.deepEqual(calls, ['GET', 'PUT']);
+});
+
+test('a provider charge with mismatched reference is never cancelled', async () => {
+  const a = app();
+  a.env.ASAAS_SANDBOX_API_KEY = 'sandbox-test-key';
+  const payment = { id: 'pay_local', provider: 'asaas', providerPaymentId: 'pay_remote',
+    environment: 'sandbox', galleryId: 'g', status: 'pending', amountCents: 1000 };
+  await a.writeKvJson(a.env, 'private_gallery_payment:pay_local', payment);
+  await a.writeKvJson(a.env, 'private_gallery_latest_payment:g', payment.id);
+  await a.env.GALLERY_DB.prepare('INSERT INTO gallery_records (key, value) VALUES (?, ?)')
+    .bind('asaas_intent:gallery:g', JSON.stringify({ paymentId: payment.id, payment, status: 'pending' })).run();
+  let deleted = false;
+  a.context.fetch = async (_url, options = {}) => {
+    if (options.method === 'DELETE') deleted = true;
+    return new Response(JSON.stringify({ id: 'pay_remote', externalReference: 'someone_else', value: 10, status: 'PENDING' }));
+  };
+  const response = await a.request('/client-gallery/payment/cancel', { slug: 'race', paymentId: payment.id }, 'client-token');
+  assert.equal(response.status, 409);
+  assert.equal(deleted, false);
+  assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:pay_local', null)).status, 'pending');
+});
+
+test('a charge paid just before cancellation is fulfilled instead of deleted', async () => {
+  const a = app();
+  a.env.ASAAS_SANDBOX_API_KEY = 'sandbox-test-key';
+  await a.writeKvJson(a.env, 'private_client:c', { id: 'c', name: 'Client', email: 'client@example.test', isTest: true });
+  await a.writeKvJson(a.env, 'private_gallery:g', { id: 'g', slug: 'race', clientId: 'c',
+    status: 'selection', selectionLimit: 0, extraPhotoPriceCents: 1000 });
+  const payment = { id: 'pay_local', provider: 'asaas', providerPaymentId: 'pay_remote',
+    environment: 'sandbox', galleryId: 'g', status: 'pending', amountCents: 1000, selectedPublicIds: ['a'] };
+  await a.writeKvJson(a.env, 'private_gallery_payment:pay_local', payment);
+  await a.writeKvJson(a.env, 'private_gallery_latest_payment:g', payment.id);
+  await a.writeKvJson(a.env, 'asaas_payment:sandbox:pay_remote', { kind: 'gallery', id: payment.id });
+  await a.env.GALLERY_DB.prepare('INSERT INTO gallery_records (key, value) VALUES (?, ?)')
+    .bind('asaas_intent:gallery:g', JSON.stringify({ paymentId: payment.id, payment, status: 'pending' })).run();
+  let deletions = 0;
+  a.context.fetch = async (_url, options = {}) => {
+    if (options.method === 'DELETE') deletions++;
+    return new Response(JSON.stringify({ id: 'pay_remote', externalReference: payment.id,
+      value: 10, status: 'RECEIVED' }));
+  };
+  const response = await a.request('/client-gallery/payment/cancel', { slug: 'race', paymentId: payment.id }, 'client-token');
+  assert.equal(response.status, 409);
+  assert.equal(deletions, 0);
+  assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:pay_local', null)).status, 'approved');
+  assert.equal((await a.readKvJson(a.env, 'private_gallery:g', null)).status, 'editing');
+});
+
 test('admin preview is gallery-scoped, expires and cannot mutate selection or generate payment', async () => {
   const a = app();
   assert.equal((await a.request('/private/gallery/preview',{galleryId:'g'},'bad')).status,401);
@@ -124,7 +248,7 @@ test('admin preview is gallery-scoped, expires and cannot mutate selection or ge
   const view = await a.request('/client-gallery?slug=race',undefined,token);
   assert.equal(view.status,200);
   const body=await view.json(); assert.equal(body.gallery.adminPreview,true); assert.deepEqual(body.gallery.selectedPublicIds,['a']);
-  for (const path of ['/client-gallery/favorite','/client-gallery/payment/create','/client-gallery/complete']) {
+  for (const path of ['/client-gallery/favorite','/client-gallery/payment/create','/client-gallery/payment/cancel','/client-gallery/complete']) {
     assert.equal((await a.request(path,{slug:'race',publicId:'a',selected:false},token)).status,403);
   }
   a.seed('private_gallery_slug:other','other');a.seed('private_gallery:other',{id:'other',slug:'other'});

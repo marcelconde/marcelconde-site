@@ -17,6 +17,7 @@ const state = {
   images: [],
   selection: [],
   events: [],
+  payment: null,
   selectedForDeletion: new Set(),
   photoFilter: "all",
   loadingGallery: false,
@@ -75,6 +76,10 @@ const deleteGalleryBtn = $("#deleteGalleryBtn");
 const selectionLogPanel = $("#selectionLogPanel");
 const selectionLogSummary = $("#selectionLogSummary");
 const selectionLogList = $("#selectionLogList");
+const galleryPaymentPanel = $("#galleryPaymentPanel");
+const galleryPaymentSummary = $("#galleryPaymentSummary");
+const galleryPaymentHelp = $("#galleryPaymentHelp");
+const cancelGalleryPaymentBtn = $("#cancelGalleryPaymentBtn");
 const shareLink = $("#shareLink");
 const photoFilters = $("#photoFilters");
 const showAllPhotosBtn = $("#showAllPhotosBtn");
@@ -437,6 +442,7 @@ function clearGalleryMediaState() {
   state.images = [];
   state.selection = [];
   state.events = [];
+  state.payment = null;
   state.selectedForDeletion.clear();
 }
 
@@ -590,6 +596,7 @@ function renderSelectedGallery() {
     selectionLogPanel.hidden = true;
     selectionLogSummary.textContent = "";
     selectionLogList.innerHTML = "";
+    if (galleryPaymentPanel) galleryPaymentPanel.hidden = true;
     shareLink.textContent = "Crie ou selecione uma galeria para gerar o link do cliente.";
     photoGrid.innerHTML = "";
     eventList.innerHTML = "";
@@ -640,6 +647,7 @@ function renderSelectedGallery() {
 
   renderGalleries();
   renderSelectionLog();
+  renderGalleryPayment();
   renderPhotos();
   renderEvents();
 }
@@ -767,6 +775,21 @@ function renderSelectionLog() {
   }).join("");
 }
 
+function renderGalleryPayment() {
+  if (!galleryPaymentPanel) return;
+  const payment = state.payment;
+  galleryPaymentPanel.hidden = !payment || !["creating", "pending"].includes(payment.status);
+  if (galleryPaymentPanel.hidden) return;
+  const amount = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+    .format(Number(payment.amountCents || 0) / 100);
+  galleryPaymentSummary.textContent = `${amount} · ID ${payment.id}`;
+  const creating = payment.status === "creating" || !payment.providerPaymentId;
+  galleryPaymentHelp.textContent = creating
+    ? "A cobrança ainda está sendo criada. Atualize esta seção em instantes."
+    : "Cancele a cobrança para liberar alterações na seleção e gerar outro valor.";
+  cancelGalleryPaymentBtn.disabled = creating;
+}
+
 async function selectGallery(id) {
   if (state.selectedGallery?.id !== id) {
     state.selectedGallery = state.galleries.find((gallery) => gallery.id === id) || null;
@@ -782,6 +805,7 @@ async function selectGallery(id) {
     state.images = data.images || [];
     state.selection = data.selection || [];
     state.events = data.events || [];
+    state.payment = data.payment || null;
     state.selectedForDeletion.clear();
   } finally {
     state.loadingGallery = false;
@@ -1398,6 +1422,28 @@ pruneUnselectedBtn.addEventListener("click", async () => {
   } finally {
     pruneUnselectedBtn.disabled = false;
     renderSelectedGallery();
+  }
+});
+
+cancelGalleryPaymentBtn?.addEventListener("click", async () => {
+  const gallery = state.selectedGallery;
+  const payment = state.payment;
+  if (!gallery?.id || !payment?.id || payment.status !== "pending") return;
+  if (!confirm(`Cancelar a cobrança ${payment.id}? O cliente poderá alterar as fotos e gerar uma nova cobrança.`)) return;
+  cancelGalleryPaymentBtn.disabled = true;
+  cancelGalleryPaymentBtn.textContent = "Cancelando...";
+  try {
+    await getJson("/private/gallery/payment/cancel", {
+      method: "POST",
+      body: JSON.stringify({ galleryId: gallery.id, paymentId: payment.id }),
+    });
+    await selectGallery(gallery.id);
+    showToast("Cobrança cancelada. A seleção pode ser alterada novamente.");
+  } catch (err) {
+    showToast(err.message || "Não foi possível cancelar a cobrança.");
+  } finally {
+    cancelGalleryPaymentBtn.textContent = "Cancelar cobrança";
+    renderGalleryPayment();
   }
 });
 

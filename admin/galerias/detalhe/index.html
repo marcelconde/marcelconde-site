@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260923-01">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20260924-02">
 </head>
 <body class="gallery-detail-page">
   <div class="admin-shell" id="adminShell">
@@ -286,6 +286,14 @@
           </form>
 
           <section class="detail-section" id="section-selection" hidden>
+            <div class="gallery-payment-panel" id="galleryPaymentPanel" hidden>
+              <div>
+                <span class="eyebrow">Cobrança pendente</span>
+                <strong id="galleryPaymentSummary"></strong>
+                <p id="galleryPaymentHelp">Cancele a cobrança para liberar alterações na seleção e gerar outro valor.</p>
+              </div>
+              <button class="btn btn-danger btn-small" id="cancelGalleryPaymentBtn" type="button">Cancelar cobrança</button>
+            </div>
             <details class="selection-log-panel" id="selectionLogPanel" open>
               <summary class="selection-log-head">
                 <span>
@@ -314,6 +322,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/admin/galerias/galerias.js?v=20260923-01"></script>
+  <script src="/admin/galerias/galerias.js?v=20260924-02"></script>
 </body>
 </html>

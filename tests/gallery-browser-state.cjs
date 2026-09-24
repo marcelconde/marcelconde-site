@@ -24,7 +24,7 @@ function browser(file, storage = new Map(), fetchImpl = async()=>new Response('{
     window:{addEventListener(){},CSS:{escape:s=>s}},
     CSS:{escape:s=>s},crypto:webcrypto,URL,URLSearchParams,Headers,Response,Request,FormData,Blob,File,console,
     setTimeout(){return 1;},clearTimeout(){},setInterval(){return 1;},clearInterval(){},
-    IntersectionObserver:class {observe(){}},fetch:fetchImpl,
+    IntersectionObserver:class {observe(){}},fetch:fetchImpl,confirm:()=>true,
   });
   let source=fs.readFileSync(require.resolve('../'+file),'utf8');
   // Stop automatic page startup; tests drive the real handlers below.
@@ -112,6 +112,39 @@ test('a payment lock restores the server selection instead of presenting it as a
   assert.deepEqual(Array.from(a.run('[...state.selected]')),['a']);
   assert.equal(a.run('state.pending.size'),0);
   assert.match(a.element('#selectionSyncStatus').textContent,/cobrança pendente/);
+});
+
+test('client cancels the displayed charge and clears the gallery payment lock',async()=>{
+  const calls=[];
+  const store=new Map([['mc_client_token','client-token']]);
+  const a=browser('clientes/galeria/galeria.js',store,async(url,options)=>{
+    calls.push({url,body:JSON.parse(options.body)});
+    return new Response(JSON.stringify({ok:true,payment:{id:'pay_1',status:'cancelled'}}));
+  });
+  a.run(`state.gallery={id:'g',title:'Race',pricing:{requiresPayment:true},status:'selection'};
+    state.payment={id:'pay_1',status:'pending',providerPaymentId:'asaas_1'};
+    state.pendingPayment=state.payment;`);
+  await a.element('#paymentCancel').listeners.click();
+  assert.equal(calls.length,1);
+  assert.match(calls[0].url,/\/client-gallery\/payment\/cancel$/);
+  assert.equal(calls[0].body.paymentId,'pay_1');
+  assert.equal(a.run('state.pendingPayment'),null);
+  assert.equal(a.run('state.payment'),null);
+});
+
+test('admin cancellation targets the selected gallery and refreshes its payment card',async()=>{
+  const calls=[];
+  const a=browser('admin/galerias/galerias.js',new Map(),async(url,options={})=>{
+    calls.push({url,body:options.body&&JSON.parse(options.body)});
+    return new Response(JSON.stringify(url.includes('/payment/cancel')
+      ? {ok:true} : {gallery:{id:'g',slug:'race',title:'Race',status:'selection'},images:[],selection:[],events:[],payment:null}));
+  });
+  a.run(`state.selectedGallery={id:'g',slug:'race',title:'Race',status:'selection'};
+    state.payment={id:'pay_1',status:'pending',providerPaymentId:'asaas_1'};`);
+  await a.element('#cancelGalleryPaymentBtn').listeners.click();
+  assert.match(calls[0].url,/\/private\/gallery\/payment\/cancel$/);
+  assert.deepEqual(calls[0].body,{galleryId:'g',paymentId:'pay_1'});
+  assert.equal(a.run('state.payment'),null);
 });
 
 test('click during an in-flight save remains queued after the older response',async()=>{

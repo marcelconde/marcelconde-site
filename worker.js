@@ -278,12 +278,20 @@ async function deleteGalleryRecord(env, key) {
   if (env.LIKES_KV) await env.LIKES_KV.delete(key);
 }
 
-async function changeStoredIds(env, key, changes, blockedIntentKey = "") {
+async function changeStoredIds(env, key, changes, blockedIntentKey = "", blockedLatestPaymentKey = "") {
   const current = await readKvJson(env, key, []);
   if (usesGalleryDatabase(env, key)) {
     // Each statement changes only its own photo, without replacing concurrent favorites.
     const blocked = blockedIntentKey
       ? "AND NOT EXISTS (SELECT 1 FROM gallery_records AS intent WHERE intent.key = ? AND json_extract(intent.value, '$.status') IN ('creating', 'pending'))"
+      : "";
+    const blockedLatest = blockedLatestPaymentKey
+      ? `AND NOT EXISTS (
+          SELECT 1 FROM gallery_records AS latest
+          JOIN gallery_records AS payment ON payment.key = 'private_gallery_payment:' || json_extract(latest.value, '$')
+          WHERE latest.key = ? AND json_extract(payment.value, '$.provider') = 'mercadopago'
+            AND json_extract(payment.value, '$.status') IN ('creating', 'pending')
+        )`
       : "";
     const result = await env.GALLERY_DB.prepare(`
       UPDATE gallery_records SET value = (
@@ -293,9 +301,11 @@ async function changeStoredIds(env, key, changes, blockedIntentKey = "") {
           UNION ALL
           SELECT json_extract(value, '$.publicId') FROM json_each(?) WHERE json_extract(value, '$.selected') = 1
         )
-      ) WHERE key = ? ${blocked}
-    `).bind(JSON.stringify(changes), JSON.stringify(changes), key, ...(blockedIntentKey ? [blockedIntentKey] : [])).run();
-    if (blockedIntentKey && (result.meta?.changes ?? result.changes) !== 1) return null;
+      ) WHERE key = ? ${blocked} ${blockedLatest}
+    `).bind(JSON.stringify(changes), JSON.stringify(changes), key,
+      ...(blockedIntentKey ? [blockedIntentKey] : []),
+      ...(blockedLatestPaymentKey ? [blockedLatestPaymentKey] : [])).run();
+    if ((blockedIntentKey || blockedLatestPaymentKey) && (result.meta?.changes ?? result.changes) !== 1) return null;
     return readKvJson(env, key, []);
   }
   const next = new Set(current);
@@ -305,7 +315,10 @@ async function changeStoredIds(env, key, changes, blockedIntentKey = "") {
 }
 
 async function changeGalleryFavorites(env, galleryId, changes) {
-  return changeStoredIds(env, privateGallerySelectionKey(galleryId), changes, `asaas_intent:gallery:${galleryId}`);
+  const latest = await getPrivateGalleryLatestPayment(env, galleryId);
+  if (!env.GALLERY_DB && latest?.provider === "mercadopago" && ["creating", "pending"].includes(latest.status)) return null;
+  return changeStoredIds(env, privateGallerySelectionKey(galleryId), changes,
+    `asaas_intent:gallery:${galleryId}`, privateGalleryLatestPaymentKey(galleryId));
 }
 
 async function prependStoredEvent(env, key, event, limit) {
@@ -1112,6 +1125,14 @@ async function getPrivateGalleryLatestPayment(env, galleryId = "") {
   return readKvJson(env, privateGalleryPaymentKey(latestPaymentId), null);
 }
 
+async function getCurrentGalleryPayment(env, galleryId) {
+  const intent = env.GALLERY_DB ? await readAsaasIntent(env, `gallery:${galleryId}`) : null;
+  if (["creating", "pending"].includes(intent?.status) && intent.paymentId) {
+    return await readKvJson(env, privateGalleryPaymentKey(intent.paymentId), null) || intent.payment || null;
+  }
+  return getPrivateGalleryLatestPayment(env, galleryId);
+}
+
 async function repairPrivateGalleryProgress(env, gallery = {}, latestPayment = null, events = []) {
   if (!gallery?.id || !shouldRepairGalleryToEditing(gallery, latestPayment, events)) return gallery;
   const completionEvent = events.find((event) => (
@@ -1182,7 +1203,7 @@ async function savePrivateGallery(env, input = {}) {
   const now = new Date().toISOString();
   const id = String(input.id || `gal_${randomToken(9)}`).replace(/[^a-zA-Z0-9_-]/g, "");
   const existing = await readKvJson(env, privateGalleryKey(id), {});
-  if (existing.id && await galleryAsaasPaymentPending(env, id)) {
+  if (existing.id && await galleryPaymentPending(env, id)) {
     throw Object.assign(new Error("Há um pagamento em andamento nesta galeria. Aguarde a confirmação antes de editar."), { status: 409 });
   }
   const title = cleanDisplayName(input.title || existing.title || "Galeria privada");
@@ -1300,7 +1321,7 @@ async function deletePrivateGallery(env, galleryId) {
 
   const gallery = await readKvJson(env, privateGalleryKey(id), null);
   if (!gallery) return null;
-  if (await galleryAsaasPaymentPending(env, id)) {
+  if (await galleryPaymentPending(env, id)) {
     throw Object.assign(new Error("Há um pagamento em andamento nesta galeria. Aguarde a confirmação antes de apagar."), { status: 409 });
   }
 
@@ -2849,6 +2870,7 @@ function publicPayment(payment = {}) {
     qrCodeBase64: payment.qrCodeBase64 || "",
     ticketUrl: payment.ticketUrl || "",
     approvedAt: payment.approvedAt || null,
+    cancelledAt: payment.cancelledAt || null,
     expiresAt: payment.expiresAt || null,
     selectionCompletedAt: payment.selectionCompletedAt || null,
   };
@@ -2976,14 +2998,14 @@ async function claimAsaasIntent(env, scope, payment) {
   const value = JSON.stringify({ paymentId: payment.id, payment, status: "creating", createdAt: Date.now() });
   const inserted = await env.GALLERY_DB.prepare("INSERT OR IGNORE INTO gallery_records (key, value) VALUES (?, ?)")
     .bind(key, value).run();
-  if (inserted.meta?.changes === 1) return true;
+  if ((inserted.meta?.changes ?? inserted.changes) === 1) return true;
   const row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(key).first();
   if (!row) return false;
   const previous = JSON.parse(row.value);
-  if (previous.status !== "rejected") return false;
+  if (!["rejected", "cancelled"].includes(previous.status)) return false;
   const replaced = await env.GALLERY_DB.prepare("UPDATE gallery_records SET value = ? WHERE key = ? AND value = ?")
     .bind(value, key, row.value).run();
-  return replaced.meta?.changes === 1;
+  return (replaced.meta?.changes ?? replaced.changes) === 1;
 }
 
 async function setAsaasIntentStatus(env, scope, paymentId, status) {
@@ -3006,10 +3028,13 @@ async function hasAsaasIntentForPayment(env, paymentId) {
   return Boolean(row);
 }
 
-async function galleryAsaasPaymentPending(env, galleryId) {
-  if (!env.GALLERY_DB) return false;
-  const intent = await readAsaasIntent(env, `gallery:${galleryId}`);
-  return ["creating", "pending"].includes(intent?.status);
+async function galleryPaymentPending(env, galleryId) {
+  if (env.GALLERY_DB) {
+    const intent = await readAsaasIntent(env, `gallery:${galleryId}`);
+    if (["creating", "pending"].includes(intent?.status)) return true;
+  }
+  const latest = await getPrivateGalleryLatestPayment(env, galleryId);
+  return latest?.provider === "mercadopago" && ["creating", "pending"].includes(latest.status);
 }
 
 // A timed-out POST may already have created a charge. Recover by reference;
@@ -3038,20 +3063,21 @@ async function rejectFailedAsaasCreation(env, scope, payment, key, error) {
   await setAsaasIntentStatus(env, scope, payment.id, "rejected");
 }
 
-async function withAsaasReconciliationLock(env, environment, providerPaymentId, work) {
+async function withPaymentReconciliationLock(env, environment, providerPaymentId, work) {
   if (!env.GALLERY_DB) throw new Error("Banco transacional indisponível para conferir pagamento.");
-  const key = `asaas_reconcile:${environment}:${providerPaymentId}`;
+  const provider = environment === "mercadopago" ? "mercadopago" : "asaas";
+  const key = `${provider}_reconcile:${environment}:${providerPaymentId}`;
   const value = JSON.stringify({ token: randomToken(12), expiresAt: Date.now() + 120000 });
   const inserted = await env.GALLERY_DB.prepare("INSERT OR IGNORE INTO gallery_records (key, value) VALUES (?, ?)")
     .bind(key, value).run();
-  if (inserted.meta?.changes !== 1) {
+  if ((inserted.meta?.changes ?? inserted.changes) !== 1) {
     const row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(key).first();
     if (!row || Number(JSON.parse(row.value).expiresAt || 0) > Date.now()) {
       return { ok: false, reason: "reconciliation_in_progress" };
     }
     const replaced = await env.GALLERY_DB.prepare("UPDATE gallery_records SET value = ? WHERE key = ? AND value = ?")
       .bind(value, key, row.value).run();
-    if (replaced.meta?.changes !== 1) return { ok: false, reason: "reconciliation_in_progress" };
+    if ((replaced.meta?.changes ?? replaced.changes) !== 1) return { ok: false, reason: "reconciliation_in_progress" };
   }
   try {
     return await work();
@@ -3169,6 +3195,12 @@ async function verifyMercadoPagoWebhookSignature(request, env, providerPaymentId
 }
 
 async function approveMercadoPagoPayment(env, request, providerPaymentId) {
+  if (!env.GALLERY_DB) return approveMercadoPagoPaymentLocked(env, request, providerPaymentId);
+  return withPaymentReconciliationLock(env, "mercadopago", providerPaymentId,
+    () => approveMercadoPagoPaymentLocked(env, request, providerPaymentId));
+}
+
+async function approveMercadoPagoPaymentLocked(env, request, providerPaymentId) {
   if (!providerPaymentId || !env.LIKES_KV) return { ok: false, reason: "missing_payment_id" };
 
   const paymentId = await env.LIKES_KV.get(mercadoPagoPaymentKey(providerPaymentId));
@@ -3178,6 +3210,10 @@ async function approveMercadoPagoPayment(env, request, providerPaymentId) {
   if (!payment) return { ok: false, reason: "payment_record_not_found" };
 
   const mpPayment = await getMercadoPagoPayment(env, providerPaymentId);
+  if (payment.status === "cancelled" && mpPayment.status !== "cancelled") {
+    console.error("Mercado Pago cancelled payment changed; manual reconciliation required", payment.id);
+    return { ok: false, reason: "cancelled_payment_changed", payment };
+  }
   const now = new Date().toISOString();
   const nextPayment = {
     ...payment,
@@ -3187,7 +3223,8 @@ async function approveMercadoPagoPayment(env, request, providerPaymentId) {
   };
 
   if (mpPayment.status !== "approved") {
-    nextPayment.status = ["rejected", "cancelled", "refunded", "charged_back"].includes(mpPayment.status) ? "rejected" : "pending";
+    nextPayment.status = mpPayment.status === "cancelled" && payment.status === "cancelled"
+      ? "cancelled" : ["rejected", "cancelled", "refunded", "charged_back"].includes(mpPayment.status) ? "rejected" : "pending";
     await writeKvJson(env, privateGalleryPaymentKey(payment.id), nextPayment);
     return { ok: true, approved: false, payment: nextPayment };
   }
@@ -3255,7 +3292,7 @@ async function approveMercadoPagoPayment(env, request, providerPaymentId) {
 }
 
 async function reconcileAsaasPayment(env, request, providerPaymentId, environment) {
-  return withAsaasReconciliationLock(env, environment, providerPaymentId,
+  return withPaymentReconciliationLock(env, environment, providerPaymentId,
     () => reconcileAsaasPaymentLocked(env, request, providerPaymentId, environment));
 }
 
@@ -3281,6 +3318,10 @@ async function reconcileAsaasPaymentLocked(env, request, providerPaymentId, envi
     }
   }
   const charge = await asaasRequest(env, environment, `/payments/${encodeURIComponent(providerPaymentId)}`);
+  if (payment.status === "cancelled" && charge.status !== "DELETED") {
+    console.error("Asaas cancelled payment changed; manual reconciliation required", payment.id);
+    return { ok: false, reason: "cancelled_payment_changed", payment };
+  }
   if (payment.status === "approved" && !asaasChargeIsPaid(charge, payment)) {
     console.error("Asaas approved payment changed; manual reconciliation required", payment.id);
     return { ok: false, reason: "approved_payment_changed", payment };
@@ -3299,8 +3340,9 @@ async function reconcileAsaasPaymentLocked(env, request, providerPaymentId, envi
     return { ok: false, reason: "paid_charge_mismatch", payment };
   }
   if (!asaasChargeIsPaid(charge, payment)) {
-    nextPayment.status = ["DELETED", "REFUNDED", "REPROVED_BY_RISK_ANALYSIS"].includes(charge.status)
-      ? "rejected" : "pending";
+    nextPayment.status = charge.status === "DELETED" && payment.status === "cancelled"
+      ? "cancelled" : ["DELETED", "REFUNDED", "REPROVED_BY_RISK_ANALYSIS"].includes(charge.status)
+        ? "rejected" : "pending";
     await writeKvJson(env, key, nextPayment);
     await setAsaasIntentStatus(env, `${reference.kind}:${reference.kind === "quote" ? reference.id : payment.galleryId}`, payment.id, nextPayment.status);
     return { ok: true, approved: false, payment: nextPayment };
@@ -3422,6 +3464,103 @@ async function reconcileAsaasPaymentLocked(env, request, providerPaymentId, envi
     paymentId: payment.id, providerPaymentId, amountCents: payment.amountCents,
   }, paymentClient);
   return { ok: true, approved: true, payment: nextPayment };
+}
+
+function paymentConflict(message) {
+  throw Object.assign(new Error(message), { status: 409 });
+}
+
+async function cancelGalleryPayment(env, request, gallery, paymentId, actor) {
+  if (!env.GALLERY_DB) throw Object.assign(new Error("Cancelamento temporariamente indisponível."), { status: 503 });
+  const key = privateGalleryPaymentKey(paymentId);
+  const stored = await readKvJson(env, key, null);
+  if (!stored || stored.galleryId !== gallery.id) paymentConflict("Cobrança não encontrada nesta galeria.");
+  if (stored.status === "cancelled") {
+    if (stored.provider === "asaas") await setAsaasIntentStatus(env, `gallery:${gallery.id}`, paymentId, "cancelled");
+    return stored;
+  }
+  if (stored.status !== "pending" || !stored.providerPaymentId) {
+    paymentConflict("Esta cobrança não está pendente e não pode ser cancelada.");
+  }
+  const current = await getCurrentGalleryPayment(env, gallery.id);
+  if (current?.id !== paymentId) paymentConflict("Esta cobrança não é mais a cobrança pendente da galeria.");
+
+  const environment = stored.provider === "asaas" ? stored.environment : "mercadopago";
+  if (stored.provider === "asaas" && !["sandbox", "production"].includes(environment)) {
+    paymentConflict("Ambiente da cobrança inválido.");
+  }
+  if (!["asaas", "mercadopago"].includes(stored.provider)) paymentConflict("Provedor da cobrança inválido.");
+
+  const result = await withPaymentReconciliationLock(env, environment, stored.providerPaymentId, async () => {
+    const payment = await readKvJson(env, key, null);
+    if (payment?.status === "cancelled") {
+      if (payment.provider === "asaas") await setAsaasIntentStatus(env, `gallery:${gallery.id}`, paymentId, "cancelled");
+      return payment;
+    }
+    if (payment?.status !== "pending" || payment.providerPaymentId !== stored.providerPaymentId) {
+      paymentConflict("Esta cobrança mudou de estado. Atualize a página.");
+    }
+    const active = await getCurrentGalleryPayment(env, gallery.id);
+    if (active?.id !== paymentId) paymentConflict("Esta cobrança não é mais a cobrança pendente da galeria.");
+    if (payment.provider === "asaas") {
+      const intent = await readAsaasIntent(env, `gallery:${gallery.id}`);
+      if (intent?.paymentId !== paymentId || intent.status !== "pending") {
+        paymentConflict("A cobrança ainda está sendo processada. Tente novamente em instantes.");
+      }
+      const charge = await asaasRequest(env, environment, `/payments/${encodeURIComponent(payment.providerPaymentId)}`);
+      if (charge.id !== payment.providerPaymentId || charge.externalReference !== payment.id
+        || Math.round(Number(charge.value) * 100) !== payment.amountCents) {
+        paymentConflict("Dados da cobrança divergentes. Entre em contato antes de cancelar.");
+      }
+      if (asaasChargeIsPaid(charge, payment)) {
+        await reconcileAsaasPaymentLocked(env, request, payment.providerPaymentId, environment);
+        paymentConflict("O pagamento já foi confirmado e não pode ser cancelado. Entre em contato para solicitar estorno.");
+      }
+      if (charge.status !== "DELETED") {
+        if (!["PENDING", "OVERDUE"].includes(charge.status)) {
+          paymentConflict("O Asaas não permite cancelar esta cobrança no estado atual.");
+        }
+        const deletion = await asaasRequest(env, environment, `/payments/${encodeURIComponent(payment.providerPaymentId)}`, { method: "DELETE" });
+        if (deletion.deleted === false) throw new Error("O Asaas não confirmou o cancelamento. Tente novamente mais tarde.");
+      }
+    } else {
+      const providerPayment = await getMercadoPagoPayment(env, payment.providerPaymentId);
+      if (String(providerPayment.id) !== payment.providerPaymentId
+        || providerPayment.external_reference !== payment.id
+        || Math.round(Number(providerPayment.transaction_amount) * 100) !== payment.amountCents) {
+        paymentConflict("Dados da cobrança divergentes. Entre em contato antes de cancelar.");
+      }
+      if (providerPayment.status === "approved") {
+        await approveMercadoPagoPaymentLocked(env, request, payment.providerPaymentId);
+        paymentConflict("O pagamento já foi aprovado e não pode ser cancelado. Entre em contato para solicitar estorno.");
+      }
+      if (providerPayment.status !== "cancelled") {
+        if (providerPayment.status !== "pending") paymentConflict("O Mercado Pago não permite cancelar esta cobrança no estado atual.");
+        const response = await fetchWithTimeout(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(payment.providerPaymentId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}` },
+          body: JSON.stringify({ status: "cancelled" }),
+        }, 12000);
+        const cancelled = await response.json().catch(() => ({}));
+        if (!response.ok || String(cancelled.id) !== payment.providerPaymentId || cancelled.status !== "cancelled") {
+          throw new Error("O Mercado Pago não confirmou o cancelamento. Tente novamente mais tarde.");
+        }
+      }
+    }
+
+    const cancelled = { ...payment, status: "cancelled", providerStatus: payment.provider === "asaas" ? "DELETED" : "cancelled",
+      cancelledAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await writeKvJson(env, key, cancelled);
+    if (payment.provider === "asaas") await setAsaasIntentStatus(env, `gallery:${gallery.id}`, payment.id, "cancelled");
+    try {
+      await appendPrivateGalleryEvent(env, request, gallery.id, "pagamento_cancelado", {
+        paymentId: payment.id, providerPaymentId: payment.providerPaymentId, amountCents: payment.amountCents,
+      }, actor);
+    } catch (err) { console.error("Gallery cancellation event error:", err); }
+    return cancelled;
+  });
+  if (result?.reason === "reconciliation_in_progress") paymentConflict("A cobrança está sendo atualizada. Tente novamente em instantes.");
+  return result;
 }
 
 function visibleGalleryImages(gallery = {}, images = []) {
@@ -4217,7 +4356,7 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
-      if (env.GALLERY_DB && ["creating", "pending"].includes((await readAsaasIntent(env, `gallery:${gallery.id}`))?.status)) {
+      if (await galleryPaymentPending(env, gallery.id)) {
         return errorJson("Há um pagamento em andamento. Aguarde a confirmação antes de concluir a seleção.", 409);
       }
 
@@ -4417,12 +4556,7 @@ export default {
       if (access.error) return access.error;
       if (access.preview) return json({ ok: true, payment: null }, 200, { "Cache-Control": "no-store" });
 
-      const latestId = await readKvJson(env, privateGalleryLatestPaymentKey(gallery.id), null);
-      const latest = latestId ? await readKvJson(env, privateGalleryPaymentKey(latestId), null) : null;
-      const intent = env.GALLERY_DB ? await readAsaasIntent(env, `gallery:${gallery.id}`) : null;
-      const payment = latest || (intent?.paymentId
-        ? await readKvJson(env, privateGalleryPaymentKey(intent.paymentId), null) || intent.payment
-        : null);
+      const payment = await getCurrentGalleryPayment(env, gallery.id);
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
       return json({
@@ -4430,6 +4564,23 @@ export default {
         payment: payment && ["creating", "pending", "approved"].includes(payment.status) ? publicPayment(payment) : null,
         pricing: calculateSelectionPricing(gallery, images, selection),
       }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-gallery/payment/cancel" && request.method === "POST") {
+      const body = await readJson(request);
+      const gallery = await getPrivateGalleryBySlug(env, slugify(body.slug || ""));
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      const paymentId = String(body.paymentId || "").trim();
+      if (!paymentId) return errorJson("Selecione a cobrança que deseja cancelar.", 400);
+      try {
+        const payment = await cancelGalleryPayment(env, request, gallery, paymentId, access.client);
+        return json({ ok: true, payment: publicPayment(payment) }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        if (!err.status || err.status >= 500) console.error("Client gallery cancellation error:", err);
+        return errorJson(err.message || "Não foi possível cancelar a cobrança.", err.status || 502);
+      }
     }
 
     if (url.pathname === "/client-gallery/payment/status" && request.method === "GET") {
@@ -5043,7 +5194,30 @@ export default {
         readKvJson(env, privateGalleryEventsKey(id), []),
       ]);
       gallery = await repairPrivateGalleryProgress(env, gallery, await getPrivateGalleryLatestPayment(env, gallery.id), events);
-      return json({ gallery, images, selection, events: events.slice(0, 120) }, 200, { "Cache-Control": "no-store" });
+      const payment = await getCurrentGalleryPayment(env, gallery.id);
+      return json({ gallery, images, selection, events: events.slice(0, 120),
+        payment: payment && ["creating", "pending"].includes(payment.status) ? publicPayment(payment) : null,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/gallery/payment/cancel" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      const gallery = await readKvJson(env, privateGalleryKey(String(body.galleryId || "").trim()), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const paymentId = String(body.paymentId || "").trim();
+      if (!paymentId) return errorJson("Selecione a cobrança que deseja cancelar.", 400);
+      try {
+        const payment = await cancelGalleryPayment(env, request, gallery, paymentId, user);
+        await appendAuditLog(env, request, user, "cancelar_cobranca_galeria", "private_galleries", {
+          galleryId: gallery.id, paymentId: payment.id, providerPaymentId: payment.providerPaymentId,
+        });
+        return json({ ok: true, payment: publicPayment(payment) }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        if (!err.status || err.status >= 500) console.error("Admin gallery cancellation error:", err);
+        return errorJson(err.message || "Não foi possível cancelar a cobrança.", err.status || 502);
+      }
     }
 
     if (url.pathname === "/private/gallery/delete" && request.method === "POST") {
@@ -5086,7 +5260,7 @@ export default {
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
 
       if (["selection", "editing", "final"].includes(body.status) && body.status !== gallery.status) {
-        if (await galleryAsaasPaymentPending(env, galleryId)) {
+        if (await galleryPaymentPending(env, galleryId)) {
           return errorJson("Há um pagamento em andamento nesta galeria. Aguarde a confirmação antes de alterar a etapa.", 409);
         }
         gallery = await savePrivateGallery(env, {
@@ -5311,7 +5485,7 @@ export default {
 
       const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
-      if (await galleryAsaasPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
+      if (await galleryPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
 
       await destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId);
       const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
@@ -5350,7 +5524,7 @@ export default {
 
       const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
-      if (await galleryAsaasPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
+      if (await galleryPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
 
       const requested = new Set(publicIds);
       const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
@@ -5419,7 +5593,7 @@ export default {
 
       const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
-      if (await galleryAsaasPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
+      if (await galleryPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
 
       const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
       const selection = await readKvJson(env, privateGallerySelectionKey(galleryId), []);

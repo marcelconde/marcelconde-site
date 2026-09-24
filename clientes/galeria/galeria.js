@@ -71,6 +71,7 @@ const copyPaymentCode = document.getElementById("copyPaymentCode");
 const paymentStatus = document.getElementById("paymentStatus");
 const paymentSandboxNotice = document.getElementById("paymentSandboxNotice");
 const paymentOpenLink = document.getElementById("paymentOpenLink");
+const paymentCancel = document.getElementById("paymentCancel");
 const documentDialog = document.getElementById("documentDialog");
 const documentForm = document.getElementById("documentForm");
 const paymentDocument = document.getElementById("paymentDocument");
@@ -804,6 +805,7 @@ function setPaymentModalState(status, message = "") {
   paymentCopy.classList.toggle("hidden", approved || rejected || hosted);
   copyPaymentCode.classList.toggle("hidden", approved || rejected || hosted);
   paymentOpenLink.classList.toggle("hidden", approved || rejected || !hosted);
+  paymentCancel.classList.toggle("hidden", approved || rejected || !state.payment?.providerPaymentId);
   paymentStatus.classList.toggle("is-approved", approved);
   paymentStatus.classList.toggle("is-rejected", rejected);
 
@@ -930,6 +932,34 @@ pendingPaymentBtn.addEventListener("click", async () => {
   }
 });
 
+paymentCancel.addEventListener("click", async () => {
+  const payment = state.payment;
+  if (!payment?.id || !confirm("Cancelar esta cobrança pendente? Você poderá alterar as fotos e gerar uma nova cobrança.")) return;
+  paymentCancel.disabled = true;
+  paymentCancel.textContent = "Cancelando cobrança...";
+  if (state.paymentPoll) {
+    clearInterval(state.paymentPoll);
+    state.paymentPoll = null;
+  }
+  try {
+    await api("/client-gallery/payment/cancel", {
+      method: "POST",
+      body: JSON.stringify({ slug, paymentId: payment.id }),
+    });
+    state.payment = null;
+    state.pendingPayment = null;
+    closePaymentModal();
+    renderHeader();
+    showToast("Cobrança cancelada. Você já pode alterar as fotos.");
+  } catch (err) {
+    showToast(err.message || "Não foi possível cancelar a cobrança.");
+    if (state.payment?.id === payment.id) startPaymentPolling(payment.id);
+  } finally {
+    paymentCancel.disabled = false;
+    paymentCancel.textContent = "Cancelar cobrança e alterar fotos";
+  }
+});
+
 function startPaymentPolling(paymentId) {
   if (state.paymentPoll) clearInterval(state.paymentPoll);
 
@@ -958,6 +988,14 @@ function startPaymentPolling(paymentId) {
         updatePhotoButtons();
         closePaymentModal();
         showToast(wasCompleted ? "Pagamento aprovado. Fotos em edição." : "Pagamento aprovado. Seleção em edição.");
+      } else if (data.payment?.status === "cancelled") {
+        state.pendingPayment = null;
+        state.payment = null;
+        clearInterval(state.paymentPoll);
+        state.paymentPoll = null;
+        closePaymentModal();
+        renderHeader();
+        showToast("Cobrança cancelada. Você já pode alterar as fotos.");
       } else if (data.payment?.status === "rejected") {
         setPaymentModalState("rejected");
         clearInterval(state.paymentPoll);
