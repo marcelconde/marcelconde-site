@@ -77,6 +77,26 @@ test('concurrent favorites from two devices preserve both changes and validate o
   assert.equal((await a.readKvJson(a.env,'private_gallery_events:g',[])).filter(e => e.action === 'favoritar_foto').length,2);
 });
 
+test('a pending Asaas charge freezes gallery favorites and completion', async () => {
+  const a = app();
+  await a.env.GALLERY_DB.prepare('INSERT INTO gallery_records (key, value) VALUES (?, ?)')
+    .bind('asaas_intent:gallery:g', JSON.stringify({ paymentId: 'pay_1', status: 'pending' })).run();
+  for (const [path, body] of [
+    ['/client-gallery/favorites', { slug: 'race', changes: [{ publicId: 'b', selected: true }] }],
+    ['/client-gallery/select-all', { slug: 'race' }],
+    ['/client-gallery/complete', { slug: 'race' }],
+  ]) {
+    assert.equal((await a.request(path, body, 'client-token')).status, 409);
+  }
+  assert.equal((await a.request('/private/galleries', { id: 'g', selectionLimit: 0 })).status, 409);
+  assert.equal((await a.request('/private/gallery/delete', { galleryId: 'g' })).status, 409);
+  assert.deepEqual(Array.from(await a.readKvJson(a.env, 'private_gallery_selection:g', [])), ['a']);
+  await a.env.GALLERY_DB.prepare('UPDATE gallery_records SET value = ? WHERE key = ?')
+    .bind(JSON.stringify({ paymentId: 'pay_1', status: 'rejected' }), 'asaas_intent:gallery:g').run();
+  assert.equal((await a.request('/client-gallery/favorites',
+    { slug: 'race', changes: [{ publicId: 'b', selected: true }] }, 'client-token')).status, 200);
+});
+
 test('admin preview is gallery-scoped, expires and cannot mutate selection or generate payment', async () => {
   const a = app();
   assert.equal((await a.request('/private/gallery/preview',{galleryId:'g'},'bad')).status,401);

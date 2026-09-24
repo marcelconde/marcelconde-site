@@ -61,6 +61,7 @@ function statusText(status) {
 
 function quoteStatusText(status) {
   if (status === "accepted") return "Contrato aceito";
+  if (status === "pending_payment") return "Aguardando pagamento";
   if (status === "viewed") return "Aguardando seu aceite";
   if (status === "expired") return "Proposta expirada";
   return "Novo orçamento";

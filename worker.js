@@ -174,6 +174,14 @@ function mercadoPagoPaymentKey(providerPaymentId) {
   return `mercadopago_payment:${providerPaymentId}`;
 }
 
+function asaasPaymentKey(providerPaymentId, environment) {
+  return `asaas_payment:${environment}:${providerPaymentId}`;
+}
+
+function privateQuotePaymentKey(quoteId) {
+  return `private_quote_payment:${quoteId}`;
+}
+
 function clientUserKey(email) {
   return `client_user:${normalizeEmail(email)}`;
 }
@@ -270,11 +278,14 @@ async function deleteGalleryRecord(env, key) {
   if (env.LIKES_KV) await env.LIKES_KV.delete(key);
 }
 
-async function changeStoredIds(env, key, changes) {
+async function changeStoredIds(env, key, changes, blockedIntentKey = "") {
   const current = await readKvJson(env, key, []);
   if (usesGalleryDatabase(env, key)) {
     // Each statement changes only its own photo, without replacing concurrent favorites.
-    await env.GALLERY_DB.prepare(`
+    const blocked = blockedIntentKey
+      ? "AND NOT EXISTS (SELECT 1 FROM gallery_records AS intent WHERE intent.key = ? AND json_extract(intent.value, '$.status') IN ('creating', 'pending'))"
+      : "";
+    const result = await env.GALLERY_DB.prepare(`
       UPDATE gallery_records SET value = (
         SELECT json_group_array(value) FROM (
           SELECT value FROM json_each(CASE WHEN gallery_records.value = 'null' THEN '[]' ELSE gallery_records.value END)
@@ -282,8 +293,9 @@ async function changeStoredIds(env, key, changes) {
           UNION ALL
           SELECT json_extract(value, '$.publicId') FROM json_each(?) WHERE json_extract(value, '$.selected') = 1
         )
-      ) WHERE key = ?
-    `).bind(JSON.stringify(changes), JSON.stringify(changes), key).run();
+      ) WHERE key = ? ${blocked}
+    `).bind(JSON.stringify(changes), JSON.stringify(changes), key, ...(blockedIntentKey ? [blockedIntentKey] : [])).run();
+    if (blockedIntentKey && (result.meta?.changes ?? result.changes) !== 1) return null;
     return readKvJson(env, key, []);
   }
   const next = new Set(current);
@@ -293,7 +305,7 @@ async function changeStoredIds(env, key, changes) {
 }
 
 async function changeGalleryFavorites(env, galleryId, changes) {
-  return changeStoredIds(env, privateGallerySelectionKey(galleryId), changes);
+  return changeStoredIds(env, privateGallerySelectionKey(galleryId), changes, `asaas_intent:gallery:${galleryId}`);
 }
 
 async function prependStoredEvent(env, key, event, limit) {
@@ -776,10 +788,10 @@ function defaultQuoteClauses() {
 function defaultQuotePaymentMethods() {
   return [
     {
-      id: "pix",
-      type: "pix",
-      label: "PIX",
-      details: "Dados para pagamento enviados após a aprovação.",
+      id: "asaas",
+      type: "other",
+      label: "Pagamento online",
+      details: "Formas disponíveis no checkout seguro do Asaas após o aceite.",
     },
   ];
 }
@@ -852,7 +864,7 @@ function calculateQuoteTotals(quote = {}) {
 }
 
 function effectiveQuoteStatus(quote = {}) {
-  if (["accepted", "cancelled", "draft"].includes(quote.status)) return quote.status;
+  if (["accepted", "pending_payment", "cancelled", "draft"].includes(quote.status)) return quote.status;
   if (quote.validUntil) {
     const expiresAt = new Date(`${quote.validUntil}T23:59:59-03:00`).getTime();
     if (Number.isFinite(expiresAt) && expiresAt < Date.now()) return "expired";
@@ -944,6 +956,11 @@ function publicQuote(quote = {}) {
     publishedAt: quote.publishedAt || null,
     viewedAt: quote.viewedAt || null,
     acceptedAt: quote.acceptedAt || null,
+    paymentRequired: quote.paymentRequired === true,
+    paymentStatus: quote.paymentStatus || null,
+    paymentChoice: quote.paymentChoice || null,
+    paymentAmountCents: quote.paymentAmountCents ?? null,
+    paymentBalanceCents: quote.paymentBalanceCents ?? null,
     acceptance: quote.acceptance ? {
       name: quote.acceptance.name,
       email: quote.acceptance.email,
@@ -1002,9 +1019,9 @@ async function savePrivateQuote(env, input = {}) {
     throw Object.assign(new Error("Não é possível transferir orçamentos entre clientes reais e de teste."), { status: 409 });
   }
   const editableTest = await isTestQuote(env, existing);
-  if (existing.status === "accepted" && !editableTest) {
+  if (existing.status === "pending_payment" || (existing.status === "accepted" && !editableTest)) {
     throw Object.assign(
-      new Error("Um contrato aceito não pode ser alterado. Duplique-o para criar uma nova versão."),
+      new Error("Um contrato aceito ou aguardando pagamento não pode ser alterado. Duplique-o para criar uma nova versão."),
       { status: 409 }
     );
   }
@@ -1059,9 +1076,9 @@ async function deletePrivateQuote(env, quoteId) {
   const id = String(quoteId || "").trim();
   const quote = await readKvJson(env, privateQuoteKey(id), null);
   if (!quote) return null;
-  if (quote.status === "accepted" && !(await isTestQuote(env, quote))) {
+  if (quote.status === "pending_payment" || (quote.status === "accepted" && !(await isTestQuote(env, quote)))) {
     throw Object.assign(
-      new Error("Contratos aceitos devem ser preservados e não podem ser apagados."),
+      new Error("Contratos aceitos ou aguardando pagamento devem ser preservados e não podem ser apagados."),
       { status: 409 }
     );
   }
@@ -1165,6 +1182,9 @@ async function savePrivateGallery(env, input = {}) {
   const now = new Date().toISOString();
   const id = String(input.id || `gal_${randomToken(9)}`).replace(/[^a-zA-Z0-9_-]/g, "");
   const existing = await readKvJson(env, privateGalleryKey(id), {});
+  if (existing.id && await galleryAsaasPaymentPending(env, id)) {
+    throw Object.assign(new Error("Há um pagamento em andamento nesta galeria. Aguarde a confirmação antes de editar."), { status: 409 });
+  }
   const title = cleanDisplayName(input.title || existing.title || "Galeria privada");
   const requestedSlug = slugify(input.slug || existing.slug || title);
   const previousSlug = existing.slug || "";
@@ -1280,6 +1300,9 @@ async function deletePrivateGallery(env, galleryId) {
 
   const gallery = await readKvJson(env, privateGalleryKey(id), null);
   if (!gallery) return null;
+  if (await galleryAsaasPaymentPending(env, id)) {
+    throw Object.assign(new Error("Há um pagamento em andamento nesta galeria. Aguarde a confirmação antes de apagar."), { status: 409 });
+  }
 
   const images = await readKvJson(env, privateGalleryImagesKey(id), []);
   const deletedIds = new Set();
@@ -2632,7 +2655,7 @@ async function sendSelectionCompletedEmail(env, gallery = {}, client = {}, selec
     .map((name) => `<li style="margin:0 0 6px;">${emailHtml(name)}</li>`)
     .join("");
   const paymentHtml = payment
-    ? `<p style="margin:16px 0 0;"><strong>Pagamento:</strong> ${formatCurrencyFromCents(payment.amountCents)} (${emailHtml(payment.providerPaymentId || payment.id || "")})</p>`
+    ? `<p style="margin:16px 0 0;"><strong>Pagamento${payment.environment === "sandbox" ? " de teste" : ""}:</strong> ${formatCurrencyFromCents(payment.amountCents)} (${emailHtml(payment.providerPaymentId || payment.id || "")})</p>`
     : `<p style="margin:16px 0 0;"><strong>Pagamento:</strong> não houve fotos extras.</p>`;
   const html = emailLayout(env, {
     preheader: `Seleção concluída por ${client.name || client.email || "cliente"}.`,
@@ -2661,7 +2684,7 @@ async function sendSelectionCompletedEmail(env, gallery = {}, client = {}, selec
     body: JSON.stringify({
       from: resendFrom(env),
       to: [to],
-      subject: `Seleção concluída — ${gallery.title || "galeria"}`,
+      subject: `${payment?.environment === "sandbox" ? "[TESTE] " : ""}Seleção concluída — ${gallery.title || "galeria"}`,
       html,
     }),
   });
@@ -2690,16 +2713,19 @@ async function sendPaymentApprovedEmail(env, gallery = {}, client = {}, payment 
   const providerPaymentId = emailHtml(payment.providerPaymentId || "");
   const internalPaymentId = emailHtml(payment.id || "");
   const description = emailHtml(payment.description || `Fotos extras — ${gallery.title || gallery.slug || "galeria"}`);
+  const paymentLabel = payment.provider === "asaas" ? "Pagamento" : "Pix";
+  const providerLabel = payment.provider === "asaas" ? "Asaas" : "Mercado Pago";
+  const sandbox = payment.environment === "sandbox";
   const html = emailLayout(env, {
-    preheader: `Pagamento Pix aprovado para ${gallery.title || gallery.slug || "galeria"}.`,
-    eyebrow: "Pagamento aprovado",
-    title: "Pix aprovado",
-    intro: `Pagamento Pix aprovado para fotos extras da galeria <strong>${galleryTitle}</strong>.`,
+    preheader: `${sandbox ? "Pagamento fictício" : paymentLabel + " aprovado"} para ${gallery.title || gallery.slug || "galeria"}.`,
+    eyebrow: sandbox ? "Ambiente de teste" : "Pagamento aprovado",
+    title: sandbox ? "Pagamento fictício confirmado" : `${paymentLabel} aprovado`,
+    intro: `${sandbox ? "Pagamento fictício confirmado" : paymentLabel + " aprovado"} para fotos extras da galeria <strong>${galleryTitle}</strong>.`,
     body: `<p style="margin:0;"><strong>Cliente:</strong> ${clientName} (${clientEmail})</p>
            <p style="margin:14px 0 0;"><strong>Valor aprovado:</strong> ${formatCurrencyFromCents(amountCents)}</p>
            <p style="margin:8px 0 0;"><strong>Fotos selecionadas:</strong> ${Number(pricing.selectedTotal || 0)} · <strong>Fotos extras:</strong> ${Number(pricing.extraCount || 0)}</p>
            <p style="margin:8px 0 0;"><strong>Descrição:</strong> ${description}</p>
-           <p style="margin:8px 0 0;"><strong>ID Mercado Pago:</strong> ${providerPaymentId || "não informado"}<br>
+           <p style="margin:8px 0 0;"><strong>ID ${providerLabel}:</strong> ${providerPaymentId || "não informado"}<br>
               <strong>ID interno:</strong> ${internalPaymentId || "não informado"}</p>`,
     ctaLabel: "Abrir galeria do cliente",
     ctaUrl: galleryUrl,
@@ -2717,7 +2743,7 @@ async function sendPaymentApprovedEmail(env, gallery = {}, client = {}, payment 
     body: JSON.stringify({
       from: resendFrom(env),
       to: [to],
-      subject: `Pix aprovado — ${gallery.title || gallery.slug || "galeria"}`,
+      subject: `${sandbox ? "[TESTE] " : ""}${paymentLabel} aprovado — ${gallery.title || gallery.slug || "galeria"}`,
       html,
     }),
   });
@@ -2815,6 +2841,7 @@ async function completePrivateGallerySelection(env, request, gallery, client, im
 function publicPayment(payment = {}) {
   return {
     id: payment.id,
+    environment: payment.environment || null,
     status: payment.status,
     amountCents: payment.amountCents || 0,
     providerPaymentId: payment.providerPaymentId || "",
@@ -2825,6 +2852,201 @@ function publicPayment(payment = {}) {
     expiresAt: payment.expiresAt || null,
     selectionCompletedAt: payment.selectionCompletedAt || null,
   };
+}
+
+function asaasEnvironmentForClient(client) {
+  return client?.isTest === true ? "sandbox" : "production";
+}
+
+function asaasApiConfig(env, environment) {
+  if (environment === "sandbox") {
+    if (!env.ASAAS_SANDBOX_API_KEY) throw new Error("Asaas Sandbox indisponível.");
+    return { base: "https://api-sandbox.asaas.com/v3", key: env.ASAAS_SANDBOX_API_KEY };
+  }
+  if (environment === "production") {
+    if (!env.ASAAS_API_KEY) throw new Error("Pagamento Asaas indisponível.");
+    return { base: "https://api.asaas.com/v3", key: env.ASAAS_API_KEY };
+  }
+  throw new Error("Ambiente Asaas inválido.");
+}
+
+async function asaasRequest(env, environment, path, options = {}) {
+  const config = asaasApiConfig(env, environment);
+  const response = await fetchWithTimeout(`${config.base}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      access_token: config.key,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const reason = Array.isArray(data.errors) ? data.errors.map((item) => item.description).filter(Boolean).join("; ") : "";
+    throw Object.assign(new Error(`Asaas ${response.status}: ${reason || "requisição recusada"}`), {
+      status: response.status,
+      definitiveFailure: options.method === "POST" && response.status >= 400 && response.status < 500 && response.status !== 429,
+    });
+  }
+  return data;
+}
+
+async function ensureAsaasCustomer(env, environment, client = {}, document = "") {
+  const clientId = String(client.id || "").trim();
+  const cpfCnpj = String(document || client.document || "").replace(/\D/g, "");
+  if (!clientId) throw new Error("Cliente do pagamento não identificado.");
+  if (![11, 14].includes(cpfCnpj.length)) throw new Error("Informe o CPF ou CNPJ para pagar pelo Asaas.");
+  const reference = `marcelconde-site:${clientId}`;
+  const matching = await asaasRequest(env, environment, `/customers?externalReference=${encodeURIComponent(reference)}&limit=100`);
+  const existing = Array.isArray(matching.data) ? matching.data.find((item) => item.externalReference === reference) : null;
+  if (existing && String(existing.cpfCnpj || "").replace(/\D/g, "") !== cpfCnpj) {
+    throw Object.assign(new Error("O CPF ou CNPJ não corresponde ao cadastro de pagamento deste cliente."), { definitiveFailure: true });
+  }
+  const customer = existing || await asaasRequest(env, environment, "/customers", {
+    method: "POST",
+    body: JSON.stringify({
+      name: String(client.name || "Cliente").slice(0, 120),
+      cpfCnpj,
+      email: normalizeEmail(client.email || "") || undefined,
+      externalReference: reference,
+      notificationDisabled: true,
+    }),
+  });
+  if (!customer.id) throw new Error("Asaas não retornou o ID do cliente.");
+  return customer.id;
+}
+
+function validateAsaasCharge(charge, payment, customer) {
+  let invoiceUrl;
+  try { invoiceUrl = new URL(charge.invoiceUrl); } catch { /* Invalid provider response. */ }
+  const allowedHosts = payment.environment === "sandbox"
+    ? ["sandbox.asaas.com"] : ["www.asaas.com", "asaas.com"];
+  if (!charge.id || invoiceUrl?.protocol !== "https:" || !allowedHosts.includes(invoiceUrl.hostname)) {
+    throw new Error("Asaas não retornou uma página de pagamento válida.");
+  }
+  if (charge.externalReference !== payment.id || charge.customer !== customer
+    || Math.round(Number(charge.value) * 100) !== payment.amountCents) {
+    throw new Error("Cobrança Asaas existente não corresponde ao pagamento solicitado.");
+  }
+  return { providerPaymentId: charge.id, ticketUrl: charge.invoiceUrl, providerStatus: charge.status || "PENDING" };
+}
+
+async function findAsaasCharge(env, payment, client, document = "") {
+  const customer = await ensureAsaasCustomer(env, payment.environment, client, document);
+  const matching = await asaasRequest(env, payment.environment, `/payments?externalReference=${encodeURIComponent(payment.id)}&limit=100`);
+  const charge = Array.isArray(matching.data) ? matching.data.find((item) => item.externalReference === payment.id) : null;
+  return { customer, charge };
+}
+
+async function createAsaasCharge(env, payment, client, document = "") {
+  if (!Number.isSafeInteger(payment.amountCents) || payment.amountCents < 500) {
+    throw new Error("O Asaas exige valor mínimo de R$ 5,00 por cobrança.");
+  }
+  const { customer, charge: existing } = await findAsaasCharge(env, payment, client, document);
+  const dueDate = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+  const charge = existing || await asaasRequest(env, payment.environment, "/payments", {
+    method: "POST",
+    body: JSON.stringify({
+      customer,
+      billingType: "UNDEFINED",
+      value: Number((payment.amountCents / 100).toFixed(2)),
+      dueDate,
+      description: String(payment.description || "Pagamento Marcel Conde Fotografia").slice(0, 500),
+      externalReference: payment.id,
+    }),
+  });
+  return validateAsaasCharge(charge, payment, customer);
+}
+
+// D1 owns the unique charge-creation claim. KV reads alone cannot prevent two
+// simultaneous Worker requests from creating different charges for one sale.
+async function claimAsaasIntent(env, scope, payment) {
+  if (!env.GALLERY_DB) throw new Error("Banco transacional indisponível para criar cobrança.");
+  const key = `asaas_intent:${scope}`;
+  const value = JSON.stringify({ paymentId: payment.id, payment, status: "creating", createdAt: Date.now() });
+  const inserted = await env.GALLERY_DB.prepare("INSERT OR IGNORE INTO gallery_records (key, value) VALUES (?, ?)")
+    .bind(key, value).run();
+  if (inserted.meta?.changes === 1) return true;
+  const row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(key).first();
+  if (!row) return false;
+  const previous = JSON.parse(row.value);
+  if (previous.status !== "rejected") return false;
+  const replaced = await env.GALLERY_DB.prepare("UPDATE gallery_records SET value = ? WHERE key = ? AND value = ?")
+    .bind(value, key, row.value).run();
+  return replaced.meta?.changes === 1;
+}
+
+async function setAsaasIntentStatus(env, scope, paymentId, status) {
+  if (!env.GALLERY_DB) return;
+  await env.GALLERY_DB.prepare("UPDATE gallery_records SET value = json_set(value, '$.status', ?) WHERE key = ? AND json_extract(value, '$.paymentId') = ?")
+    .bind(status, `asaas_intent:${scope}`, paymentId).run();
+}
+
+async function readAsaasIntent(env, scope) {
+  const row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?")
+    .bind(`asaas_intent:${scope}`).first();
+  return row ? JSON.parse(row.value) : null;
+}
+
+async function galleryAsaasPaymentPending(env, galleryId) {
+  if (!env.GALLERY_DB) return false;
+  const intent = await readAsaasIntent(env, `gallery:${galleryId}`);
+  return ["creating", "pending"].includes(intent?.status);
+}
+
+// A timed-out POST may already have created a charge. Recover by reference;
+// never issue a second POST for an uncertain attempt.
+async function recoverAsaasCharge(env, scope, payment, client, document, kind, referenceId) {
+  const intent = await readAsaasIntent(env, scope);
+  if (!intent || intent.paymentId !== payment.id || !["creating", "pending"].includes(intent.status)) return null;
+  if (intent.status === "creating" && Date.now() - Number(intent.createdAt || 0) < 20000) return null;
+  const { customer, charge } = await findAsaasCharge(env, payment, client, document);
+  if (!charge) return null;
+  const saved = {
+    ...payment, ...validateAsaasCharge(charge, payment, customer),
+    status: "pending", updatedAt: new Date().toISOString(),
+  };
+  const key = kind === "quote" ? privateQuotePaymentKey(referenceId) : privateGalleryPaymentKey(payment.id);
+  await writeKvJson(env, key, saved);
+  await writeKvJson(env, asaasPaymentKey(saved.providerPaymentId, saved.environment), { kind, id: referenceId });
+  if (kind === "gallery") await writeKvJson(env, privateGalleryLatestPaymentKey(referenceId), payment.id);
+  await setAsaasIntentStatus(env, scope, payment.id, "pending");
+  return saved;
+}
+
+async function rejectFailedAsaasCreation(env, scope, payment, key, error) {
+  if (!error.definitiveFailure) return;
+  await writeKvJson(env, key, { ...payment, status: "rejected", updatedAt: new Date().toISOString() });
+  await setAsaasIntentStatus(env, scope, payment.id, "rejected");
+}
+
+async function withAsaasReconciliationLock(env, environment, providerPaymentId, work) {
+  if (!env.GALLERY_DB) throw new Error("Banco transacional indisponível para conferir pagamento.");
+  const key = `asaas_reconcile:${environment}:${providerPaymentId}`;
+  const value = JSON.stringify({ token: randomToken(12), expiresAt: Date.now() + 120000 });
+  const inserted = await env.GALLERY_DB.prepare("INSERT OR IGNORE INTO gallery_records (key, value) VALUES (?, ?)")
+    .bind(key, value).run();
+  if (inserted.meta?.changes !== 1) {
+    const row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(key).first();
+    if (!row || Number(JSON.parse(row.value).expiresAt || 0) > Date.now()) {
+      return { ok: false, reason: "reconciliation_in_progress" };
+    }
+    const replaced = await env.GALLERY_DB.prepare("UPDATE gallery_records SET value = ? WHERE key = ? AND value = ?")
+      .bind(value, key, row.value).run();
+    if (replaced.meta?.changes !== 1) return { ok: false, reason: "reconciliation_in_progress" };
+  }
+  try {
+    return await work();
+  } finally {
+    await env.GALLERY_DB.prepare("DELETE FROM gallery_records WHERE key = ? AND value = ?").bind(key, value).run();
+  }
+}
+
+function asaasChargeIsPaid(charge, payment) {
+  return ["CONFIRMED", "RECEIVED"].includes(charge.status)
+    && charge.id === payment.providerPaymentId
+    && charge.externalReference === payment.id
+    && Math.round(Number(charge.value) * 100) === payment.amountCents;
 }
 
 async function createMercadoPagoPixPayment(env, request, payment, gallery, client) {
@@ -3014,6 +3236,176 @@ async function approveMercadoPagoPayment(env, request, providerPaymentId) {
   return { ok: true, approved: true, payment: nextPayment };
 }
 
+async function reconcileAsaasPayment(env, request, providerPaymentId, environment) {
+  return withAsaasReconciliationLock(env, environment, providerPaymentId,
+    () => reconcileAsaasPaymentLocked(env, request, providerPaymentId, environment));
+}
+
+async function reconcileAsaasPaymentLocked(env, request, providerPaymentId, environment) {
+  const reference = await readKvJson(env, asaasPaymentKey(providerPaymentId, environment), null);
+  if (!reference || !["quote", "gallery"].includes(reference.kind)) return { ok: false, reason: "payment_not_found" };
+  const key = reference.kind === "quote" ? privateQuotePaymentKey(reference.id) : privateGalleryPaymentKey(reference.id);
+  const payment = await readKvJson(env, key, null);
+  if (!payment || payment.providerPaymentId !== providerPaymentId || payment.environment !== environment) {
+    return { ok: false, reason: "payment_record_not_found" };
+  }
+  if (reference.kind === "quote") {
+    const quote = await readKvJson(env, privateQuoteKey(reference.id), null);
+    const client = quote?.clientId ? await readKvJson(env, privateClientKey(quote.clientId), null) : null;
+    if (!client || asaasEnvironmentForClient(client) !== environment || (quote.isTest === true) !== (client.isTest === true)) {
+      return { ok: false, reason: "payment_client_changed" };
+    }
+  } else {
+    const gallery = await readKvJson(env, privateGalleryKey(payment.galleryId), null);
+    const client = gallery?.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+    if (!client || asaasEnvironmentForClient(client) !== environment) {
+      return { ok: false, reason: "payment_client_changed" };
+    }
+  }
+  const charge = await asaasRequest(env, environment, `/payments/${encodeURIComponent(providerPaymentId)}`);
+  if (payment.status === "approved" && !asaasChargeIsPaid(charge, payment)) {
+    console.error("Asaas approved payment changed; manual reconciliation required", payment.id);
+    return { ok: false, reason: "approved_payment_changed", payment };
+  }
+  if (payment.status === "approved" && reference.kind === "gallery" && payment.selectionCompletedAt) {
+    if (!asaasChargeIsPaid(charge, payment)) {
+      console.error("Asaas approved payment changed or mismatched; manual reconciliation required", payment.id);
+      return { ok: false, reason: "approved_payment_changed", payment };
+    }
+    return { ok: true, approved: true, payment };
+  }
+  const now = new Date().toISOString();
+  const nextPayment = { ...payment, providerStatus: charge.status || "", updatedAt: now };
+  if (["CONFIRMED", "RECEIVED"].includes(charge.status) && !asaasChargeIsPaid(charge, payment)) {
+    console.error("Asaas paid charge does not match local payment; manual reconciliation required", payment.id);
+    return { ok: false, reason: "paid_charge_mismatch", payment };
+  }
+  if (!asaasChargeIsPaid(charge, payment)) {
+    nextPayment.status = ["DELETED", "REFUNDED", "REPROVED_BY_RISK_ANALYSIS"].includes(charge.status)
+      ? "rejected" : "pending";
+    await writeKvJson(env, key, nextPayment);
+    await setAsaasIntentStatus(env, `${reference.kind}:${reference.kind === "quote" ? reference.id : payment.galleryId}`, payment.id, nextPayment.status);
+    return { ok: true, approved: false, payment: nextPayment };
+  }
+
+  if (reference.kind === "quote") {
+    const quote = await readKvJson(env, privateQuoteKey(reference.id), null);
+    if (!quote || quote.version !== payment.quoteVersion || quote.acceptance?.hash !== payment.acceptanceHash
+      || !["pending_payment", "accepted"].includes(quote.status)) {
+      console.error("Asaas quote payment needs manual reconciliation", reference.id);
+      return { ok: false, reason: "quote_changed_after_payment" };
+    }
+    const alreadyAccepted = quote.status === "accepted";
+    if (alreadyAccepted && quote.paymentStatus !== "approved") {
+      return { ok: false, reason: "quote_changed_after_payment" };
+    }
+    if (!alreadyAccepted) {
+      quote.status = "accepted";
+      quote.paymentStatus = "approved";
+      quote.paymentApprovedAt = now;
+      quote.paymentChoice = payment.choice;
+      quote.paymentAmountCents = payment.amountCents;
+      quote.paymentBalanceCents = Math.max(0,
+        Number(quote.publishedSnapshot?.totalCents || calculateQuoteTotals(quote).totalCents) - payment.amountCents);
+      quote.updatedAt = now;
+      await writeKvJson(env, privateQuoteKey(quote.id), quote);
+    }
+    nextPayment.status = "approved";
+    nextPayment.approvedAt = payment.approvedAt || quote.paymentApprovedAt || now;
+    await writeKvJson(env, key, nextPayment);
+    await setAsaasIntentStatus(env, `quote:${quote.id}`, payment.id, "approved");
+    if (!alreadyAccepted) {
+      await appendPrivateQuoteEvent(env, request, quote.id, "pagamento_aprovado", {
+        paymentId: payment.id,
+        providerPaymentId,
+        amountCents: payment.amountCents,
+        choice: payment.choice,
+      });
+    }
+    if (!quote.acceptanceEmails?.sentAt) {
+      try {
+        const client = quote.clientId ? await readKvJson(env, privateClientKey(quote.clientId), null) : null;
+        const pdf = buildQuotePdf(env, quote, client || {}, quote.acceptance);
+        const sent = await sendQuoteAcceptedEmails(env, quote, client || {}, quote.acceptance, pdf);
+        quote.acceptanceEmails = {
+          sentAt: new Date().toISOString(),
+          clientQueued: Boolean(sent.client),
+          adminQueued: Boolean(sent.admin),
+          errors: sent.errors || [],
+        };
+        await writeKvJson(env, privateQuoteKey(quote.id), quote);
+      } catch (err) {
+        console.error("Quote payment email error:", err);
+      }
+    }
+    return { ok: true, approved: true, payment: nextPayment };
+  }
+
+  const gallery = await readKvJson(env, privateGalleryKey(payment.galleryId), null);
+  if (!gallery) return { ok: false, reason: "gallery_not_found" };
+  if (gallery.selectionPaymentId === payment.id && gallery.selectionCompletedAt) {
+    nextPayment.status = "approved";
+    nextPayment.approvedAt = payment.approvedAt || gallery.selectionCompletedAt;
+    nextPayment.selectionCompletedAt = gallery.selectionCompletedAt;
+    await writeKvJson(env, key, nextPayment);
+    await setAsaasIntentStatus(env, `gallery:${gallery.id}`, payment.id, "approved");
+    const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+    const paymentClient = client || { name: payment.clientName || "Cliente", email: payment.clientEmail || "" };
+    if (!payment.approvedNotificationSentAt) {
+      try {
+        const sent = await sendPaymentApprovedEmail(env, gallery, paymentClient,
+          nextPayment, gallery.selectionLockedPricing || payment.pricing || {});
+        nextPayment.approvedNotificationSentAt = new Date().toISOString();
+        nextPayment.approvedNotificationResendId = sent?.id || null;
+        await writeKvJson(env, key, nextPayment);
+      } catch (err) {
+        console.error("Gallery payment recovery email error:", err);
+      }
+    }
+    const events = await readKvJson(env, privateGalleryEventsKey(gallery.id), []);
+    if (!events.some((event) => event.action === "pagamento_aprovado" && event.details?.paymentId === payment.id)) {
+      await appendPrivateGalleryEvent(env, request, gallery.id, "pagamento_aprovado", {
+        paymentId: payment.id, providerPaymentId, amountCents: payment.amountCents,
+      }, paymentClient);
+    }
+    return { ok: true, approved: true, payment: nextPayment };
+  }
+  const currentSelection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+  if (gallery.status !== "selection" || JSON.stringify([...new Set(currentSelection)]) !== JSON.stringify(payment.selectedPublicIds || [])) {
+    console.error("Asaas gallery selection changed after charge; manual reconciliation required", payment.id);
+    return { ok: false, reason: "gallery_selection_changed", payment };
+  }
+  const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+  const paymentClient = client || { name: payment.clientName || "Cliente", email: payment.clientEmail || "" };
+  const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+  const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, currentSelection);
+  const pricing = calculateSelectionPricing(gallery, images, currentSelection, lockedSelection);
+  if (pricing.totalCents !== payment.amountCents || !pricing.requiresPayment) {
+    console.error("Asaas gallery price changed after charge; manual reconciliation required", payment.id);
+    return { ok: false, reason: "gallery_price_changed", payment };
+  }
+  const completed = await completePrivateGallerySelection(env, request, gallery, paymentClient, images, payment.selectedPublicIds || [], {
+    ...nextPayment, status: "approved", approvedAt: now,
+  });
+  nextPayment.status = "approved";
+  nextPayment.approvedAt = now;
+  nextPayment.selectionCompletedAt = completed.gallery.selectionCompletedAt;
+  await writeKvJson(env, key, nextPayment);
+  await setAsaasIntentStatus(env, `gallery:${gallery.id}`, payment.id, "approved");
+  try {
+    const resend = await sendPaymentApprovedEmail(env, completed.gallery, paymentClient, nextPayment, completed.pricing);
+    nextPayment.approvedNotificationSentAt = new Date().toISOString();
+    nextPayment.approvedNotificationResendId = resend?.id || null;
+    await writeKvJson(env, key, nextPayment);
+  } catch (err) {
+    console.error("Gallery payment email error:", err);
+  }
+  await appendPrivateGalleryEvent(env, request, gallery.id, "pagamento_aprovado", {
+    paymentId: payment.id, providerPaymentId, amountCents: payment.amountCents,
+  }, paymentClient);
+  return { ok: true, approved: true, payment: nextPayment };
+}
+
 function visibleGalleryImages(gallery = {}, images = []) {
   if (gallery.status === "final") {
     const finalImages = images.filter((image) => image.phase === "final");
@@ -3126,6 +3518,25 @@ export default {
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders() });
+    }
+
+    if (["/payments/asaas/webhook", "/payments/asaas/sandbox/webhook"].includes(url.pathname) && request.method === "POST") {
+      const environment = url.pathname.includes("/sandbox/") ? "sandbox" : "production";
+      const webhookToken = environment === "sandbox" ? env.ASAAS_SANDBOX_WEBHOOK_TOKEN : env.ASAAS_WEBHOOK_TOKEN;
+      if (!webhookToken || !timingSafeEqualString(request.headers.get("asaas-access-token") || "", webhookToken)) {
+        return errorJson("Invalid Asaas webhook token", 401);
+      }
+      const body = await readJson(request);
+      const providerPaymentId = String(body?.payment?.id || "").trim();
+      if (!providerPaymentId) return errorJson("Missing Asaas payment id", 400);
+      try {
+        const result = await reconcileAsaasPayment(env, request, providerPaymentId, environment);
+        if (!result.ok) return errorJson("Asaas payment pending reconciliation", 503);
+        return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        console.error("Asaas webhook error:", err);
+        return errorJson("Erro ao processar webhook do Asaas.", 503);
+      }
     }
 
     if (url.pathname === "/payments/mercadopago/webhook" && ["GET", "POST"].includes(request.method)) {
@@ -3407,6 +3818,7 @@ export default {
 
       return json({
         quote: publicQuote(quote),
+        payment: quote.paymentRequired ? publicPayment(await readKvJson(env, privateQuotePaymentKey(quote.id), {})) : null,
         client: quoteClientSnapshot(access.linkedClient || {}),
         contractor: quote.contractor || quote.publishedSnapshot?.contractor || quoteContractor(env),
       }, 200, { "Cache-Control": "no-store" });
@@ -3439,7 +3851,7 @@ export default {
       const access = await requireClientQuoteAccess(request, env, quote);
       if (access.error) return access.error;
       const status = effectiveQuoteStatus(quote);
-      if (status === "accepted") return json({ ok: true, alreadyAccepted: true, quote: publicQuote(quote) }, 200, { "Cache-Control": "no-store" });
+      if (["accepted", "pending_payment"].includes(status)) return json({ ok: true, alreadyAccepted: true, quote: publicQuote(quote) }, 200, { "Cache-Control": "no-store" });
       if (status === "expired") return errorJson("Este orçamento expirou. Solicite uma nova validade antes de aceitar.", 409);
       if (!["published", "viewed"].includes(status)) return errorJson("Este orçamento não está disponível para aceite.", 409);
 
@@ -3453,6 +3865,19 @@ export default {
 
       const acceptedAt = new Date().toISOString();
       const snapshot = quote.publishedSnapshot || quotePublishedSnapshot(env, quote, access.linkedClient || {});
+      const linkedClient = access.linkedClient || await readKvJson(env, privateClientKey(quote.clientId), null);
+      if (!linkedClient || (quote.isTest === true) !== (linkedClient.isTest === true)) {
+        return errorJson("Tipo de cliente e orçamento incompatíveis.", 409);
+      }
+      const environment = asaasEnvironmentForClient(linkedClient);
+      const paymentRequired = snapshot.totalCents > 0;
+      if (paymentRequired && ![11, 14].includes(signerDocument.replace(/\D/g, "").length)) {
+        return errorJson("Informe um CPF ou CNPJ válido para pagar o orçamento.", 400);
+      }
+      if (paymentRequired) {
+        try { asaasApiConfig(env, environment); }
+        catch { return errorJson("Pagamento Asaas temporariamente indisponível.", 503); }
+      }
       const evidence = {
         quoteId: quote.id,
         number: quote.number,
@@ -3472,9 +3897,13 @@ export default {
         hash,
       };
 
-      quote.status = "accepted";
+      if (paymentRequired && !env.GALLERY_DB) return errorJson("Pagamento indisponível: banco transacional não configurado.", 503);
+      if (paymentRequired && snapshot.totalCents < 500) return errorJson("O Asaas exige valor mínimo de R$ 5,00 por cobrança.", 400);
+      quote.status = paymentRequired ? "pending_payment" : "accepted";
       quote.acceptedAt = acceptedAt;
       quote.acceptance = acceptance;
+      quote.paymentRequired = paymentRequired;
+      quote.paymentStatus = paymentRequired ? "pending" : null;
       quote.updatedAt = acceptedAt;
       await writeKvJson(env, privateQuoteKey(quote.id), quote);
       await appendPrivateQuoteEvent(env, request, quote.id, "cliente_aceitou_orcamento", {
@@ -3482,6 +3911,10 @@ export default {
         code: acceptance.code,
         hash: acceptance.hash,
       }, access.client);
+
+      if (paymentRequired) {
+        return json({ ok: true, quote: publicQuote(quote), paymentRequired: true }, 200, { "Cache-Control": "no-store" });
+      }
 
       const pdfBytes = buildQuotePdf(env, quote, access.linkedClient || {}, acceptance);
       let emailResult = { client: null, admin: null, errors: [] };
@@ -3504,6 +3937,99 @@ export default {
         emailQueued: Boolean(emailResult.client && emailResult.admin),
         emailErrors: emailResult.errors,
       }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-quote/payment/create" && request.method === "POST") {
+      const body = await readJson(request);
+      const quote = await readKvJson(env, privateQuoteKey(String(body.quoteId || "").trim()), null);
+      if (!quote) return errorJson("Orçamento não encontrado.", 404);
+      const access = await requireClientQuoteAccess(request, env, quote);
+      if (access.error) return access.error;
+      if (quote.status !== "pending_payment" || !quote.paymentRequired || !quote.acceptance) {
+        return errorJson("Este orçamento não aguarda pagamento.", 409);
+      }
+      const linkedClient = access.linkedClient || await readKvJson(env, privateClientKey(quote.clientId), null);
+      if (!linkedClient || (quote.isTest === true) !== (linkedClient.isTest === true)) {
+        return errorJson("Tipo de cliente e orçamento incompatíveis.", 409);
+      }
+      const environment = asaasEnvironmentForClient(linkedClient);
+      try { asaasApiConfig(env, environment); }
+      catch { return errorJson("Pagamento temporariamente indisponível.", 503); }
+      if (![11, 14].includes(String(quote.acceptance.document || "").replace(/\D/g, "").length)) {
+        return errorJson("Corrija o CPF ou CNPJ do aceite antes de gerar o pagamento.", 400);
+      }
+      const choice = body.choice === "reserve" ? "reserve" : "total";
+      const totalCents = Number(quote.publishedSnapshot?.totalCents || calculateQuoteTotals(quote).totalCents);
+      const reserve = quoteReserve(quote, totalCents);
+      if (choice === "reserve" && !reserve) return errorJson("Este orçamento não oferece entrada parcial.", 400);
+      const amountCents = choice === "reserve" ? reserve.amountCents : totalCents;
+      if (!Number.isSafeInteger(amountCents) || amountCents <= 0) return errorJson("Valor de pagamento inválido.", 400);
+      if (amountCents < 500) return errorJson("O Asaas exige valor mínimo de R$ 5,00 por cobrança.", 400);
+      const scope = `quote:${quote.id}`;
+      const intent = await readAsaasIntent(env, scope);
+      let existing = await readKvJson(env, privateQuotePaymentKey(quote.id), null);
+      if (["creating", "pending"].includes(intent?.status)) {
+        const inFlight = existing?.id === intent.paymentId ? existing : intent.payment;
+        if (!inFlight) return errorJson("Cobrança anterior precisa de conferência. Entre em contato.", 409);
+        if (inFlight.environment !== environment) return errorJson("Ambiente da cobrança anterior incompatível.", 409);
+        if (intent.status === "creating" || !inFlight.ticketUrl) {
+          try {
+            existing = await recoverAsaasCharge(env, scope, inFlight,
+              access.linkedClient || access.client, quote.acceptance.document, "quote", quote.id) || inFlight;
+          } catch (err) {
+            console.error("Asaas quote recovery error:", err);
+            return errorJson("Não foi possível conferir a cobrança anterior. Tente novamente mais tarde.", 503);
+          }
+        } else existing = inFlight;
+      }
+      if (existing && ["pending", "creating", "approved"].includes(existing.status)) {
+        if (existing.choice !== choice) return errorJson("Já existe uma cobrança para este orçamento. Conclua-a antes de alterar o valor.", 409);
+        if (existing.status === "creating") return errorJson("Cobrança em processamento. Aguarde e tente novamente.", 409);
+        return json({ ok: true, payment: publicPayment(existing) }, 200, { "Cache-Control": "no-store" });
+      }
+      const payment = {
+        id: `qpay_${randomToken(12)}`,
+        provider: "asaas",
+        environment,
+        quoteId: quote.id,
+        quoteVersion: quote.version,
+        acceptanceHash: quote.acceptance.hash,
+        choice,
+        amountCents,
+        status: "creating",
+        description: `${choice === "reserve" ? "Reserva" : "Pagamento integral"} · ${quote.number || quote.title || "Orçamento"}`,
+        createdAt: new Date().toISOString(),
+      };
+      if (!await claimAsaasIntent(env, scope, payment)) {
+        return errorJson("Já existe uma cobrança para este orçamento. Aguarde a atualização do pagamento.", 409);
+      }
+      await writeKvJson(env, privateQuotePaymentKey(quote.id), payment);
+      try {
+        const charge = await createAsaasCharge(env, payment, access.linkedClient || access.client, quote.acceptance.document);
+        const saved = { ...payment, ...charge, status: "pending", updatedAt: new Date().toISOString() };
+        await writeKvJson(env, privateQuotePaymentKey(quote.id), saved);
+        await writeKvJson(env, asaasPaymentKey(charge.providerPaymentId, environment), { kind: "quote", id: quote.id });
+        await setAsaasIntentStatus(env, `quote:${quote.id}`, payment.id, "pending");
+        return json({ ok: true, payment: publicPayment(saved) }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        console.error("Asaas quote charge error:", err);
+        await rejectFailedAsaasCreation(env, scope, payment, privateQuotePaymentKey(quote.id), err);
+        return errorJson(err.message || "Não foi possível gerar o pagamento.", 502);
+      }
+    }
+
+    if (url.pathname === "/client-quote/payment/status" && request.method === "GET") {
+      const quote = await readKvJson(env, privateQuoteKey(String(url.searchParams.get("id") || "").trim()), null);
+      if (!quote) return errorJson("Orçamento não encontrado.", 404);
+      const access = await requireClientQuoteAccess(request, env, quote);
+      if (access.error) return access.error;
+      let payment = await readKvJson(env, privateQuotePaymentKey(quote.id), null);
+      if (payment?.providerPaymentId && payment.status === "pending") {
+        const reconciled = await reconcileAsaasPayment(env, request, payment.providerPaymentId, payment.environment);
+        if (reconciled.payment) payment = reconciled.payment;
+      }
+      const currentQuote = await readKvJson(env, privateQuoteKey(quote.id), quote);
+      return json({ quote: publicQuote(currentQuote), payment: payment ? publicPayment(payment) : null }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/client-galleries" && request.method === "GET") {
@@ -3597,6 +4123,7 @@ export default {
       const beforeSelection = uniquePublicIds(current);
 
       const next = await changeGalleryFavorites(env, gallery.id, changes);
+      if (!next) return errorJson("Há um pagamento em andamento. Conclua ou cancele a cobrança antes de alterar as fotos.", 409);
       const diff = selectionDiff(beforeSelection, next);
       const lockedDiff = selectionDiff(lockedSelection, next);
       ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, selected ? "favoritar_foto" : "remover_favorito", {
@@ -3635,6 +4162,7 @@ export default {
       const lockedSelection = await ensureCompletedSelectionBaseline(env, gallery, images, current);
       const ids = images.map((image) => image.public_id).filter(Boolean);
       const next = ids.length ? await changeGalleryFavorites(env, gallery.id, ids.map(publicId => ({ publicId, selected: true }))) : [];
+      if (!next) return errorJson("Há um pagamento em andamento. Conclua ou cancele a cobrança antes de alterar as fotos.", 409);
       await appendPrivateGalleryEvent(env, request, gallery.id, "selecionar_todas", {
         totalSelected: next.length,
       }, access.client);
@@ -3656,6 +4184,9 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
+      if (env.GALLERY_DB && ["creating", "pending"].includes((await readAsaasIntent(env, `gallery:${gallery.id}`))?.status)) {
+        return errorJson("Há um pagamento em andamento. Aguarde a confirmação antes de concluir a seleção.", 409);
+      }
 
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
@@ -3712,11 +4243,46 @@ export default {
       if (!pricing.requiresPayment) {
         return json({ ok: true, paymentRequired: false, pricing }, 200, { "Cache-Control": "no-store" });
       }
+      if (!access.linkedClient) return errorJson("Cliente da galeria não encontrado.", 409);
+      const environment = asaasEnvironmentForClient(access.linkedClient);
+      try { asaasApiConfig(env, environment); }
+      catch { return errorJson("Pagamento Asaas temporariamente indisponível.", 503); }
+      if (!env.GALLERY_DB) return errorJson("Pagamento indisponível: banco transacional não configurado.", 503);
+      if (pricing.totalCents < 500) {
+        return errorJson("O Asaas exige valor mínimo de R$ 5,00 por cobrança.", 400, { pricing });
+      }
+
+      const scope = `gallery:${gallery.id}`;
+      const intent = await readAsaasIntent(env, scope);
+      const latestId = await readKvJson(env, privateGalleryLatestPaymentKey(gallery.id), null);
+      let latest = latestId ? await readKvJson(env, privateGalleryPaymentKey(latestId), null) : null;
+      if (["creating", "pending"].includes(intent?.status)) {
+        const inFlight = await readKvJson(env, privateGalleryPaymentKey(intent.paymentId), null) || intent.payment;
+        if (!inFlight) return errorJson("Cobrança anterior precisa de conferência. Entre em contato.", 409);
+        if (inFlight.environment !== environment) return errorJson("Ambiente da cobrança anterior incompatível.", 409);
+        if (intent.status === "creating" || !inFlight.ticketUrl) {
+          try {
+            latest = await recoverAsaasCharge(env, scope, inFlight,
+              access.linkedClient || access.client, body.document, "gallery", gallery.id) || inFlight;
+          } catch (err) {
+            console.error("Asaas gallery recovery error:", err);
+            return errorJson("Não foi possível conferir a cobrança anterior. Tente novamente mais tarde.", 503);
+          }
+        } else latest = inFlight;
+      }
+      if (latest?.status === "pending" && latest.amountCents === pricing.totalCents
+        && JSON.stringify(latest.selectedPublicIds || []) === JSON.stringify([...new Set(selection)])) {
+        return json({ ok: true, paymentRequired: true, pricing, payment: publicPayment(latest) }, 200, { "Cache-Control": "no-store" });
+      }
+      if (latest && ["pending", "creating", "approved"].includes(latest.status)) {
+        return errorJson("Já existe cobrança para esta galeria. Conclua ou cancele o pagamento antes de mudar a seleção.", 409);
+      }
 
       const now = Date.now();
       const payment = {
         id: `pay_${randomToken(12)}`,
-        provider: "mercadopago",
+        provider: "asaas",
+        environment,
         status: "pending",
         galleryId: gallery.id,
         gallerySlug: gallery.slug,
@@ -3727,42 +4293,36 @@ export default {
         amountCents: pricing.totalCents,
         createdAt: new Date(now).toISOString(),
         updatedAt: new Date(now).toISOString(),
-        expiresAt: new Date(now + 1000 * 60 * 30).toISOString(),
       };
 
+      if (![11, 14].includes(String(body.document || access.linkedClient.document || "").replace(/\D/g, "").length)) {
+        return errorJson("Informe o CPF ou CNPJ para pagar pelo Asaas.", 400);
+      }
+      payment.description = `Fotos extras · ${gallery.title || gallery.slug || "Galeria"}`;
+      if (!await claimAsaasIntent(env, scope, payment)) {
+        return errorJson("Já existe cobrança para esta galeria. Aguarde a atualização do pagamento.", 409);
+      }
+      const selectionAfterClaim = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      if (JSON.stringify(uniquePublicIds(selectionAfterClaim)) !== JSON.stringify(payment.selectedPublicIds)) {
+        await setAsaasIntentStatus(env, scope, payment.id, "rejected");
+        return errorJson("A seleção mudou durante a criação do pagamento. Confira as fotos e tente novamente.", 409);
+      }
+      await writeKvJson(env, privateGalleryPaymentKey(payment.id), { ...payment, status: "creating" });
       try {
-        const mp = await createMercadoPagoPixPayment(env, request, payment, gallery, access.linkedClient || access.client);
-        const savedPayment = {
-          ...payment,
-          providerPaymentId: mp.providerPaymentId,
-          providerStatus: mp.providerStatus,
-          providerStatusDetail: mp.rawStatus,
-          qrCode: mp.qrCode,
-          qrCodeBase64: mp.qrCodeBase64,
-          ticketUrl: mp.ticketUrl,
-        };
-        await writeKvJson(env, privateGalleryPaymentKey(savedPayment.id), savedPayment, { expirationTtl: 60 * 60 * 24 * 7 });
-        if (savedPayment.providerPaymentId) {
-          await env.LIKES_KV.put(mercadoPagoPaymentKey(savedPayment.providerPaymentId), savedPayment.id, { expirationTtl: 60 * 60 * 24 * 7 });
-        }
-        await writeKvJson(env, privateGalleryLatestPaymentKey(gallery.id), savedPayment.id, { expirationTtl: 60 * 60 * 24 * 7 });
-        await appendPrivateGalleryEvent(env, request, gallery.id, "pix_criado", {
-          paymentId: savedPayment.id,
-          providerPaymentId: savedPayment.providerPaymentId,
-          pricing,
+        const charge = await createAsaasCharge(env, payment, access.linkedClient, body.document);
+        const saved = { ...payment, ...charge, status: "pending" };
+        await writeKvJson(env, privateGalleryPaymentKey(payment.id), saved);
+        await writeKvJson(env, asaasPaymentKey(charge.providerPaymentId, environment), { kind: "gallery", id: payment.id });
+        await writeKvJson(env, privateGalleryLatestPaymentKey(gallery.id), payment.id);
+        await setAsaasIntentStatus(env, scope, payment.id, "pending");
+        await appendPrivateGalleryEvent(env, request, gallery.id, "pagamento_criado", {
+          paymentId: payment.id, providerPaymentId: charge.providerPaymentId, pricing,
         }, access.client);
-
-        return json({
-          ok: true,
-          paymentRequired: true,
-          pricing,
-          payment: publicPayment(savedPayment),
-        }, 200, { "Cache-Control": "no-store" });
+        return json({ ok: true, paymentRequired: true, pricing, payment: publicPayment(saved) }, 200, { "Cache-Control": "no-store" });
       } catch (err) {
-        console.error("Mercado Pago create payment error:", err);
-        return errorJson("Não foi possível gerar o Pix agora.", 502, {
-          detail: String(err?.message || err || "unknown"),
-        });
+        console.error("Asaas gallery charge error:", err);
+        await rejectFailedAsaasCreation(env, scope, payment, privateGalleryPaymentKey(payment.id), err);
+        return errorJson(err.message || "Não foi possível gerar o pagamento.", 502);
       }
     }
 
@@ -3780,7 +4340,9 @@ export default {
       let currentPayment = payment;
       if (payment.providerPaymentId && payment.status === "pending") {
         try {
-          const result = await approveMercadoPagoPayment(env, request, payment.providerPaymentId);
+          const result = payment.provider === "asaas"
+            ? await reconcileAsaasPayment(env, request, payment.providerPaymentId, payment.environment)
+            : await approveMercadoPagoPayment(env, request, payment.providerPaymentId);
           if (result.payment) currentPayment = result.payment;
         } catch (err) {
           console.error("Mercado Pago payment status check failed:", err);
@@ -4232,7 +4794,7 @@ export default {
       const id = String(body.id || body.quoteId || "").trim();
       const quote = await readKvJson(env, privateQuoteKey(id), null);
       if (!quote) return errorJson("Orçamento não encontrado.", 404);
-      if (quote.status === "accepted" && !(await isTestQuote(env, quote))) return errorJson("Este orçamento já foi aceito e não pode ser republicado.", 409);
+      if (quote.status === "pending_payment" || (quote.status === "accepted" && !(await isTestQuote(env, quote)))) return errorJson("Este orçamento já foi aceito ou aguarda pagamento e não pode ser republicado.", 409);
       const client = quote.clientId ? await readKvJson(env, privateClientKey(quote.clientId), null) : null;
       if (!client?.email) return errorJson("Vincule um cliente com e-mail antes de publicar.", 400);
       if (!normalizeQuoteItems(quote.items || []).length) return errorJson("Adicione ao menos um item ao orçamento.", 400);
@@ -4354,7 +4916,9 @@ export default {
       const { error, user } = await requireAdminUser(request, env);
       if (error) return error;
       const body = await readJson(request);
-      const gallery = await savePrivateGallery(env, body);
+      let gallery;
+      try { gallery = await savePrivateGallery(env, body); }
+      catch (err) { return errorJson(err.message || "Erro ao salvar galeria.", err.status || 500); }
       await appendAuditLog(env, request, user, body.id ? "editar_galeria_privada" : "criar_galeria_privada", "private_galleries", { galleryId: gallery.id, slug: gallery.slug });
       return json({ gallery }, body.id ? 200 : 201, { "Cache-Control": "no-store" });
     }
@@ -4416,6 +4980,9 @@ export default {
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
 
       if (["selection", "editing", "final"].includes(body.status) && body.status !== gallery.status) {
+        if (await galleryAsaasPaymentPending(env, galleryId)) {
+          return errorJson("Há um pagamento em andamento nesta galeria. Aguarde a confirmação antes de alterar a etapa.", 409);
+        }
         gallery = await savePrivateGallery(env, {
           id: gallery.id,
           status: body.status,
@@ -4638,6 +5205,7 @@ export default {
 
       const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      if (await galleryAsaasPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
 
       await destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId);
       const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
@@ -4676,6 +5244,7 @@ export default {
 
       const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      if (await galleryAsaasPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
 
       const requested = new Set(publicIds);
       const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
@@ -4744,6 +5313,7 @@ export default {
 
       const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
       if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      if (await galleryAsaasPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de apagar fotos.", 409);
 
       const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
       const selection = await readKvJson(env, privateGallerySelectionKey(galleryId), []);

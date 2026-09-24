@@ -112,6 +112,7 @@ function statusMeta(status = "draft") {
     published: ["Enviado", "pending"],
     viewed: ["Visualizado", "pending"],
     accepted: ["Aceito", "success"],
+    pending_payment: ["Aguardando pagamento", "pending"],
     expired: ["Expirado", "danger"],
     cancelled: ["Cancelado", "danger"],
   };
@@ -160,7 +161,7 @@ function defaultQuote() {
     items: [{ id: `item_${Date.now()}`, description: "Serviço fotográfico", quantity: 1, unitPriceCents: 0 }],
     discountType: "none",
     discountValue: 0,
-    paymentMethods: [{ id: `payment_${Date.now()}`, type: "pix", label: "PIX", details: "Dados para pagamento enviados após a aprovação." }],
+    paymentMethods: [{ id: `payment_${Date.now()}`, type: "other", label: "Pagamento online", details: "Formas disponíveis no checkout seguro do Asaas após o aceite." }],
     reservePercent: 30,
     paymentTerms: "Saldo restante até o dia do trabalho.",
     clauses: DEFAULT_CLAUSES.map((clause) => ({ ...clause })),
@@ -325,6 +326,7 @@ function renderEvents() {
     cliente_criou_senha: "Cliente criou a senha de acesso",
     cliente_abriu_orcamento: "Cliente visualizou o orçamento",
     cliente_aceitou_orcamento: "Cliente aceitou o contrato",
+    pagamento_aprovado: "Pagamento aprovado",
   };
   quoteEvents.innerHTML = state.events.length ? state.events.map((event) => `
     <div class="event-row">
@@ -345,11 +347,14 @@ function renderEvents() {
     <span class="eyebrow">Aceite confirmado</span>
     <strong>${escapeHtml(acceptance.name || "Cliente")}</strong>
     <p>${escapeHtml(acceptance.email || "")} · ${escapeHtml(formatDate(acceptance.acceptedAt, true))}</p>
+    ${state.quote.paymentStatus === "approved" && state.quote.paymentAmountCents != null
+      ? `<p>${state.quote.paymentBalanceCents > 0 ? "Entrada paga" : "Pagamento integral"}: ${escapeHtml(formatMoney(state.quote.paymentAmountCents))}${state.quote.paymentBalanceCents > 0 ? ` · Saldo restante: ${escapeHtml(formatMoney(state.quote.paymentBalanceCents))}` : ""}</p>`
+      : state.quote.status === "pending_payment" ? "<p>Pagamento ainda não confirmado.</p>" : ""}
     <small>Código ${escapeHtml(acceptance.code || "")} · Hash ${escapeHtml(acceptance.hash || "")}</small>`;
 }
 
 function isQuoteLocked() {
-  return state.quote?.status === "accepted" && state.quote?.isTest !== true;
+  return state.quote?.status === "pending_payment" || (state.quote?.status === "accepted" && state.quote?.isTest !== true);
 }
 
 function renderHeader() {
@@ -365,7 +370,7 @@ function renderHeader() {
 
   const hasId = Boolean(state.quote.id);
   const accepted = isQuoteLocked();
-  const published = ["published", "viewed", "accepted", "expired"].includes(state.quote.status);
+  const published = ["published", "viewed", "pending_payment", "accepted", "expired"].includes(state.quote.status);
   openQuoteBtn.classList.toggle("disabled", !published);
   openQuoteBtn.href = published ? `/clientes/orcamento/?id=${encodeURIComponent(state.quote.id)}` : "#";
   downloadPdfBtn.disabled = !hasId;
@@ -376,8 +381,8 @@ function renderHeader() {
     : "/admin/galerias/";
   publishQuoteBtn.disabled = accepted;
   saveQuoteBtn.disabled = accepted;
-  publishQuoteBtn.textContent = published && !accepted ? "Reenviar versão" : accepted ? "Contrato aceito" : "Publicar e enviar";
-  saveQuoteBtn.textContent = accepted ? "Contrato bloqueado" : "Salvar rascunho";
+  publishQuoteBtn.textContent = published && !accepted ? "Reenviar versão" : accepted ? "Edição bloqueada" : "Publicar e enviar";
+  saveQuoteBtn.textContent = accepted ? "Edição bloqueada" : "Salvar rascunho";
 
   quoteForm.querySelectorAll("input, textarea, select, button").forEach((element) => {
     if (accepted && !element.closest("#section-history")) element.disabled = true;

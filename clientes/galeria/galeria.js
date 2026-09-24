@@ -67,6 +67,13 @@ const paymentCopy = paymentModal.querySelector(".payment-copy");
 const paymentCode = document.getElementById("paymentCode");
 const copyPaymentCode = document.getElementById("copyPaymentCode");
 const paymentStatus = document.getElementById("paymentStatus");
+const paymentSandboxNotice = document.getElementById("paymentSandboxNotice");
+const paymentOpenLink = document.getElementById("paymentOpenLink");
+const documentDialog = document.getElementById("documentDialog");
+const documentForm = document.getElementById("documentForm");
+const paymentDocument = document.getElementById("paymentDocument");
+const documentError = document.getElementById("documentError");
+const documentCancel = document.getElementById("documentCancel");
 const toastEl = document.getElementById("toast");
 
 function escapeHtml(value = "") {
@@ -735,10 +742,14 @@ selectAllBtn.addEventListener("click", async () => {
 
 function openPaymentModal(payment, pricing) {
   state.payment = payment;
+  paymentSandboxNotice.classList.toggle("hidden", payment.environment !== "sandbox");
   paymentDescription.textContent = `${pricing.additionalSelection ? "Total adicional das fotos extras" : "Total das fotos extras"}: ${formatCurrency(payment.amountCents || pricing.totalCents || 0)}. Depois do pagamento aprovado, sua seleção será confirmada automaticamente.`;
+  const hosted = Boolean(payment.ticketUrl && !payment.qrCode);
+  paymentOpenLink.classList.toggle("hidden", !hosted);
+  if (hosted) paymentOpenLink.href = payment.ticketUrl;
   paymentQr.innerHTML = payment.qrCodeBase64
     ? `<img src="data:image/png;base64,${escapeHtml(payment.qrCodeBase64)}" alt="QR Code Pix">`
-    : `<span>Use o código Pix abaixo.</span>`;
+    : hosted ? `<span>Escolha a forma de pagamento disponível na página segura do Asaas.</span>` : `<span>Use o código Pix abaixo.</span>`;
   paymentCode.value = payment.qrCode || "";
   setPaymentModalState("pending");
   paymentModal.classList.remove("hidden");
@@ -752,16 +763,18 @@ function setPaymentModalState(status, message = "") {
   paymentCard.classList.toggle("is-approved", approved);
   paymentCard.classList.toggle("is-rejected", rejected);
   paymentSuccess.classList.toggle("hidden", !approved);
+  const hosted = Boolean(state.payment?.ticketUrl && !state.payment?.qrCode);
   paymentQr.classList.toggle("hidden", approved || rejected);
-  paymentCopy.classList.toggle("hidden", approved || rejected);
-  copyPaymentCode.classList.toggle("hidden", approved || rejected);
+  paymentCopy.classList.toggle("hidden", approved || rejected || hosted);
+  copyPaymentCode.classList.toggle("hidden", approved || rejected || hosted);
+  paymentOpenLink.classList.toggle("hidden", approved || rejected || !hosted);
   paymentStatus.classList.toggle("is-approved", approved);
   paymentStatus.classList.toggle("is-rejected", rejected);
 
   if (approved) {
     paymentStatus.textContent = message || "Pagamento aprovado. Seleção concluída!";
   } else if (rejected) {
-    paymentStatus.textContent = message || "Pagamento recusado ou cancelado. Gere um novo Pix para tentar novamente.";
+    paymentStatus.textContent = message || "Pagamento recusado ou cancelado. Tente gerar uma nova cobrança.";
   } else {
     paymentStatus.textContent = message || "Aguardando pagamento...";
   }
@@ -775,14 +788,56 @@ function closePaymentModal() {
   }
 }
 
+function askPaymentDocument() {
+  return new Promise((resolve) => {
+    documentError.classList.add("hidden");
+    paymentDocument.value = "";
+    documentDialog.showModal();
+    const finish = (value) => {
+      documentForm.removeEventListener("submit", submit);
+      documentCancel.removeEventListener("click", cancel);
+      documentDialog.removeEventListener("cancel", cancel);
+      if (documentDialog.open) documentDialog.close();
+      resolve(value);
+    };
+    const submit = (event) => {
+      event.preventDefault();
+      const value = paymentDocument.value.replace(/\D/g, "");
+      if (![11, 14].includes(value.length)) {
+        documentError.classList.remove("hidden");
+        paymentDocument.focus();
+        return;
+      }
+      finish(value);
+    };
+    const cancel = (event) => {
+      event.preventDefault();
+      finish("");
+    };
+    documentForm.addEventListener("submit", submit);
+    documentCancel.addEventListener("click", cancel);
+    documentDialog.addEventListener("cancel", cancel);
+    paymentDocument.focus();
+  });
+}
+
 async function createPixPayment() {
   completeBtn.disabled = true;
-  completeBtn.textContent = "Gerando Pix...";
+  completeBtn.textContent = "Preparando pagamento...";
   try {
-    const data = await api("/client-gallery/payment/create", {
+    let data;
+    const create = (document = "") => api("/client-gallery/payment/create", {
       method: "POST",
-      body: JSON.stringify({ slug }),
+      body: JSON.stringify({ slug, document }),
     });
+    try {
+      data = await create();
+    } catch (err) {
+      if (!/CPF ou CNPJ/.test(err.message || "")) throw err;
+      const document = await askPaymentDocument();
+      if (!document) throw new Error("CPF ou CNPJ necessário para continuar.");
+      data = await create(document.trim());
+    }
     if (!data.paymentRequired) {
       const completed = await api("/client-gallery/complete", {
         method: "POST",
@@ -798,7 +853,7 @@ async function createPixPayment() {
     if (data.pricing) state.gallery.pricing = data.pricing;
     openPaymentModal(data.payment, data.pricing || state.gallery.pricing || {});
   } catch (err) {
-    showToast(err.message || "Não foi possível gerar o Pix.");
+    showToast(err.message || "Não foi possível gerar o pagamento.");
   } finally {
     completeBtn.disabled = false;
     completeBtn.textContent = "Concluir seleção";

@@ -49,6 +49,19 @@ test('real accepted contracts cannot be changed, deleted or transferred to test 
   assert.equal(a.read('private_quote:' + quote.id).status, 'accepted');
 });
 
+test('quotes awaiting payment cannot be edited, deleted or republished', async () => {
+  const a = app();
+  for (const isTest of [false, true]) {
+    const client = await a.savePrivateClient(a.env, { name: isTest ? 'Demo' : 'Real', isTest });
+    const quote = await a.savePrivateQuote(a.env, { clientId: client.id });
+    a.seed('private_quote:' + quote.id, { ...quote, status: 'pending_payment', acceptance: { hash: 'signed' } });
+    assert.equal((await a.request('/private/quotes', { id: quote.id, title: 'Changed' })).status, 409);
+    assert.equal((await a.request('/private/quote/delete', { quoteId: quote.id })).status, 409);
+    assert.equal((await a.request('/private/quote/publish', { quoteId: quote.id })).status, 409);
+    assert.equal(a.read('private_quote:' + quote.id).status, 'pending_payment');
+  }
+});
+
 test('test quote inherits type, resets acceptance on edit and can be deleted after acceptance', async () => {
   const a = app();
   const client = await a.savePrivateClient(a.env, { name: 'Demo', isTest: true });

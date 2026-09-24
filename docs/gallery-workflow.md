@@ -11,7 +11,7 @@
 
 ## Armazenamento
 
-O binding `GALLERY_DB` usa Cloudflare D1, tabela `gallery_records`, criada por `migrations/0001_gallery_records.sql`. Dados de galerias, clientes, índices associados e auditoria administrativa usam D1. Contas de acesso, sessões, orçamentos, conteúdo público e a associação de IDs do Mercado Pago continuam em KV.
+O binding `GALLERY_DB` usa Cloudflare D1, tabela `gallery_records`, criada por `migrations/0001_gallery_records.sql`. Dados de galerias, clientes, índices associados e auditoria administrativa usam D1. Contas de acesso, sessões, orçamentos, conteúdo público e associações de IDs dos provedores de pagamento continuam em KV. A trava de criação e conciliação de cobranças Asaas usa D1.
 
 Na primeira leitura, cada registro é importado do KV com `INSERT OR IGNORE`. Depois, D1 é a fonte oficial; o KV legado não é regravado. Exclusões deixam um marcador `null` para impedir reimportação de um valor antigo. Favoritos, índices, registros de fotos e eventos usam atualizações SQL atômicas, evitando substituir modificações concorrentes.
 
@@ -21,7 +21,7 @@ O Worker mantém compatibilidade sem o binding para desenvolvimento. Em produç�
 
 1. Salvar cópia do Worker, bindings e registros KV antes de publicar.
 2. Criar D1, aplicar a migração e adicionar binding `GALLERY_DB` preservando todos os bindings e secrets existentes.
-3. Publicar o Worker antes do JavaScript do site e verificar autenticação, leitura e gravação com dados de teste.
+3. Publicar os arquivos estáticos compatíveis antes do Worker e verificar autenticação, leitura e gravação com dados de teste. Para a troca de provedor, seguir `docs/asaas-payments.md`.
 4. Se houver rollback, preferir corrigir o Worker mantendo D1. Antes de voltar a código que só lê KV, exportar D1 e reconciliar valores e marcadores de exclusão para KV, com gravações suspensas durante a transferência. Não basta publicar o Worker antigo.
 
 Testes: Node 22.13 ou posterior, `node --test tests/*.cjs`. Os testes de banco executam SQL em SQLite real e simulam o binding D1.
@@ -34,12 +34,8 @@ Upload continua dependente da conexão, tamanho das fotos e Cloudinary. A compre
 
 Referência: https://developers.cloudflare.com/kv/concepts/how-kv-works/
 
-## Bradesco
+## Pagamentos
 
-A integração atual continua sendo Mercado Pago. Em 22/09/2026, o produto "Pix - geração de QR Code" aparecia como inscrito no Portal Bradesco Developers, mas a conta não tinha aplicação registrada nem credencial disponível. A inscrição no produto, por si só, não conclui a integração. O catálogo visível não oferecia checkout de cartão de crédito ou débito para recebimentos.
+Novas cobranças usam Asaas, separando produção para clientes reais e Sandbox para clientes de teste. O checkout hospedado mostra os meios habilitados na conta; a API de cobrança permite Pix, boleto e cartão de crédito, mas não oferece débito nesse fluxo. Cobranças antigas do Mercado Pago continuam conciliáveis. Implantação, secrets e validação: `docs/asaas-payments.md`.
 
-Registrar a aplicação para a API Pix, concluir os requisitos do produto, obter credenciais e certificados no portal, e homologar os ambientes de teste e produção. Para cartões, confirmar e contratar um produto de adquirência/checkout específico antes de desenhar sua integração. Portal oficial: https://developers.bradesco.com.br/
-
-Com acesso liberado, implementar e homologar criação de cobrança, consulta de status, autenticação, validação de notificações, expiração, idempotência e conciliação de valor/identificador. Configurar certificados e secrets diretamente no ambiente apropriado, nunca em Git ou mensagens. Cobranças Mercado Pago existentes devem continuar sendo conciliadas durante a troca.
-
-O cliente não pode marcar pagamento como aprovado. Trocar o QR por uma chave Pix estática não substitui a confirmação automática de pagamento. Recusas de risco do provedor não devem ser tratadas como aprovação ou pagamento pendente utilizável.
+A API Pix do Bradesco foi apenas inscrita no portal; não foi integrada ao site. Ela não oferece o checkout de cartão solicitado.

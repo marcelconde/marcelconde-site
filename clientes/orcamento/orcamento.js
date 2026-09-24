@@ -4,7 +4,7 @@ const CONFIG = {
 };
 
 const quoteId = new URLSearchParams(location.search).get("id") || "";
-const state = { quote: null, client: null, contractor: null };
+const state = { quote: null, client: null, contractor: null, payment: null, paymentPoll: null };
 
 const $ = (selector) => document.querySelector(selector);
 const quoteLoading = $("#quoteLoading");
@@ -32,6 +32,15 @@ const quoteClientNote = $("#quoteClientNote");
 const quoteAcceptPanel = $("#quoteAcceptPanel");
 const quoteAcceptForm = $("#quoteAcceptForm");
 const quoteAcceptedPanel = $("#quoteAcceptedPanel");
+const quotePaymentPanel = $("#quotePaymentPanel");
+const quoteSandboxNotice = $("#quoteSandboxNotice");
+const quotePaymentBtn = $("#quotePaymentBtn");
+const quotePaymentLink = $("#quotePaymentLink");
+const quotePaymentStatus = $("#quotePaymentStatus");
+const quotePaymentChoices = $("#quotePaymentChoices");
+const quoteReserveChoice = $("#quoteReserveChoice");
+const quoteReserveAmount = $("#quoteReserveAmount");
+const quoteFullAmount = $("#quoteFullAmount");
 const signerName = $("#signerName");
 const signerDocument = $("#signerDocument");
 const confirmContract = $("#confirmContract");
@@ -101,6 +110,7 @@ function formatDate(value, withTime = false) {
 
 function statusText(status) {
   if (status === "accepted") return "Aceito";
+  if (status === "pending_payment") return "Aguardando pagamento";
   if (status === "expired") return "Expirado";
   if (status === "viewed") return "Em análise";
   return "Novo";
@@ -166,9 +176,24 @@ function renderQuote() {
   signerName.value = client.name || "";
   signerDocument.value = client.document || "";
   const accepted = quote.status === "accepted";
+  const awaitingPayment = quote.status === "pending_payment";
   const expired = quote.status === "expired";
-  quoteAcceptPanel.hidden = accepted;
+  quoteAcceptPanel.hidden = accepted || awaitingPayment;
+  quotePaymentPanel.hidden = !awaitingPayment;
   quoteAcceptedPanel.hidden = !accepted;
+  if (awaitingPayment) {
+    quoteSandboxNotice.hidden = quote.isTest !== true;
+    quoteReserveChoice.hidden = !quote.reserveAmountCents || quote.reserveAmountCents < 500;
+    quoteReserveAmount.textContent = formatMoney(quote.reserveAmountCents);
+    quoteFullAmount.textContent = formatMoney(quote.totalCents);
+    if (quoteReserveChoice.hidden) quotePaymentChoices.querySelector('[value="total"]').checked = true;
+    const active = Boolean(state.payment?.ticketUrl && state.payment?.status === "pending");
+    quotePaymentChoices.hidden = active;
+    quotePaymentBtn.hidden = active;
+    quotePaymentLink.hidden = !active;
+    if (active) quotePaymentLink.href = state.payment.ticketUrl;
+    quotePaymentStatus.textContent = active ? "Aguardando confirmação do pagamento." : "O pagamento ainda não foi gerado.";
+  }
   if (expired) {
     quoteAcceptPanel.hidden = false;
     quoteAcceptForm.hidden = true;
@@ -177,6 +202,11 @@ function renderQuote() {
   }
   if (accepted && quote.acceptance) {
     acceptedSummary.textContent = `${quote.acceptance.name} confirmou o aceite em ${formatDate(quote.acceptance.acceptedAt, true)}.`;
+    if (quote.paymentStatus === "approved" && quote.paymentAmountCents != null) {
+      acceptedSummary.textContent += quote.paymentBalanceCents > 0
+        ? ` Entrada paga: ${formatMoney(quote.paymentAmountCents)}. Saldo restante: ${formatMoney(quote.paymentBalanceCents)}.`
+        : ` Pagamento integral confirmado: ${formatMoney(quote.paymentAmountCents)}.`;
+    }
     acceptedEvidence.textContent = `Código ${quote.acceptance.code} · Hash ${quote.acceptance.hash}`;
   }
 
@@ -195,7 +225,9 @@ async function loadQuote() {
     state.quote = data.quote;
     state.client = data.client;
     state.contractor = data.contractor;
+    state.payment = data.payment;
     renderQuote();
+    if (state.quote.status === "pending_payment" && state.payment?.id) startQuotePaymentPolling();
   } catch (err) {
     if (err.message !== "Unauthorized") quoteLoading.innerHTML = `<strong>Não foi possível abrir o orçamento.</strong><p>${escapeHtml(err.message)}</p>`;
   }
@@ -219,6 +251,10 @@ quoteAcceptForm.addEventListener("submit", async (event) => {
     });
     state.quote = data.quote;
     renderQuote();
+    if (state.quote.status === "pending_payment") {
+      quotePaymentPanel.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
     if (!data.emailQueued && data.emailErrors?.length) {
       acceptedSummary.textContent += " O aceite foi registrado, mas uma das cópias por e-mail está pendente de reenvio.";
     }
@@ -228,6 +264,56 @@ quoteAcceptForm.addEventListener("submit", async (event) => {
     acceptQuoteBtn.disabled = false;
     acceptQuoteBtn.textContent = "Aceitar orçamento e contrato";
   }
+});
+
+quotePaymentBtn.addEventListener("click", async () => {
+  quotePaymentBtn.disabled = true;
+  quotePaymentStatus.textContent = "Gerando pagamento...";
+  try {
+    const choice = quotePaymentChoices.querySelector('input[name="quotePaymentChoice"]:checked')?.value || "total";
+    const data = await api("/client-quote/payment/create", {
+      method: "POST",
+      body: JSON.stringify({ quoteId, choice }),
+    });
+    state.payment = data.payment;
+    renderQuote();
+    startQuotePaymentPolling();
+  } catch (err) {
+    quotePaymentStatus.textContent = err.message || "Não foi possível gerar o pagamento.";
+  } finally {
+    quotePaymentBtn.disabled = false;
+  }
+});
+
+function startQuotePaymentPolling() {
+  if (state.paymentPoll) clearInterval(state.paymentPoll);
+  if (!state.payment?.id || state.quote?.status !== "pending_payment") return;
+  const check = async () => {
+    if (document.hidden) return;
+    try {
+      const data = await api(`/client-quote/payment/status?id=${encodeURIComponent(quoteId)}`);
+      state.quote = data.quote;
+      state.payment = data.payment;
+      if (state.quote.status === "accepted") {
+        clearInterval(state.paymentPoll);
+        state.paymentPoll = null;
+        renderQuote();
+      } else if (data.payment?.status === "rejected") {
+        clearInterval(state.paymentPoll);
+        state.paymentPoll = null;
+        renderQuote();
+        quotePaymentStatus.textContent = "Pagamento não concluído. Você pode gerar uma nova cobrança.";
+      }
+    } catch (err) {
+      quotePaymentStatus.textContent = err.message || "Aguardando confirmação do Asaas.";
+    }
+  };
+  state.paymentPoll = setInterval(check, 5000);
+  check();
+}
+
+window.addEventListener("focus", () => {
+  if (state.quote?.status === "pending_payment" && state.payment?.id) startQuotePaymentPolling();
 });
 
 downloadQuoteBtn.addEventListener("click", async () => {

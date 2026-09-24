@@ -693,6 +693,31 @@ p {
   background: rgba(184,149,106,0.07);
 }
 
+.quote-payment-choices {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+.quote-payment-choices label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.quote-payment-choices label:has(input:checked) {
+  border-color: var(--gold);
+  background: rgba(184,149,106,0.12);
+}
+
+.quote-payment-choices input { accent-color: var(--gold); }
+.quote-payment-choices strong { margin-left: auto; white-space: nowrap; }
+#quoteSandboxNotice { border-left: 2px solid var(--gold); padding-left: 12px; }
+
 .quote-accept-form {
   margin-top: 24px;
   display: grid;

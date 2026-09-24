@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/clientes/auth.css?v=20260716-02">
+  <link rel="stylesheet" href="/clientes/auth.css?v=20260923-01">
 </head>
 <body class="client-quote-page">
   <main class="client-shell quote-client-shell">
@@ -119,6 +119,19 @@
         </form>
       </section>
 
+      <section class="quote-accept-panel" id="quotePaymentPanel" hidden>
+        <div class="quote-section-title"><h2>Pagamento</h2></div>
+        <p id="quoteSandboxNotice" hidden><strong>Ambiente de teste:</strong> cobrança fictícia, sem movimentação de dinheiro.</p>
+        <p>Escolha o valor. Confira as formas de pagamento disponíveis na página segura do Asaas.</p>
+        <div id="quotePaymentChoices" class="quote-payment-choices">
+          <label id="quoteReserveChoice"><input type="radio" name="quotePaymentChoice" value="reserve" checked> Pagar a reserva: <strong id="quoteReserveAmount"></strong></label>
+          <label><input type="radio" name="quotePaymentChoice" value="total"> Pagar o valor total: <strong id="quoteFullAmount"></strong></label>
+        </div>
+        <button class="btn btn-primary" id="quotePaymentBtn" type="button">Gerar pagamento</button>
+        <a class="btn btn-primary" id="quotePaymentLink" target="_blank" rel="noopener noreferrer" hidden>Abrir pagamento no Asaas</a>
+        <p id="quotePaymentStatus" role="status" aria-live="polite"></p>
+      </section>
+
       <section class="quote-accepted-panel" id="quoteAcceptedPanel" hidden>
         <span class="eyebrow">Contrato aceito</span>
         <h2>Aprovação registrada</h2>
@@ -129,6 +142,6 @@
   </main>
 
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/clientes/orcamento/orcamento.js?v=20260922-01"></script>
+  <script src="/clientes/orcamento/orcamento.js?v=20260923-03"></script>
 </body>
 </html>

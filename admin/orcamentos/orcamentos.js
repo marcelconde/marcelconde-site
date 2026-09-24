@@ -55,6 +55,7 @@ function statusMeta(status) {
     published: ["Enviado", "pending"],
     viewed: ["Visualizado", "pending"],
     accepted: ["Aceito", "success"],
+    pending_payment: ["Aguardando pagamento", "pending"],
     expired: ["Expirado", "danger"],
     cancelled: ["Cancelado", "danger"],
   };
