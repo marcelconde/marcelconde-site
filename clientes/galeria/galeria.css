@@ -642,6 +642,7 @@ body.selection-processing .workflow-status {
   place-items: center;
   margin: 18px 0;
   background: #f7f3ec;
+  color: #26231f;
   padding: 18px;
 }
 
