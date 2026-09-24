@@ -2876,6 +2876,7 @@ async function asaasRequest(env, environment, path, options = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      "User-Agent": "MarcelCondeSite/1.0 (https://marcelconde.com.br)",
       access_token: config.key,
       ...(options.headers || {}),
     },
@@ -2942,7 +2943,16 @@ async function createAsaasCharge(env, payment, client, document = "") {
   if (!Number.isSafeInteger(payment.amountCents) || payment.amountCents < 500) {
     throw new Error("O Asaas exige valor mínimo de R$ 5,00 por cobrança.");
   }
-  const { customer, charge: existing } = await findAsaasCharge(env, payment, client, document);
+  let customer;
+  let existing;
+  try {
+    ({ customer, charge: existing } = await findAsaasCharge(env, payment, client, document));
+  } catch (err) {
+    // No payment POST has happened yet. Release the intent so a failed
+    // customer lookup cannot leave the gallery permanently locked.
+    err.definitiveFailure = true;
+    throw err;
+  }
   const dueDate = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   const charge = existing || await asaasRequest(env, payment.environment, "/payments", {
     method: "POST",

@@ -137,6 +137,23 @@ test('Asaas minimum blocks a small charge before any API request', async () => {
   await assert.rejects(app.createCharge(app.env, { amountCents: 100 }, {}), /R\$ 5,00/);
 });
 
+test('Asaas requests identify the site and a failed preflight can release the charge claim', async () => {
+  let requests = 0;
+  const app = setup({}, async (url, options) => {
+    requests++;
+    assert.match(url, /\/customers\?/);
+    assert.equal(options.headers['User-Agent'], 'MarcelCondeSite/1.0 (https://marcelconde.com.br)');
+    return new Response(JSON.stringify({ errors: [{ description: 'Dados inválidos' }] }), { status: 400 });
+  });
+  await assert.rejects(
+    app.createCharge(app.env,
+      { id: 'local_1', amountCents: 500, environment: 'sandbox' },
+      { id: 'client_1', name: 'Cliente de teste' }, '12345678901'),
+    (error) => error.definitiveFailure === true && /Asaas 400/.test(error.message),
+  );
+  assert.equal(requests, 1);
+});
+
 test('test clients charge Sandbox and real clients charge production with separate keys', async () => {
   const calls = [];
   const app = setup({}, async (url, options = {}) => {
