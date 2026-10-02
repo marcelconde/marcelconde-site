@@ -2,10 +2,10 @@
 
 ## Fluxo
 
-- Cliente de teste usa `ASAAS_SANDBOX_API_KEY` e API Sandbox. Enquanto a conta PJ estiver em análise e `ASAAS_API_KEY` não estiver configurada, clientes reais mantêm o aceite de orçamento atual e o Pix de fotos extras pelo Mercado Pago. Após a liberação PJ, adicionar a chave de produção ativa o Asaas para clientes reais. O tipo do cliente não pode ser alterado após a criação.
-- Orçamento de cliente de teste com valor exige pagamento após o aceite; isso também valerá para clientes reais quando a chave de produção for ativada. O cliente escolhe entrada percentual, quando configurada, ou valor integral. A confirmação do provedor muda o orçamento para aceito. O valor pago e o saldo restante aparecem ao cliente e no admin; o saldo não é cobrado automaticamente nesta versão.
-- Fotos extras geram cobrança hospedada e a seleção só é concluída após confirmação do provedor. Cobranças antigas do Mercado Pago continuam consultáveis.
-- Durante cobrança pendente de fotos extras, a seleção e alterações administrativas que possam mudar a galeria ficam bloqueadas. Cliente e admin podem cancelar a cobrança; o site a exclui no Asaas (ou cancela no Mercado Pago para cobranças antigas), registra o evento e libera a seleção para ajuste. Cobrança confirmada exige estorno separado e não pode ser cancelada por esse botão.
+- Asaas é o único intermediador. Cliente de teste usa `ASAAS_SANDBOX_API_KEY` e API Sandbox; cliente real usa `ASAAS_API_KEY` e API de produção. Sem a chave do ambiente, aceite de orçamento com valor e cobrança de fotos extras falham com 503, sem alternativa. O tipo do cliente não pode ser alterado após a criação.
+- Orçamento com valor exige pagamento após o aceite. O cliente escolhe entrada percentual, quando configurada, ou valor integral. A confirmação do provedor muda o orçamento para aceito. O valor pago e o saldo restante aparecem ao cliente e no admin; o saldo não é cobrado automaticamente nesta versão.
+- Fotos extras geram cobrança hospedada e a seleção só é concluída após confirmação do provedor. O Mercado Pago foi removido; registros antigos (todos recusados) ficam apenas como histórico.
+- Durante cobrança pendente de fotos extras, a seleção e alterações administrativas que possam mudar a galeria ficam bloqueadas. Cliente e admin podem cancelar a cobrança; o site a exclui no Asaas, registra o evento e libera a seleção para ajuste. Cobrança confirmada exige estorno separado e não pode ser cancelada por esse botão.
 - `billingType: UNDEFINED` oferece as formas habilitadas na fatura Asaas. A [documentação oficial](https://docs.asaas.com/reference/criar-nova-cobranca) lista boleto, Pix e cartão de crédito; débito não está disponível nesse fluxo.
 - A aprovação exige consultar a cobrança no Asaas e conferir ambiente, ID, referência e valor. O site nunca recebe dados de cartão.
 - Clientes Asaas criados pelo site usam referência própria; cadastros da Fotop na mesma conta não são reutilizados.
@@ -26,13 +26,14 @@ Configurar no Asaas webhooks de cobranças com esses tokens, separados por ambie
 - Produção: `https://api.marcelconde.com.br/payments/asaas/webhook`
 - Sandbox: `https://api.marcelconde.com.br/payments/asaas/sandbox/webhook`
 
-Eventos de cobrança devem incluir pagamento confirmado, recebido, recusado, excluído e estornado. O Worker autentica cada webhook pelo cabeçalho `asaas-access-token`, ignora cobranças de outras integrações da mesma conta e consulta as cobranças do site diretamente no ambiente correto. Se o webhook falhar, a consulta de status na página do cliente também tenta conciliar. Não remover os secrets do Mercado Pago enquanto houver cobranças antigas pendentes.
+Eventos de cobrança devem incluir pagamento confirmado, recebido, recusado, excluído e estornado. O Worker autentica cada webhook pelo cabeçalho `asaas-access-token`, ignora cobranças de outras integrações da mesma conta e consulta as cobranças do site diretamente no ambiente correto. Se o webhook falhar, a consulta de status na página do cliente também tenta conciliar.
 
 ## Publicação e validação
 
 1. Conferir bindings e a versão atual do Worker para rollback. Salvar os secrets Sandbox no Worker e cadastrar seu webhook.
 2. Publicar primeiro os arquivos estáticos no GitHub Pages; eles são compatíveis com o Worker anterior. Publicar depois `worker.js` no Worker `cloudinary` em `api.marcelconde.com.br`.
 3. Testar com cliente de teste: orçamento de R$ 300, entrada e valor integral; galeria com fotos extras. Confirmar que a fatura abre em `sandbox.asaas.com`, que o saldo fictício muda no Sandbox e que a seleção/aceite só conclui após confirmação.
-4. Depois que o Asaas validar a conta PJ e habilitar os meios desejados, salvar `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN`, cadastrar o webhook de produção e fazer uma cobrança real de valor pequeno. Confirmar fatura em `www.asaas.com`, recebimento na conta, taxa, e-mail, status e saldo restante quando houver entrada.
+4. Os secrets `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET` não são mais usados e podem ser removidos do Worker; desative também o webhook no painel do Mercado Pago.
+5. Depois que o Asaas validar a conta PJ e habilitar os meios desejados, salvar `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN`, cadastrar o webhook de produção e fazer uma cobrança real de valor pequeno. Confirmar fatura em `www.asaas.com`, recebimento na conta, taxa, e-mail, status e saldo restante quando houver entrada.
 
 Testes locais: `node --test tests/*.cjs`. Eles usam respostas simuladas; não provam que as chaves, permissões da conta, checkout e webhooks reais funcionam.

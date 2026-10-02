@@ -17,6 +17,6 @@ Verificado em 2026-10-01: `main` = `origin/main` após `6e4d9f0` (memória/CLAUD
 
 ## Em andamento
 
-Nenhuma tarefa de código aberta. Memória persistente configurada (ver `CLAUDE.md`). Próximos candidatos em `pending.md`.
+Branch `asaas-only` (não mesclada, Worker não publicado): remove Mercado Pago; Asaas único para todos os clientes. Testes 47/47. Bloqueio: `ASAAS_API_KEY`/`ASAAS_WEBHOOK_TOKEN` de produção ausentes — publicar antes disso impede clientes reais de aceitar orçamentos com valor e pagar fotos extras (503). D1 tinha só 2 cobranças Mercado Pago, ambas `rejected` (2026-10-01).
 
 Referências: `architecture.md` (visão do sistema), `bugs.md` (defeitos), `docs/`.

@@ -90,10 +90,10 @@ function setup(charge, fetchImpl) {
     seed, read, dbRows };
 }
 
-test('quote acceptance uses Sandbox for test clients and keeps real clients on the existing flow until PJ activation', async () => {
+test('quote acceptance always requires Asaas payment and fails closed without the production key', async () => {
   for (const [isTest, productionKey, expectedStatus] of [
     [true, false, 'pending_payment'],
-    [false, false, 'accepted'],
+    [false, false, 'published'],
     [false, true, 'pending_payment'],
   ]) {
     const app = setup({});
@@ -113,9 +113,9 @@ test('quote acceptance uses Sandbox for test clients and keeps real clients on t
         confirmContract: true, confirmElectronicSignature: true,
       }),
     }), app.env, {});
-    assert.equal(response.status, 200);
+    assert.equal(response.status, expectedStatus === 'published' ? 503 : 200);
     assert.equal(app.read('private_quote:quote_1').status, expectedStatus);
-    assert.equal((await response.json()).paymentRequired, expectedStatus === 'pending_payment' || undefined);
+    if (expectedStatus === 'pending_payment') assert.equal((await response.json()).paymentRequired, true);
   }
 });
 
