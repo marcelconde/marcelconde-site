@@ -1,6 +1,6 @@
 # Marcel Conde — guia do projeto
 
-Este repositório contém o site de fotografia de Marcel Conde. Antes de alterar um fluxo, leia o código responsável e os registros em [`.claude/memory/`](.claude/memory/). Eles são um ponto de partida; confirme informações que possam ter mudado no GitHub e nos serviços de produção.
+Este repositório contém o site de fotografia de Marcel Conde. Antes de alterar um fluxo, leia o código responsável e `current-state.md` e `pending.md` em [`.claude/memory/`](.claude/memory/). Eles são um ponto de partida; confirme informações que possam ter mudado no GitHub e nos serviços de produção.
 
 ## Onde trabalhar
 
@@ -23,4 +23,20 @@ Este repositório contém o site de fotografia de Marcel Conde. Antes de alterar
 
 O site estático sai da `main` pelo GitHub Pages em `https://marcelconde.com.br`. A API é o Worker `cloudinary` em `https://api.marcelconde.com.br`. Em uma mudança que envolva ambos, publique e verifique os arquivos estáticos antes de atualizar o Worker; preserve bindings e secrets. Testes simulados não comprovam pagamento ou webhook real.
 
-Atualize os arquivos de memória somente com fatos verificados. Use `current-state.md` para situação atual, `decisions.md` para decisões duradouras, `bugs.md` para defeitos reproduzíveis e `summaries/session-latest.md` para a passagem da última sessão.
+## Memória persistente (`.claude/memory/`)
+
+Fonte de contexto entre sessões; não dependa do histórico da conversa.
+
+- Início de sessão: leia `current-state.md` e `pending.md`. Consulte `decisions.md`, `architecture.md` e `bugs.md` só quando relevantes.
+- `current-state.md`: estado atual, o que funciona, trabalho em andamento e o necessário para continuar. Atualize ao concluir mudança importante.
+- `pending.md`: tarefas adiadas e o que Marcel pedir para lembrar ("depois fazemos", "me lembre", "deixa para depois"…) — registre automaticamente; remova quando resolvido.
+- `decisions.md`: decisões arquiteturais duradouras e o motivo; nada trivial.
+- `architecture.md`: visão do sistema. `bugs.md`: defeitos reproduzíveis.
+- Ao concluir uma tarefa, consulte `pending.md` e mencione brevemente pendências relevantes.
+- Registre só fatos verificados e úteis no futuro; consolide e remova o obsoleto para manter os arquivos pequenos.
+
+## Estilo de trabalho
+
+- Respostas extremamente concisas; trabalho complexo fica interno.
+- Leia só os arquivos necessários e amplie a investigação quando preciso.
+- Perguntas simples: esforço baixo. Tarefas complexas: sugerir esforço Max/Ultracode se a sessão estiver em nível menor.
