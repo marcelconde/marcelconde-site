@@ -10,3 +10,4 @@
 6. **Provedor confirma dinheiro.** O Worker verifica referência, valor, ambiente e estado no Asaas/Mercado Pago antes de concluir fluxo ou cancelar cobrança. Cobrança aprovada não é cancelada pelo botão de pendência; estorno é outro processo.
 7. **Originais ficam fora do site.** Cloudinary guarda as cópias do site; eventual integração Lightroom Classic deve localizar os originais no Windows, sem presumir que o Worker ou o navegador acessam esse disco. Já existe exportação CSV autenticada da seleção.
 8. **Secrets fora do Git.** `wrangler.jsonc` guarda bindings e variável pública; chaves de Cloudinary, pagamentos e Resend pertencem aos secrets do Worker.
+9. **Asaas é o único intermediador (2026-10-01).** Mercado Pago removido do código para simplificar e unificar o fluxo; sem chave do ambiente o pagamento falha fechado (503), sem fallback.
