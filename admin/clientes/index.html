@@ -85,7 +85,7 @@
               </label>
               <label>
                 CPF / CNPJ
-                <input id="clientDocument" type="text" placeholder="000.000.000-00">
+                <input id="clientDocument" type="text" inputmode="numeric" maxlength="18" placeholder="000.000.000-00" data-document-mask>
               </label>
               <label class="full">
                 Empresa / razão social
@@ -159,6 +159,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/admin/clientes/clientes.js?v=20260915-03"></script>
+  <script src="/document-mask.js?v=20261002-01"></script>
+  <script src="/admin/clientes/clientes.js?v=20261002-01"></script>
 </body>
 </html>

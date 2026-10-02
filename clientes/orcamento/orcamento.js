@@ -175,6 +175,7 @@ function renderQuote() {
 
   signerName.value = client.name || "";
   signerDocument.value = client.document || "";
+  signerDocument.dispatchEvent(new Event("input", { bubbles: true }));
   const accepted = quote.status === "accepted";
   const awaitingPayment = quote.status === "pending_payment";
   const expired = quote.status === "expired";

@@ -95,7 +95,7 @@
       <h2 id="documentTitle">Identificação para pagamento</h2>
       <p>Informe seu CPF ou CNPJ para abrir o checkout do Asaas.</p>
       <label for="paymentDocument">CPF ou CNPJ</label>
-      <input id="paymentDocument" name="document" inputmode="numeric" autocomplete="off" required maxlength="18" placeholder="Somente números">
+      <input id="paymentDocument" name="document" inputmode="numeric" autocomplete="off" required maxlength="18" placeholder="000.000.000-00" data-document-mask>
       <p class="document-error hidden" id="documentError" role="alert">Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.</p>
       <div class="document-actions">
         <button class="btn" type="button" id="documentCancel">Cancelar</button>
@@ -106,6 +106,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
+  <script src="/document-mask.js?v=20261002-01"></script>
   <script src="/clientes/galeria/galeria.js?v=20260924-03"></script>
 </body>
 </html>

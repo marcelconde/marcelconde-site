@@ -209,6 +209,7 @@ function selectClient(id) {
   clientEmail.value = state.selectedClient.email || "";
   clientPhone.value = state.selectedClient.phone || "";
   clientDocument.value = state.selectedClient.document || "";
+  clientDocument.dispatchEvent(new Event("input", { bubbles: true }));
   clientCompanyName.value = state.selectedClient.companyName || "";
   clientPostalCode.value = state.selectedClient.address?.postalCode || "";
   clientStreet.value = state.selectedClient.address?.street || "";
