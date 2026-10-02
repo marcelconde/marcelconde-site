@@ -11,12 +11,12 @@ Verificado em 2026-10-01: `main` = `origin/main` após `6e4d9f0` (memória/CLAUD
 
 ## Estado externo
 
-- Secrets do Worker em 2026-10-01: Sandbox Asaas configurado; `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` ausentes (Asaas produção inativo).
+- 2026-10-01: `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` gravados no Worker; webhook de produção "marcelconde.com.br - site" criado no Asaas (v3, não sequencial, eventos de cobrança). Worker no ar (código `8cbf660`) já usa Asaas produção para clientes reais. Chave ainda não validada por cobrança real.
 - Sem validação financeira real de ponta a ponta registrada.
 - Pode haver trabalho local não enviado no PC Windows; compare antes de tarefas entre máquinas.
 
 ## Em andamento
 
-Branch `asaas-only` (não mesclada, Worker não publicado): remove Mercado Pago; Asaas único para todos os clientes. Testes 47/47. Bloqueio: `ASAAS_API_KEY`/`ASAAS_WEBHOOK_TOKEN` de produção ausentes — publicar antes disso impede clientes reais de aceitar orçamentos com valor e pagar fotos extras (503). D1 tinha só 2 cobranças Mercado Pago, ambas `rejected` (2026-10-01).
+Branch `asaas-only` (não mesclada, Worker não publicado): remove Mercado Pago; Asaas único para todos os clientes. Testes 47/47. Secrets e webhook prontos; falta mesclar/publicar e fazer cobrança real pequena. D1 tinha só 2 cobranças Mercado Pago, ambas `rejected` (2026-10-01).
 
 Referências: `architecture.md` (visão do sistema), `bugs.md` (defeitos), `docs/`.
