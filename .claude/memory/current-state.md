@@ -17,6 +17,9 @@ Verificado em 2026-10-01: `main` = `origin/main` após `6e4d9f0` (memória/CLAUD
 
 ## Em andamento
 
+- 2026-10-04 `6d5478a` (Worker publicado, versão 064770b8): exclusão de fotos da galeria em lotes pela Admin API do Cloudinary (antes, 1 por vez estourava o limite de 50 subrequests do plano Free e deixava registros órfãos). Galeria `gal_OFvN_CL1W9R7` tinha 50 fotos não selecionadas já apagadas no Cloudinary; nova tentativa de "Remover não selecionadas" deve limpar (not_found conta como removida). Ainda não validado contra o Cloudinary real.
+- Proposta em discussão: seção "Fotos editadas" (upload fase final + concluir entrega apagando originais da seleção).
+
 - `main` `2b193a9`: máscara CPF/CNPJ (`document-mask.js`) na galeria, orçamento e admin de clientes; publicada.
 
 Branch `asaas-only` (não mesclada, Worker não publicado): remove Mercado Pago; Asaas único para todos os clientes. Testes 47/47. Secrets e webhook prontos, mas **Asaas produção recusa a chave com `403 IP não autorizado`** (3 tentativas rejeitadas em 2026-10-02, nenhuma cobrança criada). Whitelist da conta está vazia; egress do Worker é IP BR e chave inválida recebe 401 normal. **Confirmado em 2026-10-02:** chave válida também recebe `403 not_allowed_ip` do Mac (IP residencial BR, Algar) → restrição de IP da conta, não da Cloudflare; provavelmente herdada da conta-pai Fotop (validação de saque aponta para fotop.com.br). Não há como contornar no código. `ASAAS_API_KEY` no Worker hoje contém valor inválido (colado errado); regravar quando a conta for liberada. Uma chave de produção ficou exposta no terminal e deve ser excluída no Asaas. Enquanto isso clientes reais não conseguem pagar. Não mesclar `asaas-only` até resolver. D1 tinha só 2 cobranças Mercado Pago, ambas `rejected` (2026-10-01).
