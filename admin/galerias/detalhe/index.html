@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
-  <link rel="stylesheet" href="/admin/private-admin.css?v=20260924-02">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20261004-01">
 </head>
 <body class="gallery-detail-page">
   <div class="admin-shell" id="adminShell">
@@ -66,6 +66,10 @@
             <button class="detail-nav-item" type="button" data-detail-section="section-upload">
               <strong>Upload</strong>
               <span>Enviar arquivos</span>
+            </button>
+            <button class="detail-nav-item" type="button" data-detail-section="section-final">
+              <strong>Fotos editadas</strong>
+              <span>Entrega final</span>
             </button>
             <button class="detail-nav-item" type="button" data-detail-section="section-info">
               <strong>Dados</strong>
@@ -285,6 +289,42 @@
             </section>
           </form>
 
+          <section class="detail-section" id="section-final" hidden>
+            <div class="detail-section-head">
+              <div>
+                <span class="eyebrow">Entrega final</span>
+                <h2>Fotos editadas</h2>
+              </div>
+            </div>
+            <p class="upload-note">Envie as fotos já editadas. A cliente só passa a vê-las quando você concluir a entrega, que apaga os originais da seleção.</p>
+            <div class="upload-split">
+              <div class="upload-card upload-card-drop">
+                <div class="dropzone" id="finalDropzone">
+                  <input id="finalFileInput" type="file" accept="image/*" multiple>
+                  <div>
+                    <strong>Arraste as fotos editadas aqui</strong>
+                    <span>ou clique para selecionar arquivos</span>
+                  </div>
+                </div>
+                <div class="upload-options">
+                  <button class="btn btn-primary" id="finalUploadBtn" type="button" disabled>Enviar editadas</button>
+                </div>
+              </div>
+
+              <div class="upload-card upload-card-process">
+                <div class="upload-card-head">
+                  <span class="eyebrow">Conferência</span>
+                  <strong id="finalMatchSummary">Nenhuma foto editada enviada.</strong>
+                </div>
+                <div class="final-match-list" id="finalMatchList"></div>
+                <div class="queue" id="finalUploadQueue"></div>
+              </div>
+            </div>
+            <div class="final-delivery-actions">
+              <button class="btn btn-danger" id="completeDeliveryBtn" type="button" disabled>Concluir entrega</button>
+            </div>
+          </section>
+
           <section class="detail-section" id="section-selection" hidden>
             <div class="gallery-payment-panel" id="galleryPaymentPanel" hidden>
               <div>
@@ -322,6 +362,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/admin/galerias/galerias.js?v=20261004-01"></script>
+  <script src="/admin/galerias/galerias.js?v=20261004-02"></script>
 </body>
 </html>

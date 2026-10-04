@@ -289,3 +289,36 @@ test('removing unselected photos deletes in batches and only drops confirmed rec
   assert.deepEqual(Array.from(remaining), ['a', 'clientes/race/selecao/p119']);
   assert.deepEqual(Array.from(await a.readKvJson(a.env, 'private_gallery_selection:g', [])), ['a']);
 });
+
+test('completing delivery keeps only edited photos, finalizes the gallery and preserves the chosen names', async () => {
+  const a = app();
+  Object.assign(a.env, { CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' });
+  a.context.fetch = () => { throw Error('no external request before edited photos exist'); };
+  assert.equal((await a.request('/private/gallery/complete-delivery', { galleryId: 'g' })).status, 400);
+
+  await a.writeKvJson(a.env, 'private_gallery_images:g', [
+    { public_id: 'f1', phase: 'final', url: 'https://example.test/f1', filename: 'A-Editar.jpg' },
+    ...['a', 'b', 'c'].map(public_id => ({ public_id, phase: 'selection', url: 'https://example.test/' + public_id, filename: public_id.toUpperCase() + '.jpg' })),
+  ]);
+  const deletedIds = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(options.method, 'DELETE');
+    const batch = new URL(url).searchParams.getAll('public_ids[]');
+    deletedIds.push(...batch);
+    return new Response(JSON.stringify({ deleted: Object.fromEntries(batch.map(id => [id, 'deleted'])) }));
+  };
+  const response = await a.request('/private/gallery/complete-delivery', { galleryId: 'g' });
+  assert.equal(response.status, 200, await response.clone().text());
+  const body = await response.json();
+  assert.deepEqual(deletedIds.sort(), ['a', 'b', 'c']);
+  assert.equal(body.removed, 3);
+  assert.deepEqual(Array.from(await a.readKvJson(a.env, 'private_gallery_images:g', [])).map(image => image.public_id), ['f1']);
+  const gallery = await a.readKvJson(a.env, 'private_gallery:g', null);
+  assert.equal(gallery.status, 'final');
+  assert.equal(gallery.allowDownload, true);
+  assert.equal(gallery.coverPublicId, 'f1');
+  assert.deepEqual(Array.from(gallery.deliveredSelection, item => item.filename), ['A.jpg']);
+
+  const csv = await (await a.request('/private/gallery/export-selected?id=g')).text();
+  assert.match(csv, /A\.jpg;;a/);
+});

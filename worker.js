@@ -5665,6 +5665,83 @@ export default {
       }, 200, { "Cache-Control": "no-store" });
     }
 
+    if (url.pathname === "/private/gallery/complete-delivery" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+
+      const cloudName = env.CLOUDINARY_CLOUD_NAME;
+      const apiKey    = env.CLOUDINARY_API_KEY;
+      const apiSecret = env.CLOUDINARY_API_SECRET;
+      if (!cloudName || !apiKey || !apiSecret) return errorJson("Missing Cloudinary env vars", 500);
+
+      const body = await readJson(request);
+      const galleryId = String(body.galleryId || "").trim();
+      if (!galleryId) return errorJson("Galeria inválida.", 400);
+
+      const gallery = await readKvJson(env, privateGalleryKey(galleryId), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      if (await galleryPaymentPending(env, galleryId)) return errorJson("Há um pagamento em andamento nesta galeria. Aguarde antes de concluir a entrega.", 409);
+
+      const images = await readKvJson(env, privateGalleryImagesKey(galleryId), []);
+      const finals = images.filter((image) => image.phase === "final");
+      if (!finals.length) return errorJson("Envie as fotos editadas antes de concluir a entrega.", 400);
+
+      // Edited photos replace the whole selection set. Keep the chosen file names,
+      // because the CSV and history can no longer read them from deleted assets.
+      const originals = images.filter((image) => image.phase !== "final");
+      const selected = new Set(await readKvJson(env, privateGallerySelectionKey(galleryId), []));
+      const deliveredSelection = originals
+        .filter((image) => selected.has(image.public_id))
+        .map((image) => ({
+          public_id: image.public_id,
+          filename: image.filename || image.display_name || image.public_id,
+          display_name: image.display_name || "",
+        }));
+
+      const { removed, failed } = originals.length
+        ? await destroyCloudinaryImages(cloudName, apiKey, apiSecret, originals.map((image) => image.public_id))
+        : { removed: new Set(), failed: [] };
+      if (originals.length && !removed.size) {
+        return errorJson("O Cloudinary não confirmou a exclusão dos originais. A entrega não foi concluída.", 502, { failed: failed.length });
+      }
+      const kept = images.filter((image) => !removed.has(image.public_id));
+      await writeKvJson(env, privateGalleryImagesKey(galleryId), kept);
+
+      const coverKept = kept.some((image) => image.public_id === gallery.coverPublicId);
+      let delivered = await savePrivateGallery(env, {
+        id: galleryId,
+        status: "final",
+        ...(coverKept ? {} : { coverUrl: finals[0].url, coverPublicId: finals[0].public_id }),
+      });
+      delivered = {
+        ...delivered,
+        deliveredAt: new Date().toISOString(),
+        deliveredSelection: deliveredSelection.length ? deliveredSelection : (gallery.deliveredSelection || []),
+      };
+      await writeKvJson(env, privateGalleryKey(galleryId), delivered);
+
+      await appendAuditLog(env, request, user, "concluir_entrega_galeria_privada", "private_galleries", {
+        galleryId,
+        finals: finals.length,
+        removed: removed.size,
+        failed: failed.length,
+      });
+      await appendPrivateGalleryEvent(env, request, galleryId, "admin_concluiu_entrega", {
+        finals: finals.length,
+        removed: removed.size,
+        failed: failed.length,
+        selectedFiles: deliveredSelection.map((item) => item.filename),
+      }, user);
+
+      return json({
+        ok: true,
+        gallery: delivered,
+        finals: finals.length,
+        removed: removed.size,
+        failed: failed.length,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/private/gallery/export-selected" && request.method === "GET") {
       const { error } = await requireAdminUser(request, env);
       if (error) return error;
@@ -5675,13 +5752,14 @@ export default {
 
       const images = await readKvJson(env, privateGalleryImagesKey(id), []);
       const selected = new Set(await readKvJson(env, privateGallerySelectionKey(id), []));
-      const rows = images
-        .filter((image) => selected.has(image.public_id))
-        .map((image) => [
-          image.filename || image.display_name || image.public_id,
-          image.display_name || "",
-          image.public_id,
-        ]);
+      const selectedImages = images.filter((image) => selected.has(image.public_id));
+      // After delivery the originals are deleted; their names live on the gallery.
+      const source = selectedImages.length ? selectedImages : (gallery.deliveredSelection || []);
+      const rows = source.map((image) => [
+        image.filename || image.display_name || image.public_id,
+        image.display_name || "",
+        image.public_id,
+      ]);
       const csv = [
         ["arquivo", "nome_exibido", "public_id"],
         ...rows,

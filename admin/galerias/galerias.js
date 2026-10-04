@@ -95,6 +95,13 @@ const fileInput = $("#fileInput");
 const firstAsCover = $("#firstAsCover");
 const uploadBtn = $("#uploadBtn");
 const uploadQueue = $("#uploadQueue");
+const finalDropzone = $("#finalDropzone");
+const finalFileInput = $("#finalFileInput");
+const finalUploadBtn = $("#finalUploadBtn");
+const finalUploadQueue = $("#finalUploadQueue");
+const finalMatchSummary = $("#finalMatchSummary");
+const finalMatchList = $("#finalMatchList");
+const completeDeliveryBtn = $("#completeDeliveryBtn");
 const photoGrid = $("#photoGrid");
 const eventList = $("#eventList");
 const toastEl = $("#toast");
@@ -133,6 +140,15 @@ function fileBaseName(fileName) {
 
 function jpgFileName(fileName) {
   return `${fileBaseName(fileName)}.jpg`;
+}
+
+// Matches an edited export to its original: "IMG_9232-Editar.jpg" and
+// "IMG_9232-2.jpg" (Lightroom copy) both map to "img_9232".
+function photoKey(fileName) {
+  let key = fileBaseName(fileName).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const suffix = /[-_ ]+(editar|editada|editado|edit|edited|final|copy|copia|aprimorado|aprimorada|enhanced|nr|sr|hdr|pano|\d{1,2})$/;
+  while (suffix.test(key)) key = key.replace(suffix, "");
+  return key;
 }
 
 function formatFileSize(bytes = 0) {
@@ -340,6 +356,7 @@ function eventTitle(event = {}) {
     admin_editou_galeria: "Configurações da galeria atualizadas",
     admin_publicou_galeria: "Galeria publicada",
     admin_entregou_galeria: "Entrega final publicada",
+    admin_concluiu_entrega: "Entrega concluída: originais da seleção apagados",
   };
   return labels[event.action] || String(event.action || "Atividade").replace(/_/g, " ");
 }
@@ -650,6 +667,33 @@ function renderSelectedGallery() {
   renderGalleryPayment();
   renderPhotos();
   renderEvents();
+  renderFinalDelivery();
+}
+
+function renderFinalDelivery() {
+  const finals = state.images.filter((image) => image.phase === "final");
+  const originals = state.images.filter((image) => image.phase !== "final");
+  const selected = new Set(state.selection);
+  const chosen = originals.filter((image) => selected.has(image.public_id));
+  const editedKeys = new Set(finals.map((image) => photoKey(image.filename || image.display_name)));
+  const missing = chosen.filter((image) => !editedKeys.has(photoKey(image.filename || image.display_name)));
+  const paymentPending = ["creating", "pending"].includes(state.payment?.status);
+
+  if (!finals.length) {
+    finalMatchSummary.textContent = "Nenhuma foto editada enviada.";
+  } else if (!originals.length) {
+    finalMatchSummary.textContent = `Entrega concluída · ${finals.length} foto${finals.length === 1 ? "" : "s"} editada${finals.length === 1 ? "" : "s"}`;
+  } else {
+    finalMatchSummary.textContent = `${finals.length} editada${finals.length === 1 ? "" : "s"} · ${chosen.length - missing.length} de ${chosen.length} escolhidas com versão editada`;
+  }
+  finalMatchList.innerHTML = finals.length && missing.length
+    ? `Sem versão editada: ${missing.slice(0, 40).map((image) => `<em>${escapeHtml(image.filename || image.display_name || "foto")}</em>`).join("")}${missing.length > 40 ? ` e mais ${missing.length - 40}` : ""}`
+    : "";
+
+  completeDeliveryBtn.disabled = !state.selectedGallery || !finals.length || !originals.length || state.uploading || paymentPending;
+  completeDeliveryBtn.textContent = originals.length
+    ? `Concluir entrega e apagar ${originals.length} originais`
+    : "Concluir entrega";
 }
 
 function renderPhotos() {
@@ -693,7 +737,7 @@ function renderPhotos() {
       </label>
       <img src="${escapeHtml(cloudUrl(image.url, "w_400,q_auto,f_auto"))}" alt="${escapeHtml(image.display_name || image.filename || "")}" loading="lazy" decoding="async">
       <div class="gallery-photo-body">
-        <strong>${selected.has(image.public_id) ? "♥ " : ""}${escapeHtml(image.filename || image.display_name || "foto")}</strong>
+        <strong>${selected.has(image.public_id) ? "♥ " : ""}${image.phase === "final" ? "Editada · " : ""}${escapeHtml(image.filename || image.display_name || "foto")}</strong>
         <small>${escapeHtml(image.public_id || "")}</small>
         <button class="btn btn-danger btn-small" type="button" data-delete-image="${escapeHtml(image.public_id)}">Excluir</button>
       </div>
@@ -1043,27 +1087,32 @@ galleryForm.addEventListener("submit", async (event) => {
   }
 });
 
-["dragenter", "dragover"].forEach((eventName) => {
-  dropzone.addEventListener(eventName, (event) => {
-    event.preventDefault();
-    dropzone.classList.add("dragover");
+// Each dropzone keeps its own queue: the Upload section may still send final
+// photos when the gallery status is "Entrega final".
+function bindDropzone(zone, input, queue, phase) {
+  ["dragenter", "dragover"].forEach((eventName) => {
+    zone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      zone.classList.add("dragover");
+    });
   });
-});
-
-["dragleave", "drop"].forEach((eventName) => {
-  dropzone.addEventListener(eventName, (event) => {
-    event.preventDefault();
-    dropzone.classList.remove("dragover");
+  ["dragleave", "drop"].forEach((eventName) => {
+    zone.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      zone.classList.remove("dragover");
+    });
   });
-});
+  zone.addEventListener("drop", (event) => addFiles(event.dataTransfer.files, queue, phase()));
+  input.addEventListener("change", () => {
+    addFiles(input.files, queue, phase());
+    input.value = "";
+  });
+}
 
-dropzone.addEventListener("drop", (event) => addFiles(event.dataTransfer.files));
-fileInput.addEventListener("change", () => {
-  addFiles(fileInput.files);
-  fileInput.value = "";
-});
+bindDropzone(dropzone, fileInput, "main", () => galleryStatus.value === "final" ? "final" : "selection");
+bindDropzone(finalDropzone, finalFileInput, "final", () => "final");
 
-function addFiles(files) {
+function addFiles(files, queue = "main", phase = galleryStatus.value === "final" ? "final" : "selection") {
   if (!state.selectedGallery) return;
   for (const file of files) {
     const duplicate = state.uploads.some(item => item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified);
@@ -1071,8 +1120,9 @@ function addFiles(files) {
     state.uploads.push({
       id: crypto.randomUUID(), file, status: "pending", progress: 0,
       galleryId: state.selectedGallery.id,
-      phase: galleryStatus.value === "final" ? "final" : "selection",
-      useAsCover: firstAsCover.checked && state.uploads.length === 0,
+      queue,
+      phase,
+      useAsCover: phase === "selection" && firstAsCover.checked && !state.uploads.some(item => item.phase === "selection"),
       note: formatFileSize(file.size),
     });
   }
@@ -1080,26 +1130,34 @@ function addFiles(files) {
 }
 
 function renderQueue() {
-  uploadBtn.disabled = !state.selectedGallery || state.uploading || !state.uploads.some(item => ["pending", "error"].includes(item.status));
-  uploadQueue.innerHTML = state.uploads.map(item => `
+  const queueRows = (queue) => state.uploads.filter(item => item.queue === queue).map(item => `
     <div class="queue-row" data-file="${item.id}">
       <div><span>${escapeHtml(item.file.name)}</span><small>${item.phase === "final" ? "Entrega final" : "Seleção"} · ${escapeHtml(item.note)}</small></div>
       <div class="queue-bar"><span style="width:${item.progress}%"></span></div>
     </div>
   `).join("");
+  const waiting = (queue) => state.uploads.some(item => item.queue === queue && ["pending", "error"].includes(item.status));
+  uploadBtn.disabled = !state.selectedGallery || state.uploading || !waiting("main");
+  finalUploadBtn.disabled = !state.selectedGallery || state.uploading || !waiting("final");
+  uploadQueue.innerHTML = queueRows("main");
+  finalUploadQueue.innerHTML = queueRows("final");
+}
+
+function queueRow(id) {
+  return uploadQueue.querySelector(`[data-file="${id}"]`) || finalUploadQueue.querySelector(`[data-file="${id}"]`);
 }
 
 function setQueueProgress(id, percent) {
   const item = state.uploads.find(item => item.id === id);
   if (item) item.progress = percent;
-  const row = uploadQueue.querySelector(`[data-file="${id}"]`);
+  const row = queueRow(id);
   if (row) row.querySelector(".queue-bar span").style.width = `${percent}%`;
 }
 
 function setQueueNote(id, message) {
   const item = state.uploads.find(item => item.id === id);
   if (item) item.note = message;
-  const note = uploadQueue.querySelector(`[data-file="${id}"] small`);
+  const note = queueRow(id)?.querySelector("small");
   if (note) note.textContent = message;
 }
 
@@ -1134,17 +1192,19 @@ function uploadToCloudinary(signature, file, onProgress) {
   });
 }
 
-uploadBtn.addEventListener("click", async () => {
+async function startUploads(queue, button) {
   if (!state.selectedGallery || state.uploading) return;
   state.uploading = true;
-  state.uploads.filter(item => item.status === "error").forEach(item => { item.status = "pending"; });
-  uploadBtn.textContent = "Enviando...";
+  state.uploads.filter(item => item.queue === queue && item.status === "error").forEach(item => { item.status = "pending"; });
+  const idleLabel = button.textContent;
+  button.textContent = "Enviando...";
   renderQueue();
+  renderFinalDelivery();
   // Transfers overlap; registration stays ordered to preserve gallery metadata.
   let registration = Promise.resolve();
   const consume = async () => {
     let item;
-    while ((item = state.uploads.find(entry => entry.status === "pending"))) {
+    while ((item = state.uploads.find(entry => entry.queue === queue && entry.status === "pending"))) {
       item.status = "uploading";
       const { file, id, galleryId, phase } = item;
       try {
@@ -1174,6 +1234,7 @@ uploadBtn.addEventListener("click", async () => {
         setQueueNote(id, "Enviada");
         renderPhotos();
         renderStats();
+        renderFinalDelivery();
       } catch (err) {
         item.status = "error";
         setQueueNote(id, err.message || "Falha. Clique em enviar para tentar novamente.");
@@ -1182,12 +1243,64 @@ uploadBtn.addEventListener("click", async () => {
   };
   try {
     await Promise.all([consume(), consume()]);
-    const failed = state.uploads.filter(item => item.status === "error").length;
+    const failed = state.uploads.filter(item => item.queue === queue && item.status === "error").length;
     showToast(failed ? `${failed} foto(s) falharam. Envie novamente para tentar só as pendentes.` : "Upload concluído.");
   } finally {
     state.uploading = false;
-    uploadBtn.textContent = "Enviar fotos";
+    button.textContent = idleLabel;
     renderQueue();
+    renderFinalDelivery();
+  }
+}
+
+uploadBtn.addEventListener("click", () => startUploads("main", uploadBtn));
+finalUploadBtn.addEventListener("click", () => startUploads("final", finalUploadBtn));
+
+completeDeliveryBtn.addEventListener("click", async () => {
+  const gallery = state.selectedGallery;
+  if (!gallery || state.uploading) return;
+  const finals = state.images.filter((image) => image.phase === "final");
+  const originals = state.images.filter((image) => image.phase !== "final");
+  const selected = new Set(state.selection);
+  const chosen = originals.filter((image) => selected.has(image.public_id)).length;
+  const editedKeys = new Set(finals.map((image) => photoKey(image.filename || image.display_name)));
+  const missing = originals.filter((image) => selected.has(image.public_id)
+    && !editedKeys.has(photoKey(image.filename || image.display_name))).length;
+  const confirmed = confirm(
+    `Concluir a entrega de "${gallery.title || "galeria"}"?\n\n` +
+    `Serão apagados do Cloudinary os ${originals.length} originais da seleção (${chosen} escolhidos pelo cliente e ${originals.length - chosen} não escolhidos). ` +
+    `O cliente passará a ver apenas as ${finals.length} fotos editadas.` +
+    (missing ? `\n\nAtenção: ${missing} foto${missing === 1 ? "" : "s"} escolhida${missing === 1 ? "" : "s"} ainda sem versão editada.` : "") +
+    "\n\nEsta ação não pode ser desfeita."
+  );
+  if (!confirmed) return;
+
+  completeDeliveryBtn.disabled = true;
+  completeDeliveryBtn.textContent = "Concluindo...";
+  try {
+    const data = await getJson("/private/gallery/complete-delivery", {
+      method: "POST",
+      body: JSON.stringify({ galleryId: gallery.id }),
+    });
+    await selectGallery(gallery.id);
+    showToast(data.failed
+      ? `Entrega concluída; ${data.failed} original${data.failed === 1 ? "" : "is"} não ${data.failed === 1 ? "pôde" : "puderam"} ser apagado${data.failed === 1 ? "" : "s"}.`
+      : `Entrega concluída. ${data.removed} originais apagados.`);
+    const client = state.clients.find((item) => item.id === state.selectedGallery?.clientId);
+    if (client?.email && confirm(`Enviar e-mail para ${client.email} avisando que as fotos editadas estão prontas?`)) {
+      const sent = await getJson("/private/gallery/publish", {
+        method: "POST",
+        body: JSON.stringify({ galleryId: gallery.id, status: "final" }),
+      });
+      await selectGallery(gallery.id);
+      showToast(sent.emailQueued
+        ? `Entrega final enviada para ${client.email}.`
+        : `Entrega concluída, mas o e-mail não foi enviado: ${sent.emailError || "verifique o Resend"}`);
+    }
+  } catch (err) {
+    showToast(err.message || "Não foi possível concluir a entrega.");
+  } finally {
+    renderFinalDelivery();
   }
 });
 
