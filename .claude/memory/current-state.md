@@ -18,7 +18,7 @@ Verificado em 2026-10-01: `main` = `origin/main` após `6e4d9f0` (memória/CLAUD
 ## Em andamento
 
 - 2026-10-04 `6d5478a` (Worker publicado, versão 064770b8): exclusão de fotos da galeria em lotes pela Admin API do Cloudinary (antes, 1 por vez estourava o limite de 50 subrequests do plano Free e deixava registros órfãos). Galeria `gal_OFvN_CL1W9R7` tinha 50 fotos não selecionadas já apagadas no Cloudinary; nova tentativa de "Remover não selecionadas" deve limpar (not_found conta como removida). Ainda não validado contra o Cloudinary real.
-- Proposta em discussão: seção "Fotos editadas" (upload fase final + concluir entrega apagando originais da seleção).
+- 2026-10-04 `954ccf1` (Worker versão 016c0a4a): seção "Fotos editadas" + rota `/private/gallery/complete-delivery`. Testado com simulação e tela local; ainda não usado numa galeria real.
 
 - `main` `2b193a9`: máscara CPF/CNPJ (`document-mask.js`) na galeria, orçamento e admin de clientes; publicada.
 

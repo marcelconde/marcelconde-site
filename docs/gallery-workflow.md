@@ -7,6 +7,8 @@
 - Upload mantém uma fila aditiva na página, com duas transferências simultâneas e registros ordenados. Arquivos adicionados durante o envio entram na fila. Uma falha de registro reaproveita o arquivo já enviado ao Cloudinary. A fila de arquivos não sobrevive a fechar/recarregar a página; há aviso antes de sair durante envios pendentes.
 - Favoritos são salvos antes da confirmação. Alterações ainda sem resposta ficam em `localStorage`, separadas por cliente e galeria, e são reenviadas após conexão/retorno. Confirmação aguarda sincronização. Somente a confirmação ou pagamento aprovado inicia a edição.
 - A galeria verifica configurações e seleção a cada 15 segundos enquanto visível e ao voltar para a aba. Não é uma conexão em tempo real.
+- Fotos editadas: a seção "Fotos editadas" do admin envia arquivos como entrega final (pasta `finais`) e confere cada um com as fotos escolhidas pelo nome do arquivo (`IMG_9232-Editar.jpg` corresponde a `IMG_9232.jpg`). O cliente não vê essas fotos até "Concluir entrega", que apaga no Cloudinary todos os originais da seleção, muda a galeria para entrega final e guarda os nomes escolhidos em `deliveredSelection` para o CSV. O e-mail ao cliente é opcional logo em seguida.
+- Exclusões em lote usam a Admin API do Cloudinary (até 100 por chamada). Apagar uma foto por pedido estoura o limite de 50 subrequests do Worker no plano gratuito.
 - Ver como cliente cria uma credencial temporária de uma hora, restrita a uma galeria e somente leitura. Mostra favoritos reais, inclusive os não confirmados; alterações ainda offline no aparelho do cliente só aparecem após sincronização. O token fica no fragmento do link e é removido do endereço ao abrir. Não permite confirmar nem criar pagamentos.
 
 ## Armazenamento

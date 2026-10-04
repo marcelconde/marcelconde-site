@@ -11,3 +11,4 @@
 7. **Originais ficam fora do site.** Cloudinary guarda as cópias do site; eventual integração Lightroom Classic deve localizar os originais no Windows, sem presumir que o Worker ou o navegador acessam esse disco. Já existe exportação CSV autenticada da seleção.
 8. **Secrets fora do Git.** `wrangler.jsonc` guarda bindings e variável pública; chaves de Cloudinary, pagamentos e Resend pertencem aos secrets do Worker.
 9. **Asaas é o único intermediador (2026-10-01).** Mercado Pago removido do código para simplificar e unificar o fluxo; sem chave do ambiente o pagamento falha fechado (503), sem fallback.
+10. **Entrega de editadas substitui a seleção (2026-10-04).** Fotos editadas sobem como fase `final`; "Concluir entrega" (com confirmação, nunca automático) apaga todos os originais da seleção para liberar espaço no Cloudinary. Os nomes escolhidos ficam em `gallery.deliveredSelection`.
