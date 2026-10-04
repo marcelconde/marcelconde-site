@@ -1478,6 +1478,37 @@ async function searchCloudinaryImages(cloudName, auth, path) {
   return resources;
 }
 
+// The Admin API removes up to 100 assets per call. Deleting one by one hits the
+// Worker subrequest limit (50 on the free plan) and leaves records behind.
+async function destroyCloudinaryImages(cloudName, apiKey, apiSecret, publicIds) {
+  const removed = new Set();
+  const failed = [];
+  const auth = btoa(`${apiKey}:${apiSecret}`);
+  for (let start = 0; start < publicIds.length; start += 100) {
+    const batch = publicIds.slice(start, start + 100);
+    const query = new URLSearchParams({ invalidate: "true" });
+    batch.forEach((publicId) => query.append("public_ids[]", sanitizePublicId(publicId)));
+    try {
+      const res = await fetchWithTimeout(
+        `https://api.cloudinary.com/v1_1/${cloudName}/resources/image/upload?${query}`,
+        { method: "DELETE", headers: { Authorization: `Basic ${auth}` } },
+        30000
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(`Cloudinary delete ${res.status}: ${data?.error?.message || "requisição recusada"}`);
+      batch.forEach((publicId) => {
+        // "not_found" means the asset is already gone, e.g. after an interrupted earlier removal.
+        const result = data.deleted?.[sanitizePublicId(publicId)];
+        if (result === "deleted" || result === "not_found") removed.add(publicId);
+        else failed.push({ public_id: publicId, error: String(result || "exclusão não confirmada") });
+      });
+    } catch (err) {
+      batch.forEach((publicId) => failed.push({ public_id: publicId, error: String(err?.message || err || "unknown") }));
+    }
+  }
+  return { removed, failed };
+}
+
 async function destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId) {
   const timestamp = Math.round(Date.now() / 1000);
   const params = {
@@ -5531,20 +5562,8 @@ export default {
       const toDelete = images.filter((image) => requested.has(image.public_id));
       if (!toDelete.length) return errorJson("Nenhuma foto encontrada para excluir.", 404);
 
-      const deletedIds = new Set();
-      const failed = [];
-
-      for (const image of toDelete) {
-        try {
-          await destroyCloudinaryImage(cloudName, apiKey, apiSecret, image.public_id);
-          deletedIds.add(image.public_id);
-        } catch (err) {
-          failed.push({
-            public_id: image.public_id,
-            error: String(err?.message || err || "unknown"),
-          });
-        }
-      }
+      const { removed: deletedIds, failed } = await destroyCloudinaryImages(
+        cloudName, apiKey, apiSecret, toDelete.map((image) => image.public_id));
 
       if (deletedIds.size) {
         const kept = images.filter((image) => !deletedIds.has(image.public_id));
@@ -5603,16 +5622,17 @@ export default {
         return errorJson("Nenhuma foto selecionada pelo cliente.", 400);
       }
 
-      const kept = images.filter((image) => selected.has(image.public_id) || image.phase === "final");
-      const removed = images.filter((image) => !selected.has(image.public_id) && image.phase !== "final");
-
-      if (!removed.length) {
-        return json({ ok: true, removed: 0, kept: kept.length }, 200, { "Cache-Control": "no-store" });
+      const candidates = images.filter((image) => !selected.has(image.public_id) && image.phase !== "final");
+      if (!candidates.length) {
+        return json({ ok: true, removed: 0, failed: 0, kept: images.length }, 200, { "Cache-Control": "no-store" });
       }
 
-      for (const image of removed) {
-        await destroyCloudinaryImage(cloudName, apiKey, apiSecret, image.public_id);
+      const { removed: removedIds, failed } = await destroyCloudinaryImages(
+        cloudName, apiKey, apiSecret, candidates.map((image) => image.public_id));
+      if (!removedIds.size) {
+        return errorJson("O Cloudinary não confirmou a exclusão. Nenhuma foto foi removida.", 502, { failed: failed.length });
       }
+      const kept = images.filter((image) => !removedIds.has(image.public_id));
 
       await writeKvJson(env, privateGalleryImagesKey(galleryId), kept);
       const nextSelection = selection.filter((publicId) => kept.some((image) => image.public_id === publicId));
@@ -5627,17 +5647,20 @@ export default {
 
       await appendAuditLog(env, request, user, "remover_nao_selecionadas_galeria_privada", "private_galleries", {
         galleryId,
-        removed: removed.length,
+        removed: removedIds.size,
+        failed: failed.length,
         kept: kept.length,
       });
       await appendPrivateGalleryEvent(env, request, galleryId, "admin_removeu_nao_selecionadas", {
-        removed: removed.length,
+        removed: removedIds.size,
+        failed: failed.length,
         kept: kept.length,
       }, user);
 
       return json({
         ok: true,
-        removed: removed.length,
+        removed: removedIds.size,
+        failed: failed.length,
         kept: kept.length,
       }, 200, { "Cache-Control": "no-store" });
     }

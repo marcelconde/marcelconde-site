@@ -21,7 +21,7 @@ function app() {
     async put(key, value) { data.set(key, value); }, async delete(key) { data.delete(key); },
   };
   const tasks = [];
-  const context = vm.createContext({ crypto: webcrypto, Request, Response, Headers, URL, AbortController, TextEncoder, TextDecoder, btoa, atob, console, setTimeout, clearTimeout, fetch: () => { throw Error('Unexpected external request'); } });
+  const context = vm.createContext({ crypto: webcrypto, Request, Response, Headers, URL, URLSearchParams, AbortController, TextEncoder, TextDecoder, btoa, atob, console, setTimeout, clearTimeout, fetch: () => { throw Error('Unexpected external request'); } });
   const source = fs.readFileSync(require.resolve('../worker.js'), 'utf8').replace('export default {', 'globalThis.worker = {');
   vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, createMercadoPagoPixPayment, claimAsaasIntent};', context);
   const env = { LIKES_KV: kv, GALLERY_DB: database, ADMIN_KEY: 'local-test-key' };
@@ -263,4 +263,29 @@ test('provider rejection or missing QR never becomes a usable pending Pix', asyn
     a.context.fetch=async()=>new Response(JSON.stringify(body),{status:201});
     await assert.rejects(a.createMercadoPagoPixPayment({MERCADO_PAGO_ACCESS_TOKEN:'test'},new Request('https://example.test'),{id:'pay',amountCents:1000},{title:'Race'},{email:'client@example.test'}), /não disponibilizou Pix/);
   }
+});
+
+test('removing unselected photos deletes in batches and only drops confirmed records', async () => {
+  const a = app();
+  Object.assign(a.env, { CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' });
+  const ids = Array.from({ length: 120 }, (_, i) => 'clientes/race/selecao/p' + i);
+  a.seed('private_gallery_images:g', ['a', ...ids].map(public_id => ({ public_id, phase: 'selection', url: 'https://example.test/' + public_id })));
+  const calls = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(options.method, 'DELETE');
+    assert.equal(options.headers.Authorization, 'Basic ' + btoa('key:secret'));
+    const batch = new URL(url).searchParams.getAll('public_ids[]');
+    calls.push(batch.length);
+    const deleted = Object.fromEntries(batch.map(id => [id, id.endsWith('p0') ? 'not_found' : id.endsWith('p119') ? 'error' : 'deleted']));
+    return new Response(JSON.stringify({ deleted, partial: false }));
+  };
+  const response = await a.request('/private/gallery/prune-unselected', { galleryId: 'g' });
+  assert.equal(response.status, 200, await response.clone().text());
+  const body = await response.json();
+  assert.deepEqual(calls, [100, 20]);
+  assert.equal(body.removed, 119);
+  assert.equal(body.failed, 1);
+  const remaining = (await a.readKvJson(a.env, 'private_gallery_images:g', [])).map(image => image.public_id);
+  assert.deepEqual(Array.from(remaining), ['a', 'clientes/race/selecao/p119']);
+  assert.deepEqual(Array.from(await a.readKvJson(a.env, 'private_gallery_selection:g', [])), ['a']);
 });

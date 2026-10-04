@@ -1416,7 +1416,10 @@ pruneUnselectedBtn.addEventListener("click", async () => {
       body: JSON.stringify({ galleryId: state.selectedGallery.id }),
     });
     await selectGallery(state.selectedGallery.id);
-    showToast(`${data.removed || removableCount} fotos não selecionadas foram removidas.`);
+    const removed = data.removed ?? 0;
+    showToast(data.failed
+      ? `${removed} removida${removed === 1 ? "" : "s"}; ${data.failed} não ${data.failed === 1 ? "pôde" : "puderam"} ser apagada${data.failed === 1 ? "" : "s"}. Tente novamente.`
+      : `${removed} fotos não selecionadas foram removidas.`);
   } catch (err) {
     showToast(err.message || "Erro ao remover fotos não selecionadas.");
   } finally {
