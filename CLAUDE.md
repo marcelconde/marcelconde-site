@@ -37,6 +37,9 @@ Fonte de contexto entre sessões; não dependa do histórico da conversa.
 
 ## Estilo de trabalho
 
-- Respostas extremamente concisas; trabalho complexo fica interno.
-- Leia só os arquivos necessários e amplie a investigação quando preciso.
+- Respostas extremamente diretas e curtas; sem repetir a pergunta, explicar o básico, narrar planos ou mostrar raciocínio. Explicação longa só se Marcel pedir.
+- Desenvolvimento com profundidade: analisar antes de mudar, considerar segurança, desempenho, UX e efeitos colaterais, preservar a arquitetura existente, sem complexidade desnecessária nem mudanças não relacionadas. Entregar resultado profissional, não só o mínimo.
+- Executar, testar e validar antes de concluir; revisar o próprio trabalho.
+- Economia de contexto: ler só os arquivos e trechos necessários; filtrar saídas grandes (grep/head/tail); não exibir arquivos inteiros, diffs completos ou logs extensos.
+- Resposta final de tarefa: o que foi feito, arquivos relevantes, testes/validações, pendências importantes.
 - Perguntas simples: esforço baixo. Tarefas complexas: sugerir esforço Max/Ultracode se a sessão estiver em nível menor.
