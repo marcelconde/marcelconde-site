@@ -377,8 +377,11 @@ async function saveAdminUser(env, user) {
 
 async function listAdminUsers(env) {
   const emails = await getUserEmails(env);
-  const users = await Promise.all(emails.map((email) => getAdminUser(env, email)));
-  return users.filter(Boolean).map(publicUser);
+  const users = await Promise.all(emails.map(async (email) => {
+    const [user, guard] = await Promise.all([getAdminUser(env, email), readLoginGuard(env, "admin", email)]);
+    return user ? { ...publicUser(user), lock: publicLoginLock(guard) } : null;
+  }));
+  return users.filter(Boolean);
 }
 
 async function saveUserPassword(env, email, password, extra = {}) {
@@ -407,7 +410,7 @@ async function getCurrentAdmin(request, env) {
   }
 
   const session = await getSession(env, token);
-  if (!session) return null;
+  if (!session || await isBlockedByAdmin(env, "admin", session.email)) return null;
   return {
     email: normalizeEmail(session.email || ""),
     name: session.name || session.email || "Usuário",
@@ -1796,7 +1799,30 @@ async function readLoginGuard(env, scope, email) {
   const failures = Number(guard?.failures || 0);
   const lockedAt = guard?.lockedAt || null;
   const recent = Number(guard?.lastFailureAt || 0) > Date.now() - LOGIN_FAILURE_WINDOW_MS;
-  return { failures: lockedAt || recent ? failures : 0, lockedAt };
+  // lockedBy: "attempts" (too many wrong passwords) or "admin" (blocked in the admin panel).
+  return {
+    failures: lockedAt || recent ? failures : 0,
+    lockedAt,
+    lockedBy: lockedAt ? (guard.lockedBy === "admin" ? "admin" : "attempts") : null,
+  };
+}
+
+function publicLoginLock(guard = {}) {
+  return guard.lockedAt ? { by: guard.lockedBy, at: new Date(Number(guard.lockedAt)).toISOString() } : null;
+}
+
+async function isBlockedByAdmin(env, scope, email) {
+  return (await readLoginGuard(env, scope, email)).lockedBy === "admin";
+}
+
+// An admin block survives password resets; only the admin can lift it.
+async function setAdminLoginBlock(env, scope, email, adminUser = {}) {
+  const key = loginGuardKey(scope, email);
+  const value = JSON.stringify({ failures: 0, lockedAt: Date.now(), lockedBy: "admin", blockedBy: adminUser.email || "" });
+  if (env.GALLERY_DB) {
+    await env.GALLERY_DB.prepare("INSERT INTO gallery_records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(key, value).run();
+  } else if (env.LIKES_KV) await env.LIKES_KV.put(key, value);
 }
 
 async function recordLoginFailure(env, scope, email) {
@@ -1809,7 +1835,7 @@ async function recordLoginFailure(env, scope, email) {
       ON CONFLICT(key) DO UPDATE SET value = json_set(value,
         '$.failures', CASE WHEN COALESCE(json_extract(value, '$.lastFailureAt'), 0) > ? THEN COALESCE(json_extract(value, '$.failures'), 0) + 1 ELSE 1 END,
         '$.lastFailureAt', ?)`).bind(key, now, cutoff, now).run();
-    await env.GALLERY_DB.prepare(`UPDATE gallery_records SET value = json_set(value, '$.lockedAt', ?)
+    await env.GALLERY_DB.prepare(`UPDATE gallery_records SET value = json_set(value, '$.lockedAt', ?, '$.lockedBy', 'attempts')
       WHERE key = ? AND json_extract(value, '$.failures') >= ? AND json_extract(value, '$.lockedAt') IS NULL`)
       .bind(now, key, LOGIN_MAX_FAILURES).run();
     if (Math.random() < 0.05) {
@@ -1819,17 +1845,24 @@ async function recordLoginFailure(env, scope, email) {
   } else if (env.LIKES_KV) {
     const current = await readLoginGuard(env, scope, email);
     const failures = current.failures + 1;
+    const lockedAt = current.lockedAt || (failures >= LOGIN_MAX_FAILURES ? now : null);
     await env.LIKES_KV.put(key, JSON.stringify({
-      failures, lastFailureAt: now, lockedAt: current.lockedAt || (failures >= LOGIN_MAX_FAILURES ? now : null),
+      failures, lastFailureAt: now, lockedAt, lockedBy: lockedAt ? current.lockedBy || "attempts" : null,
     }));
   }
   return readLoginGuard(env, scope, email);
 }
 
-async function clearLoginGuard(env, scope, email) {
+// Saving a new password clears failed attempts and an attempts lock; `force` (admin
+// unblocking in the panel) also lifts an admin block.
+async function clearLoginGuard(env, scope, email, { force = false } = {}) {
   const key = loginGuardKey(scope, email);
-  if (env.GALLERY_DB) await env.GALLERY_DB.prepare("DELETE FROM gallery_records WHERE key = ?").bind(key).run();
-  else if (env.LIKES_KV) await env.LIKES_KV.delete(key);
+  if (env.GALLERY_DB) {
+    await env.GALLERY_DB.prepare(`DELETE FROM gallery_records WHERE key = ?
+      AND (? = 1 OR COALESCE(json_extract(value, '$.lockedBy'), '') != 'admin')`).bind(key, force ? 1 : 0).run();
+  } else if (env.LIKES_KV && (force || !await isBlockedByAdmin(env, scope, email))) {
+    await env.LIKES_KV.delete(key);
+  }
 }
 
 async function verifyTurnstile(env, request, token) {
@@ -1852,12 +1885,13 @@ async function verifyTurnstile(env, request, token) {
 }
 
 // Unknown e-mails follow the same path as real accounts, so responses do not reveal which exist.
-async function guardedLogin(env, request, scope, email, body, validate) {
-  const locked = () => errorJson(
-    "Conta bloqueada por segurança após várias tentativas incorretas. Use \"Esqueci minha senha\" para redefinir a senha e desbloquear.",
+async function guardedLogin(env, request, scope, email, body, validate, notifyLocked) {
+  const locked = (guard) => errorJson(guard.lockedBy === "admin"
+    ? "Conta bloqueada pelo administrador. Entre em contato para liberar o acesso."
+    : "Conta bloqueada por segurança após várias tentativas incorretas. Enviamos um e-mail com o link para redefinir a senha e desbloquear; se não chegar, use \"Esqueci minha senha\".",
     423, { locked: true });
   const guard = await readLoginGuard(env, scope, email);
-  if (guard.lockedAt) return { response: locked() };
+  if (guard.lockedAt) return { response: locked(guard) };
 
   // Without the secret the captcha step is skipped; the lock still applies.
   const captcha = Boolean(env.TURNSTILE_SECRET_KEY);
@@ -1872,10 +1906,30 @@ async function guardedLogin(env, request, scope, email, body, validate) {
   }
   const next = await recordLoginFailure(env, scope, email);
   if (next.lockedAt) {
-    await appendAuditLog(env, request, { email }, "conta_bloqueada", "auth", { scope, failures: next.failures });
-    return { response: locked() };
+    let emailQueued = false;
+    try { emailQueued = Boolean(await notifyLocked?.()); }
+    catch (err) { console.error("Account lock email error:", err); }
+    await appendAuditLog(env, request, { email }, "conta_bloqueada", "auth", { scope, failures: next.failures, emailQueued });
+    return { response: locked(next) };
   }
   return { response: errorJson("E-mail ou senha inválidos.", 401, { captchaRequired: captcha }) };
+}
+
+async function notifyAdminAccountLocked(env, request, email) {
+  if (!env.LIKES_KV || !(await getAdminUser(env, email) || email === adminEmail(env))) return null;
+  const token = randomToken(36);
+  await env.LIKES_KV.put(`admin_reset:${token}`, JSON.stringify({
+    email, createdAt: new Date().toISOString(), expiresAt: Date.now() + 1000 * 60 * 60,
+  }), { expirationTtl: 60 * 60 });
+  return sendResetEmail(env, request, email, token, { locked: true });
+}
+
+async function notifyClientAccountLocked(env, email) {
+  const [storedUser, clients] = await Promise.all([getClientUser(env, email), listPrivateClients(env)]);
+  const client = clients.find((item) => normalizeEmail(item.email || "") === email);
+  if (!storedUser?.passwordHash || !client) return null;
+  const { token } = await createClientPasswordReset(env, client, "account_lock");
+  return sendClientPasswordResetEmail(env, email, client, token, { locked: true });
 }
 
 async function validateAdminLogin(env, email, password) {
@@ -1943,8 +1997,8 @@ function hasPermanentClientAccess(user = {}) {
 }
 
 async function getClientAccessSummary(env, email) {
-  const user = await getClientUser(env, email);
-  return clientAccessSummary(user || {});
+  const [user, guard] = await Promise.all([getClientUser(env, email), readLoginGuard(env, "client", email)]);
+  return { ...clientAccessSummary(user || {}), lock: publicLoginLock(guard) };
 }
 
 async function saveClientPassword(env, email, password, profile = {}) {
@@ -2024,7 +2078,9 @@ async function getClientSession(env, token) {
 }
 
 async function getCurrentClient(request, env) {
-  return getClientSession(env, getBearerToken(request));
+  const session = await getClientSession(env, getBearerToken(request));
+  if (!session || await isBlockedByAdmin(env, "client", session.email)) return null;
+  return session;
 }
 
 async function requireClientGalleryAccess(request, env, gallery) {
@@ -2492,9 +2548,19 @@ async function sendClientTemporaryPasswordEmail(env, email, client = {}, tempora
   });
 }
 
-async function sendClientPasswordResetEmail(env, email, client = {}, token = "") {
+async function sendClientPasswordResetEmail(env, email, client = {}, token = "", { locked = false } = {}) {
   const resetUrl = clientPasswordResetUrl(env, token);
-  const html = emailLayout(env, {
+  const html = emailLayout(env, locked ? {
+    preheader: "Sua conta foi bloqueada por segurança. Crie uma nova senha para voltar a acessar.",
+    eyebrow: "Segurança",
+    title: "Conta bloqueada por segurança",
+    intro: `Olá ${emailHtml(client.name || email)}, sua conta da Área do Cliente foi bloqueada após ${LOGIN_MAX_FAILURES} tentativas de acesso com senha incorreta.`,
+    body: `<p style="margin:0;">Para desbloquear, crie uma nova senha pelo botão abaixo. Se não foi você quem tentou entrar, a nova senha também mantém sua conta protegida.</p>`,
+    ctaLabel: "Redefinir senha",
+    ctaUrl: resetUrl,
+    footerNote: "Este link expira em 1 hora e pode ser utilizado uma única vez. Depois disso, use \"Esqueci minha senha\" na tela de login.",
+    reason: "Você recebeu este e-mail porque sua conta da Área do Cliente foi bloqueada por excesso de tentativas de acesso.",
+  } : {
     preheader: "Use este link para criar uma nova senha da Área do Cliente.",
     eyebrow: "Segurança",
     title: "Redefinir sua senha",
@@ -2507,7 +2573,7 @@ async function sendClientPasswordResetEmail(env, email, client = {}, token = "")
   });
   return sendResendMessage(env, {
     to: [email],
-    subject: `Redefinir senha — ${brandName(env)}`,
+    subject: `${locked ? "Conta bloqueada — redefina sua senha" : "Redefinir senha"} — ${brandName(env)}`,
     html,
   });
 }
@@ -3713,14 +3779,24 @@ function cloudinaryAttachmentUrl(src = "") {
   return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, "/upload/fl_attachment/");
 }
 
-async function sendResetEmail(env, request, email, token) {
+async function sendResetEmail(env, request, email, token, { locked = false } = {}) {
   if (!env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY não configurada no Worker.");
   }
 
   const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
   const resetUrl = `${origin}/admin/?reset=${encodeURIComponent(token)}`;
-  const html = emailLayout(env, {
+  const html = emailLayout(env, locked ? {
+    preheader: "Sua conta do painel foi bloqueada por segurança. Crie uma nova senha para voltar a acessar.",
+    eyebrow: "Segurança",
+    title: "Conta bloqueada por segurança",
+    intro: `Sua conta do painel administrativo foi bloqueada após ${LOGIN_MAX_FAILURES} tentativas de acesso com senha incorreta.`,
+    body: `<p style="margin:0;">Para desbloquear, crie uma nova senha pelo botão abaixo. Se não foi você quem tentou entrar, a nova senha também mantém sua conta protegida.</p>`,
+    ctaLabel: "Redefinir senha",
+    ctaUrl: resetUrl,
+    footerNote: "Este link expira em 1 hora. Depois disso, use \"Esqueci minha senha\" na tela de login.",
+    reason: "Você recebeu este e-mail porque sua conta do painel administrativo foi bloqueada por excesso de tentativas de acesso.",
+  } : {
     preheader: "Use este link para criar uma nova senha do painel administrativo.",
     eyebrow: "Segurança",
     title: "Redefinir senha",
@@ -3740,7 +3816,7 @@ async function sendResetEmail(env, request, email, token) {
     body: JSON.stringify({
       from: resendFrom(env),
       to: [email],
-      subject: `Redefinir senha do admin — ${brandName(env)}`,
+      subject: `${locked ? "Conta bloqueada — redefina sua senha do admin" : "Redefinir senha do admin"} — ${brandName(env)}`,
       html,
     }),
   });
@@ -3993,7 +4069,7 @@ export default {
           listPrivateClients(env),
         ]);
         const client = clients.find((item) => normalizeEmail(item.email || "") === email);
-        if (storedUser?.passwordHash && client) {
+        if (storedUser?.passwordHash && client && !await isBlockedByAdmin(env, "client", email)) {
           const { token } = await createClientPasswordReset(env, client, "client");
           await sendClientPasswordResetEmail(env, email, client, token);
         }
@@ -4022,6 +4098,7 @@ export default {
       if (!reset || Number(reset.expiresAt || 0) < Date.now()) {
         return errorJson("Link de redefinição inválido ou expirado.", 400);
       }
+      if (await isBlockedByAdmin(env, "client", reset.email)) return errorJson("Conta bloqueada pelo administrador.", 423);
       const clients = await listPrivateClients(env);
       const client = clients.find((item) => normalizeEmail(item.email || "") === normalizeEmail(reset.email || ""));
       if (!client) return errorJson("Cadastro do cliente não encontrado.", 404);
@@ -4040,7 +4117,8 @@ export default {
       if (!email || !password) return errorJson("E-mail e senha são obrigatórios.", 400);
 
       const { user, response } = await guardedLogin(env, request, "client", email, body,
-        () => validateClientLogin(env, email, password));
+        () => validateClientLogin(env, email, password),
+        () => notifyClientAccountLocked(env, email));
       if (response) return response;
 
       const session = await createClientSession(env, user);
@@ -4863,7 +4941,8 @@ export default {
       if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
 
       const { user, response } = await guardedLogin(env, request, "admin", email, body,
-        () => validateAdminLogin(env, email, password));
+        () => validateAdminLogin(env, email, password),
+        () => notifyAdminAccountLocked(env, request, email));
       if (response) return response;
 
       const session = await createSession(env, user);
@@ -4897,7 +4976,7 @@ export default {
       const user = await getAdminUser(env, email);
 
       // Resposta neutra para não revelar se o e-mail existe.
-      if (email && (user || email === adminEmail(env)) && env.LIKES_KV) {
+      if (email && (user || email === adminEmail(env)) && env.LIKES_KV && !await isBlockedByAdmin(env, "admin", email)) {
         const token = randomToken(36);
         await env.LIKES_KV.put(
           `admin_reset:${token}`,
@@ -4937,6 +5016,7 @@ export default {
         if (!reset || !reset.email || Number(reset.expiresAt || 0) < Date.now()) {
           return errorJson("Token inválido ou expirado.", 400);
         }
+        if (await isBlockedByAdmin(env, "admin", reset.email)) return errorJson("Conta bloqueada pelo administrador.", 423);
 
         const existing = await getAdminUser(env, reset.email);
         const user = await saveUserPassword(env, reset.email, password, {
@@ -5096,6 +5176,16 @@ export default {
           emailQueued: Boolean(emailResult),
           emailError,
         }, 200, { "Cache-Control": "no-store" });
+      }
+
+      if (action === "block" || action === "unblock") {
+        if (action === "block") await setAdminLoginBlock(env, "client", client.email, user);
+        else await clearLoginGuard(env, "client", client.email, { force: true });
+        await appendAuditLog(env, request, user, action === "block" ? "bloquear_acesso_cliente" : "desbloquear_acesso_cliente", "private_clients", {
+          clientId: client.id,
+          email: client.email,
+        });
+        return json({ ok: true, access: await getClientAccessSummary(env, client.email) }, 200, { "Cache-Control": "no-store" });
       }
 
       return errorJson("Ação de acesso inválida.", 400);
@@ -5908,6 +5998,25 @@ export default {
 
       await appendAuditLog(env, request, user, "excluir_usuario", "users", { email });
       return json({ ok: true });
+    }
+
+    if (url.pathname === "/auth/user-lock" && request.method === "POST") {
+      const { error, user } = await requireSuperAdmin(request, env);
+      if (error) return error;
+
+      const body = await readJson(request);
+      const email = normalizeEmail(body.email || "");
+      if (!email || !await getAdminUser(env, email)) return errorJson("Usuário não encontrado.", 404);
+      if (body.locked === true) {
+        if (email === normalizeEmail(user.email)) return errorJson("Não é possível bloquear sua própria conta.", 400);
+        if (email === adminEmail(env)) return errorJson("Não é possível bloquear o admin principal.", 400);
+        await setAdminLoginBlock(env, "admin", email, user);
+      } else {
+        await clearLoginGuard(env, "admin", email, { force: true });
+      }
+
+      await appendAuditLog(env, request, user, body.locked === true ? "bloquear_usuario" : "desbloquear_usuario", "users", { email });
+      return json({ ok: true, lock: publicLoginLock(await readLoginGuard(env, "admin", email)) });
     }
 
     if (url.pathname === "/auth/invite" && request.method === "POST") {

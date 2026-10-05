@@ -42,6 +42,7 @@ const saveClientBtn = $("#saveClientBtn");
 const clientAccessStatus = $("#clientAccessStatus");
 const generateTemporaryPasswordBtn = $("#generateTemporaryPasswordBtn");
 const sendPasswordResetBtn = $("#sendPasswordResetBtn");
+const toggleClientBlockBtn = $("#toggleClientBlockBtn");
 const temporaryPasswordResult = $("#temporaryPasswordResult");
 const temporaryPasswordValue = $("#temporaryPasswordValue");
 const copyTemporaryPasswordBtn = $("#copyTemporaryPasswordBtn");
@@ -123,10 +124,19 @@ function renderClientAccess() {
   const hasSavedClient = Boolean(client?.id);
   const hasEmail = Boolean(client?.email);
   const access = client?.access || {};
+  const lock = access.lock || null;
   generateTemporaryPasswordBtn.disabled = !hasSavedClient || !hasEmail;
-  sendPasswordResetBtn.disabled = !hasSavedClient || !hasEmail || !access.hasPassword;
+  sendPasswordResetBtn.disabled = !hasSavedClient || !hasEmail || !access.hasPassword || lock?.by === "admin";
+  toggleClientBlockBtn.disabled = !hasSavedClient || !hasEmail;
+  toggleClientBlockBtn.textContent = lock ? "Desbloquear acesso" : "Bloquear acesso";
+  toggleClientBlockBtn.className = lock ? "btn btn-primary" : "btn btn-danger";
 
-  if (!hasSavedClient) {
+  if (hasSavedClient && hasEmail && lock) {
+    const since = new Date(lock.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    clientAccessStatus.textContent = lock.by === "admin"
+      ? `Acesso bloqueado por você em ${since}. O cliente não consegue entrar nem redefinir a senha até o desbloqueio.`
+      : `Acesso bloqueado em ${since} por excesso de tentativas com senha errada. O sistema envia ao cliente um e-mail com o link para redefinir a senha; você também pode desbloquear aqui.`;
+  } else if (!hasSavedClient) {
     clientAccessStatus.textContent = "Salve o cliente com um e-mail para criar o acesso.";
   } else if (!hasEmail) {
     clientAccessStatus.textContent = "Adicione e salve um e-mail para habilitar a área do cliente.";
@@ -144,6 +154,7 @@ function updateSelectedClientAccess(access) {
   state.selectedClient = { ...state.selectedClient, access };
   const index = state.clients.findIndex((client) => client.id === state.selectedClient.id);
   if (index >= 0) state.clients[index] = state.selectedClient;
+  renderClients();
   renderClientAccess();
 }
 
@@ -245,7 +256,7 @@ function renderClients() {
     const active = state.selectedClient?.id === client.id ? " active" : "";
     return `
       <button class="private-list-item${active}" type="button" data-client-id="${escapeHtml(client.id)}">
-        <strong>${escapeHtml(client.name || "Cliente")}${client.isTest ? ' <span class="status-badge">Teste</span>' : ""}</strong>
+        <strong>${escapeHtml(client.name || "Cliente")}${client.isTest ? ' <span class="status-badge">Teste</span>' : ""}${client.access?.lock ? ' <span class="status-badge danger">Bloqueada</span>' : ""}</strong>
         <small>${escapeHtml(client.email || "sem e-mail")} · ${galleries} galeria(s) · ${quotes} orçamento(s)</small>
         <small>${escapeHtml(client.phone || "")}</small>
       </button>
@@ -432,6 +443,27 @@ sendPasswordResetBtn.addEventListener("click", async () => {
     setFieldStatus(clientAccessMessage, err.message || "Erro ao enviar redefinição.", "error");
   } finally {
     sendPasswordResetBtn.textContent = "Enviar redefinição";
+    renderClientAccess();
+  }
+});
+
+toggleClientBlockBtn.addEventListener("click", async () => {
+  const client = state.selectedClient;
+  if (!client?.id) return;
+  const unblock = Boolean(client.access?.lock);
+  if (!unblock && !confirm(`Bloquear o acesso de ${client.name || client.email}?\n\nO cliente será desconectado e não conseguirá entrar nem redefinir a senha até você desbloquear.`)) return;
+  toggleClientBlockBtn.disabled = true;
+  setFieldStatus(clientAccessMessage, "");
+  try {
+    const data = await getJson("/private/client/access", {
+      method: "POST",
+      body: JSON.stringify({ clientId: client.id, action: unblock ? "unblock" : "block" }),
+    });
+    updateSelectedClientAccess(data.access || {});
+    setFieldStatus(clientAccessMessage, unblock ? "Acesso desbloqueado." : "Acesso bloqueado.", "success");
+  } catch (err) {
+    setFieldStatus(clientAccessMessage, err.message || "Não foi possível alterar o bloqueio.", "error");
+  } finally {
     renderClientAccess();
   }
 });

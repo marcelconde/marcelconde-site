@@ -1056,20 +1056,32 @@ function renderUsers(users) {
     const email = escapeHtml(user.email || "");
     const isCurrent = user.email === currentEmail;
     const isMain = user.email === CONFIG.adminEmail;
+    const lock = user.lock || null;
+    const lockLabel = lock ? (lock.by === "admin" ? "Bloqueada pelo admin" : "Bloqueada por tentativas") : "";
+    // Anyone locked can be released; only other, non-main accounts can be blocked.
+    const lockButton = lock
+      ? `<button class="btn btn-ghost btn-small" data-lock-user="${email}" data-locked="false" type="button">Desbloquear</button>`
+      : (!isCurrent && !isMain) ? `<button class="btn btn-ghost btn-small" data-lock-user="${email}" data-locked="true" type="button">Bloquear</button>` : "";
     return `
       <div class="admin-row">
         <div>
           <strong>${escapeHtml(user.name || user.email)}</strong>
           <small>${email}</small>
-          <small>Criado em ${escapeHtml(formatDate(user.createdAt))}</small>
+          <small>Criado em ${escapeHtml(formatDate(user.createdAt))}${lock ? ` · bloqueada em ${escapeHtml(formatDate(lock.at))}` : ""}</small>
         </div>
         <div>
           <span class="role-badge">${escapeHtml(user.role || "editor")}</span>
+          ${lock ? `<span class="status-badge expired">${lockLabel}</span>` : ""}
+          ${lockButton}
           ${(!isCurrent && !isMain) ? `<button class="btn btn-danger btn-small" data-delete-user="${email}" type="button">Remover</button>` : ""}
         </div>
       </div>
     `;
   }).join("");
+
+  usersList.querySelectorAll("[data-lock-user]").forEach((btn) => {
+    btn.addEventListener("click", () => setUserLock(btn.dataset.lockUser, btn.dataset.locked === "true"));
+  });
 
   usersList.querySelectorAll("[data-delete-user]").forEach((btn) => {
     btn.addEventListener("click", () => deleteUser(btn.dataset.deleteUser));
@@ -1134,6 +1146,24 @@ inviteBtn?.addEventListener("click", async () => {
     inviteBtn.textContent = "Enviar convite";
   }
 });
+
+async function setUserLock(email, locked) {
+  if (!email) return;
+  if (locked && !confirm(`Bloquear o acesso de ${email}?\n\nA pessoa será desconectada e não conseguirá entrar nem redefinir a senha até você desbloquear.`)) return;
+
+  try {
+    const res = await workerFetch("/auth/user-lock", {
+      method: "POST",
+      body: JSON.stringify({ email, locked }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Falha ao alterar o bloqueio.");
+    showToast(locked ? "Conta bloqueada." : "Conta desbloqueada.");
+    await loadUsersView();
+  } catch (err) {
+    showToast(err.message || "Erro ao alterar o bloqueio.");
+  }
+}
 
 async function deleteUser(email) {
   if (!email) return;

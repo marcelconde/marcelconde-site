@@ -365,3 +365,59 @@ test('login asks for captcha after one wrong password, locks after five and unlo
   assert.equal(unknown.status, 401);
   assert.equal((await unknown.json()).captchaRequired, true);
 });
+
+test('attempt lock e-mails a reset link; an admin block survives resets, ends sessions and is lifted only by the admin', async () => {
+  const a = app();
+  a.env.RESEND_API_KEY = 'resend-test';
+  const emails = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(url, 'https://api.resend.com/emails');
+    emails.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ id: 'email_1' }));
+  };
+  const email = 'client@example.test';
+  await a.writeKvJson(a.env, 'private_clients_index', ['c']);
+  await a.saveClientPassword(a.env, email, 'right-password');
+  const post = async (path, body, token = '') => {
+    const response = await a.request(path, body, token);
+    return { status: response.status, ...(await response.json().catch(() => ({}))) };
+  };
+  const login = password => post('/client-auth/login', { email, password });
+
+  // Five wrong passwords: one e-mail with the reset button, nothing for unknown accounts.
+  for (let attempt = 1; attempt <= 4; attempt += 1) assert.equal((await login('wrong')).status, 401);
+  assert.equal((await login('wrong')).status, 423);
+  assert.equal(emails.length, 1);
+  assert.deepEqual(Array.from(emails[0].to), [email]);
+  assert.match(emails[0].subject, /Conta bloqueada/);
+  assert.match(emails[0].html, /\?redefinir=/);
+  assert.match(emails[0].html, /Redefinir senha/);
+  for (let attempt = 1; attempt <= 5; attempt += 1) await post('/client-auth/login', { email: 'ghost@example.test', password: 'x' });
+  assert.equal(emails.length, 1);
+  let access = (await post('/private/client/access', { clientId: 'c', action: 'unblock' }, 'local-test-key')).access;
+  assert.equal(access.lock, null);
+  assert.equal((await login('right-password')).status, 200);
+
+  // Admin block: listed, refuses login, reset and live sessions; a new password does not lift it.
+  access = (await post('/private/client/access', { clientId: 'c', action: 'block' }, 'local-test-key')).access;
+  assert.equal(access.lock.by, 'admin');
+  const listed = await (await a.request('/private/clients', undefined, 'local-test-key')).json();
+  assert.equal(listed.clients.find(client => client.id === 'c').access.lock.by, 'admin');
+  assert.match((await login('right-password')).error, /administrador/);
+  assert.equal((await a.request('/client-galleries', undefined, 'client-token')).status, 401);
+  await post('/client-auth/forgot', { email });
+  assert.equal(emails.length, 1);
+  await a.saveClientPassword(a.env, email, 'another-password');
+  assert.equal((await login('another-password')).status, 423);
+  await post('/private/client/access', { clientId: 'c', action: 'unblock' }, 'local-test-key');
+  assert.equal((await login('another-password')).status, 200);
+  assert.equal((await a.request('/client-galleries', undefined, 'client-token')).status, 200);
+
+  // Admin users: block and unblock, never self or the main admin.
+  await a.saveUserPassword(a.env, 'editor@example.test', 'editor-password', { role: 'editor' });
+  assert.equal((await post('/auth/user-lock', { email: 'editor@example.test', locked: true }, 'local-test-key')).lock.by, 'admin');
+  assert.equal((await post('/auth/login', { email: 'editor@example.test', password: 'editor-password' })).status, 423);
+  assert.equal((await post('/auth/user-lock', { email: 'editor@example.test', locked: false }, 'local-test-key')).lock, null);
+  assert.equal((await post('/auth/login', { email: 'editor@example.test', password: 'editor-password' })).status, 200);
+  assert.equal((await post('/auth/user-lock', { email: 'nobody@example.test', locked: true }, 'local-test-key')).status, 404);
+});
