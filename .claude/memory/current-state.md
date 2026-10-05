@@ -1,6 +1,6 @@
 # Estado atual
 
-Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (versão `507ffd5e`, commit `ba27dfc`). Reconfirme após novos commits ou trabalho feito no Windows.
+Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (versão `944a0915`, commit `7d00802`). Reconfirme após novos commits ou trabalho feito no Windows.
 
 ## Funcionando
 
