@@ -23,6 +23,14 @@ Este repositório contém o site de fotografia de Marcel Conde. Antes de alterar
 
 O site estático sai da `main` pelo GitHub Pages em `https://marcelconde.com.br`. A API é o Worker `cloudinary` em `https://api.marcelconde.com.br`. Em uma mudança que envolva ambos, publique e verifique os arquivos estáticos antes de atualizar o Worker; preserve bindings e secrets. Testes simulados não comprovam pagamento ou webhook real.
 
+## Sincronização Mac ↔ Windows
+
+Marcel trabalha neste repositório em um Mac e em um PC Windows. O GitHub (`main`) é a única fonte de verdade.
+
+- Antes de cada tarefa: `git fetch`, `git status` e `git pull --ff-only`. Se houver divergência ou alterações locais inesperadas, resolva antes de editar.
+- Depois de cada tarefa que altere código, documentação ou memória: atualize `.claude/memory/` com fatos verificados, faça commit e `git push` na `main`, e confirme que `git status` está limpo e o commit local é igual ao `origin/main`.
+- Nunca encerre com trabalho sem push. Não versione secrets, `.DS_Store` novos ou `.claude/settings.local.json`.
+
 ## Memória persistente (`.claude/memory/`)
 
 Fonte de contexto entre sessões; não dependa do histórico da conversa.
