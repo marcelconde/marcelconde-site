@@ -2,7 +2,7 @@
 // The Worker asks for it after a wrong password; the widget loads only then.
 (function () {
   // Public site key of the Turnstile widget. Empty disables the captcha step.
-  const SITE_KEY = "";
+  const SITE_KEY = "0x4AAAAAAFOZWerlzFPtCXej";
   let script = null;
   let widgetId = null;
   let box = null;
