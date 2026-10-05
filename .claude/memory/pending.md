@@ -8,7 +8,7 @@ Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou
   3. Mesclar `asaas-only` na `main`, publicar Pages e depois o Worker.
   4. Cobrança real ≥ R$ 5 e conferência de webhook, saldo e e-mail; Sandbox conforme `docs/asaas-payments.md`.
   5. Excluir no Asaas as chaves criadas/expostas em 2026-10-01/02 (não a da Fotop); remover secrets e webhook do Mercado Pago.
-- **Ativar o captcha do login:** site key já publicada em `login-guard.js` (2026-10-05). Falta Marcel rotacionar a secret no painel do Turnstile (a primeira foi colada no chat) e gravá-la com `npx wrangler secret put TURNSTILE_SECRET_KEY`; depois validar no site real.
+- **Validar o captcha do login no navegador:** `TURNSTILE_SECRET_KEY` gravada e site key publicada (2026-10-05); a API já exige o captcha após 1 erro e recusa token falso. Falta Marcel confirmar que um captcha resolvido de verdade é aceito (se a secret estiver errada, ninguém passa do 2º erro).
 - **Integração Lightroom Classic (Windows).** Só lembrar Marcel quando o Asaas estiver 100% concluído. Enviar fotos selecionadas para uma coleção; usar CSV/API da seleção; originais no disco Windows; validar nomes, ausências e duplicatas.
 - **Ideias não iniciadas:** NFSe automática; API Pix Bradesco (apenas inscrita no portal).
 - **Limpeza menor:** `.DS_Store` rastreados no Git; `README.md` quase vazio.
