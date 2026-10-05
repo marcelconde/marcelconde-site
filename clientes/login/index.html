@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/clientes/auth.css?v=20260716-02">
+  <link rel="stylesheet" href="/clientes/auth.css?v=20261005-01">
 </head>
 <body>
   <main class="client-shell">
@@ -41,6 +41,7 @@
           Confirmar senha
           <input id="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repita a senha">
         </label>
+        <div class="login-captcha" id="loginCaptcha" hidden></div>
         <button class="btn btn-primary" id="submitBtn" type="submit">Entrar</button>
         <button class="muted-link link-button" id="forgotPasswordBtn" type="button">Esqueci minha senha</button>
         <button class="muted-link link-button" id="backToLoginBtn" type="button" hidden>Voltar ao login</button>
@@ -51,6 +52,7 @@
   </main>
 
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/clientes/login/login.js?v=20260716-01"></script>
+  <script src="/login-guard.js?v=20261005-01"></script>
+  <script src="/clientes/login/login.js?v=20261005-01"></script>
 </body>
 </html>

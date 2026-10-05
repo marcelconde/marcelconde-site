@@ -384,6 +384,7 @@ async function listAdminUsers(env) {
 async function saveUserPassword(env, email, password, extra = {}) {
   const cleanEmail = normalizeEmail(email);
   const passwordHash = await hashPassword(password, "", authPepper(env));
+  await clearLoginGuard(env, "admin", cleanEmail);
   return saveAdminUser(env, {
     ...extra,
     email: cleanEmail,
@@ -1773,6 +1774,110 @@ async function saveAdminPassword(env, password) {
   });
 }
 
+// ── PROTEÇÃO DE LOGIN ─────────────────────────────────────────
+// After one wrong password the next attempts need a Turnstile token; after
+// LOGIN_MAX_FAILURES the account stays locked until a new password is saved.
+const LOGIN_MAX_FAILURES = 5;
+const LOGIN_FAILURE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function loginGuardKey(scope, email) {
+  return `login_guard:${scope}:${normalizeEmail(email).slice(0, 254)}`;
+}
+
+async function readLoginGuard(env, scope, email) {
+  const key = loginGuardKey(scope, email);
+  let guard = null;
+  if (env.GALLERY_DB) {
+    const row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(key).first();
+    guard = row ? JSON.parse(row.value) : null;
+  } else if (env.LIKES_KV) {
+    guard = await env.LIKES_KV.get(key, "json");
+  }
+  const failures = Number(guard?.failures || 0);
+  const lockedAt = guard?.lockedAt || null;
+  const recent = Number(guard?.lastFailureAt || 0) > Date.now() - LOGIN_FAILURE_WINDOW_MS;
+  return { failures: lockedAt || recent ? failures : 0, lockedAt };
+}
+
+async function recordLoginFailure(env, scope, email) {
+  const key = loginGuardKey(scope, email);
+  const now = Date.now();
+  const cutoff = now - LOGIN_FAILURE_WINDOW_MS;
+  if (env.GALLERY_DB) {
+    // Atomic, so parallel guesses cannot share one counter value.
+    await env.GALLERY_DB.prepare(`INSERT INTO gallery_records (key, value) VALUES (?, json_object('failures', 1, 'lastFailureAt', ?))
+      ON CONFLICT(key) DO UPDATE SET value = json_set(value,
+        '$.failures', CASE WHEN COALESCE(json_extract(value, '$.lastFailureAt'), 0) > ? THEN COALESCE(json_extract(value, '$.failures'), 0) + 1 ELSE 1 END,
+        '$.lastFailureAt', ?)`).bind(key, now, cutoff, now).run();
+    await env.GALLERY_DB.prepare(`UPDATE gallery_records SET value = json_set(value, '$.lockedAt', ?)
+      WHERE key = ? AND json_extract(value, '$.failures') >= ? AND json_extract(value, '$.lockedAt') IS NULL`)
+      .bind(now, key, LOGIN_MAX_FAILURES).run();
+    if (Math.random() < 0.05) {
+      await env.GALLERY_DB.prepare(`DELETE FROM gallery_records WHERE key >= 'login_guard:' AND key < 'login_guard;'
+        AND json_extract(value, '$.lockedAt') IS NULL AND COALESCE(json_extract(value, '$.lastFailureAt'), 0) < ?`).bind(cutoff).run();
+    }
+  } else if (env.LIKES_KV) {
+    const current = await readLoginGuard(env, scope, email);
+    const failures = current.failures + 1;
+    await env.LIKES_KV.put(key, JSON.stringify({
+      failures, lastFailureAt: now, lockedAt: current.lockedAt || (failures >= LOGIN_MAX_FAILURES ? now : null),
+    }));
+  }
+  return readLoginGuard(env, scope, email);
+}
+
+async function clearLoginGuard(env, scope, email) {
+  const key = loginGuardKey(scope, email);
+  if (env.GALLERY_DB) await env.GALLERY_DB.prepare("DELETE FROM gallery_records WHERE key = ?").bind(key).run();
+  else if (env.LIKES_KV) await env.LIKES_KV.delete(key);
+}
+
+async function verifyTurnstile(env, request, token) {
+  if (!token) return false;
+  try {
+    const res = await fetchWithTimeout("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: new URLSearchParams({
+        secret: env.TURNSTILE_SECRET_KEY,
+        response: String(token).slice(0, 2048),
+        remoteip: request.headers.get("CF-Connecting-IP") || "",
+      }),
+    }, 8000);
+    const data = await res.json().catch(() => ({}));
+    return data.success === true;
+  } catch (err) {
+    console.error("Turnstile verification failed:", err);
+    return false;
+  }
+}
+
+// Unknown e-mails follow the same path as real accounts, so responses do not reveal which exist.
+async function guardedLogin(env, request, scope, email, body, validate) {
+  const locked = () => errorJson(
+    "Conta bloqueada por segurança após várias tentativas incorretas. Use \"Esqueci minha senha\" para redefinir a senha e desbloquear.",
+    423, { locked: true });
+  const guard = await readLoginGuard(env, scope, email);
+  if (guard.lockedAt) return { response: locked() };
+
+  // Without the secret the captcha step is skipped; the lock still applies.
+  const captcha = Boolean(env.TURNSTILE_SECRET_KEY);
+  if (captcha && guard.failures >= 1 && !await verifyTurnstile(env, request, body.turnstileToken)) {
+    return { response: errorJson("Confirme que você não é um robô para continuar.", 403, { captchaRequired: true }) };
+  }
+
+  const user = await validate();
+  if (user) {
+    if (guard.failures) await clearLoginGuard(env, scope, email);
+    return { user };
+  }
+  const next = await recordLoginFailure(env, scope, email);
+  if (next.lockedAt) {
+    await appendAuditLog(env, request, { email }, "conta_bloqueada", "auth", { scope, failures: next.failures });
+    return { response: locked() };
+  }
+  return { response: errorJson("E-mail ou senha inválidos.", 401, { captchaRequired: captcha }) };
+}
+
 async function validateAdminLogin(env, email, password) {
   const cleanEmail = normalizeEmail(email);
   const stored = await getAdminUser(env, cleanEmail);
@@ -1862,6 +1967,7 @@ async function saveClientPassword(env, email, password, profile = {}) {
   };
 
   await writeKvJson(env, clientUserKey(cleanEmail), user);
+  await clearLoginGuard(env, "client", cleanEmail);
   return publicClientUser(user);
 }
 
@@ -3933,8 +4039,9 @@ export default {
       const password = String(body.password || "");
       if (!email || !password) return errorJson("E-mail e senha são obrigatórios.", 400);
 
-      const user = await validateClientLogin(env, email, password);
-      if (!user) return errorJson("E-mail ou senha inválidos.", 401);
+      const { user, response } = await guardedLogin(env, request, "client", email, body,
+        () => validateClientLogin(env, email, password));
+      if (response) return response;
 
       const session = await createClientSession(env, user);
       return json(session, 200, { "Cache-Control": "no-store" });
@@ -4755,8 +4862,9 @@ export default {
       if (!email || !password) return errorJson("E-mail e senha são obrigatórios.", 400);
       if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
 
-      const user = await validateAdminLogin(env, email, password);
-      if (!user) return errorJson("Credenciais inválidas.", 401);
+      const { user, response } = await guardedLogin(env, request, "admin", email, body,
+        () => validateAdminLogin(env, email, password));
+      if (response) return response;
 
       const session = await createSession(env, user);
       await appendAuditLog(env, request, user, "login", "auth", { email: user.email });

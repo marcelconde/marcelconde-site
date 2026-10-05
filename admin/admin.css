@@ -1184,3 +1184,12 @@ label {
     grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
   }
 }
+
+.login-captcha {
+  min-height: 65px;
+  margin: 4px 0 2px;
+}
+
+.login-captcha[hidden] {
+  display: none;
+}

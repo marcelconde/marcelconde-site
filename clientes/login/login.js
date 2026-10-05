@@ -33,6 +33,7 @@ function setStatus(message, type = "") {
 }
 
 function resetFields() {
+  window.loginCaptcha?.hide();
   passwordInput.value = "";
   passwordConfirm.value = "";
   submitBtn.disabled = false;
@@ -103,7 +104,7 @@ async function api(path, options = {}) {
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Erro ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(data.error || `Erro ${res.status}`), { data, status: res.status });
   return data;
 }
 
@@ -214,9 +215,10 @@ authForm.addEventListener("submit", async (event) => {
       return;
     }
 
+    if (window.loginCaptcha?.pending()) throw new Error("Confirme que você não é um robô para continuar.");
     const data = await api("/client-auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: emailInput.value, password: passwordInput.value }),
+      body: JSON.stringify({ email: emailInput.value, password: passwordInput.value, turnstileToken: window.loginCaptcha?.token() || "" }),
     });
     saveSession(data);
     if (data.user?.mustChangePassword) {
@@ -231,6 +233,10 @@ authForm.addEventListener("submit", async (event) => {
     redirectAfterLogin(data);
   } catch (err) {
     setStatus(err.message || "Erro ao acessar.", "error");
+    if (err.data?.locked) window.loginCaptcha?.hide();
+    if (err.data?.captchaRequired) {
+      await window.loginCaptcha?.show(document.getElementById("loginCaptcha")).catch((failure) => setStatus(failure.message, "error"));
+    }
   } finally {
     submitBtn.disabled = false;
   }

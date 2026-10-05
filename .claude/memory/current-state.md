@@ -8,7 +8,8 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 - Clientes reais/de teste, orçamentos e PDFs, galerias privadas, seleção persistente, histórico, filtros, busca, "Ver como cliente", CSV da seleção, máscara CPF/CNPJ (`document-mask.js`).
 - Galerias: exclusão em lotes pela Admin API do Cloudinary; seção "Fotos editadas" com conferência por nome de arquivo e "Concluir entrega" (`/private/gallery/complete-delivery`), que apaga os originais da seleção e guarda os nomes em `gallery.deliveredSelection`.
 - Upload de galeria: mantém resolução até 25 MP e busca a maior qualidade JPEG em ~9,9 MB (plano Free: 10 MB e 25 MP); 3 envios simultâneos. Portfólio também envia 3 por vez.
-- Testes: `node --test tests/*.cjs` — 50/50 em 2026-10-05.
+- Proteção de login (admin e cliente, 2026-10-05): após 1 senha errada exige Cloudflare Turnstile; após 5 erros em 24 h a conta bloqueia até salvar nova senha ("Esqueci minha senha"). Contador atômico no D1 (`login_guard:<escopo>:<email>`). O captcha só liga com `TURNSTILE_SECRET_KEY` no Worker e `SITE_KEY` em `login-guard.js`; sem eles, só o bloqueio vale.
+- Testes: `node --test tests/*.cjs` — 51/51 em 2026-10-05.
 
 ## Ainda não validado no uso real
 

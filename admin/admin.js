@@ -311,15 +311,25 @@ loginForm.addEventListener("submit", async (event) => {
   const password = loginPassword.value;
   if (!email || !password) return;
 
+  if (window.loginCaptcha?.pending()) {
+    loginMsg.textContent = "Confirme que você não é um robô para continuar.";
+    return;
+  }
+
   loginBtn.disabled = true;
   loginBtn.textContent = "Entrando...";
   loginMsg.textContent = "";
 
   try {
-    const { res, data } = await postJson("/auth/login", { email, password });
+    const { res, data } = await postJson("/auth/login", { email, password, turnstileToken: window.loginCaptcha?.token() || "" });
     if (!res.ok) {
       loginMsg.textContent = data.error || "E-mail ou senha inválidos.";
-      loginPassword.value = "";
+      // A wrong password clears the field; a missing captcha keeps what was typed.
+      if (res.status !== 403) loginPassword.value = "";
+      if (data.locked) window.loginCaptcha?.hide();
+      if (data.captchaRequired) {
+        await window.loginCaptcha?.show(document.getElementById("loginCaptcha")).catch((err) => { loginMsg.textContent = err.message; });
+      }
       loginPassword.focus();
       return;
     }

@@ -12,3 +12,4 @@
 8. **Secrets fora do Git.** `wrangler.jsonc` guarda bindings e variável pública; chaves de Cloudinary, pagamentos e Resend pertencem aos secrets do Worker.
 9. **Asaas é o único intermediador (2026-10-01).** Mercado Pago removido do código para simplificar e unificar o fluxo; sem chave do ambiente o pagamento falha fechado (503), sem fallback.
 10. **Entrega de editadas substitui a seleção (2026-10-04).** Fotos editadas sobem como fase `final`; "Concluir entrega" (com confirmação, nunca automático) apaga todos os originais da seleção para liberar espaço no Cloudinary. Os nomes escolhidos ficam em `gallery.deliveredSelection`.
+11. **Login protegido por conta, não por IP (2026-10-05).** Turnstile após o primeiro erro e bloqueio no quinto, liberado só por nova senha; e-mails inexistentes seguem o mesmo caminho para não revelar quais contas existem. Custo aceito: quem souber o e-mail pode forçar o bloqueio e obrigar uma redefinição.

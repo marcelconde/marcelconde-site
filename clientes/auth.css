@@ -824,3 +824,12 @@ p {
     gap: 10px;
   }
 }
+
+.login-captcha {
+  min-height: 65px;
+  margin: 4px 0 2px;
+}
+
+.login-captcha[hidden] {
+  display: none;
+}

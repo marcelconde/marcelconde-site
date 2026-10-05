@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
+  <link rel="stylesheet" href="/admin/admin.css?v=20261005-01">
   <link rel="stylesheet" href="/admin/workspace.css?v=20260915-01">
 </head>
 <body class="workspace-page">
@@ -30,6 +30,7 @@
           <button class="toggle-password" id="togglePassword" type="button" aria-label="Mostrar senha">Mostrar</button>
         </div>
 
+        <div class="login-captcha" id="loginCaptcha" hidden></div>
         <button class="btn btn-primary" id="loginBtn" type="submit">Entrar</button>
         <span class="form-msg" id="loginMsg"></span>
         <button class="text-link" id="forgotLink" type="button">Esqueci minha senha</button>
@@ -261,6 +262,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/admin/admin.js?v=20261005-01"></script>
+  <script src="/login-guard.js?v=20261005-01"></script>
+  <script src="/admin/admin.js?v=20261005-02"></script>
 </body>
 </html>

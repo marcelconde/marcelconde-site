@@ -23,7 +23,7 @@ function app() {
   const tasks = [];
   const context = vm.createContext({ crypto: webcrypto, Request, Response, Headers, URL, URLSearchParams, AbortController, TextEncoder, TextDecoder, btoa, atob, console, setTimeout, clearTimeout, fetch: () => { throw Error('Unexpected external request'); } });
   const source = fs.readFileSync(require.resolve('../worker.js'), 'utf8').replace('export default {', 'globalThis.worker = {');
-  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, createMercadoPagoPixPayment, claimAsaasIntent};', context);
+  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, createMercadoPagoPixPayment, claimAsaasIntent, saveClientPassword, saveUserPassword};', context);
   const env = { LIKES_KV: kv, GALLERY_DB: database, ADMIN_KEY: 'local-test-key' };
   const seed = (key, value) => data.set(key, JSON.stringify(value));
   const request = (path, body, token = 'local-test-key') => context.worker.fetch(new Request('https://example.test' + path, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : {body: JSON.stringify(body)}) }), env, {waitUntil(p) { tasks.push(p); }});
@@ -321,4 +321,47 @@ test('completing delivery keeps only edited photos, finalizes the gallery and pr
 
   const csv = await (await a.request('/private/gallery/export-selected?id=g')).text();
   assert.match(csv, /A\.jpg;;a/);
+});
+
+test('login asks for captcha after one wrong password, locks after five and unlocks only with a new password', async () => {
+  const a = app();
+  a.env.TURNSTILE_SECRET_KEY = 'turnstile-secret';
+  const verified = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(url, 'https://challenges.cloudflare.com/turnstile/v0/siteverify');
+    assert.equal(options.body.get('secret'), 'turnstile-secret');
+    verified.push(options.body.get('response'));
+    return new Response(JSON.stringify({ success: options.body.get('response') === 'human' }));
+  };
+  for (const [path, scope, save] of [['/client-auth/login', 'client', a.saveClientPassword], ['/auth/login', 'admin', a.saveUserPassword]]) {
+    const email = scope + '@example.test';
+    await save(a.env, email, 'right-password');
+    const login = async (password, turnstileToken) => {
+      const response = await a.request(path, { email, password, turnstileToken }, '');
+      return { status: response.status, ...(await response.json()) };
+    };
+
+    // The first mistake needs no captcha; a correct login clears the count.
+    assert.deepEqual([(await login('wrong')).status, (await login('wrong')).status], [401, 403]);
+    assert.equal((await login('right-password')).captchaRequired, true);
+    assert.equal((await login('right-password', 'robot')).status, 403);
+    assert.equal((await login('right-password', 'human')).status, 200);
+    assert.equal((await login('wrong')).status, 401);
+
+    // Captcha refusals are not password attempts; five wrong passwords lock the account.
+    assert.equal((await login('wrong')).status, 403);
+    for (let attempt = 2; attempt <= 4; attempt += 1) assert.equal((await login('wrong', 'human')).status, 401);
+    const locking = await login('wrong', 'human');
+    assert.equal(locking.status, 423);
+    assert.equal(locking.locked, true);
+    assert.equal((await login('right-password', 'human')).status, 423);
+
+    await save(a.env, email, 'new-password');
+    assert.equal((await login('right-password')).status, 401);
+    assert.equal((await login('new-password', 'human')).status, 200);
+  }
+  // Unknown e-mails behave like real accounts.
+  const unknown = await a.request('/client-auth/login', { email: 'nobody@example.test', password: 'x' }, '');
+  assert.equal(unknown.status, 401);
+  assert.equal((await unknown.json()).captchaRequired, true);
 });
