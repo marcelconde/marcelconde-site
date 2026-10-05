@@ -30,6 +30,10 @@ Testes: Node 22.13 ou posterior, `node --test tests/*.cjs`. Os testes de banco e
 
 ## Desempenho
 
+O Worker roda com `placement.region = aws:us-east-1`, perto do primário do D1. Medido em 2026-10-04: consulta D1 a partir da borda no Brasil ~140 ms; a partir de us-east-1 ~15 ms. Telas do admin e da galeria fazem várias consultas em sequência, então o ganho supera o salto extra de ida aos EUA (~120 ms por requisição). Se o Asaas de produção recusar IPs fora do Brasil, isolar as rotas de pagamento ou remover o placement.
+
+Uploads de galeria mantêm a resolução original até 25 MP e procuram a maior qualidade JPEG que cabe em ~9,9 MB (limite do plano gratuito: 10 MB e 25 MP). Arquivos dentro dos limites sobem sem reprocessamento. São três transferências simultâneas.
+
 KV tem consistência eventual, cache de leitura e limite de gravações por chave. Não é adequado para substituir repetidamente um array compartilhado a cada clique. D1 resolve a consistência dos registros operacionais; leituras independentes usam paralelismo e o admin usa a resposta do salvamento sem buscar tudo outra vez.
 
 Upload continua dependente da conexão, tamanho das fotos e Cloudinary. A compressão agora encerra na primeira versão que cabe no limite; antes podia continuar reprocessando uma foto mesmo após obter arquivo adequado. Não foi contratado aumento de limite ou plano do Cloudinary.

@@ -2,6 +2,11 @@
   "name": "cloudinary",
   "main": "worker.js",
   "compatibility_date": "2026-01-12",
+  // Run next to the D1 primary (Eastern North America): each query drops from
+  // ~140 ms (Brazil edge) to ~15 ms; requests pay one forwarding hop instead.
+  "placement": {
+    "region": "aws:us-east-1"
+  },
   "kv_namespaces": [
     {
       "binding": "LIKES_KV",

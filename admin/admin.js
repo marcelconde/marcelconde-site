@@ -806,7 +806,8 @@ uploadBtn.addEventListener("click", async () => {
   uploadBtn.textContent = "Enviando...";
 
   try {
-    for (const [index, file] of files.entries()) {
+    // Three transfers at a time; the upload link, not the browser, is the bottleneck.
+    await mapLimit(files, 3, async (file, index) => {
       const typedName = singleDisplayName.value.trim();
       const displayName = files.length === 1 && typedName ? typedName : fileBaseName(file.name);
 
@@ -829,7 +830,7 @@ uploadBtn.addEventListener("click", async () => {
       }
 
       setQueueProgress(file.name, 100);
-    }
+    });
 
     await workerFetch("/admin/clear-cache", {
       method: "POST",
@@ -940,7 +941,6 @@ async function deleteImage(image) {
     updateStats();
 
     showToast("Imagem excluída.");
-    await selectAlbum(state.selectedPath);
   } catch (err) {
     showToast(err.message || "Erro ao excluir imagem.");
   }

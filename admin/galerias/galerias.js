@@ -1,8 +1,10 @@
 const CONFIG = {
   workerUrl: "https://api.marcelconde.com.br",
   tokenKey: "mc_admin_token",
+  // Free plan limits: 10 MB (10,485,760 bytes) and 25 megapixels per image.
   cloudinaryUploadLimit: 10 * 1024 * 1024,
-  cloudinaryUploadTarget: 8.8 * 1024 * 1024,
+  cloudinaryUploadTarget: 10 * 1024 * 1024 - 128 * 1024,
+  cloudinaryMaxPixels: 25000000,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -190,53 +192,77 @@ function canvasToBlob(canvas, quality) {
   });
 }
 
-async function compressImageFile(file, maxEdge, quality) {
-  const img = await loadImageFile(file);
-  const longestSide = Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height);
-  const scale = Math.min(1, maxEdge / longestSide);
-  const width = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
-  const height = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
+// Reads width/height from the JPEG or PNG header without decoding the photo.
+async function readImageSize(file) {
+  const view = new DataView(await file.slice(0, 512 * 1024).arrayBuffer());
+  if (view.byteLength >= 24 && view.getUint32(0) === 0x89504e47) {
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null;
+  let offset = 2;
+  while (offset + 9 < view.byteLength) {
+    if (view.getUint8(offset) !== 0xff) return null;
+    const marker = view.getUint8(offset + 1);
+    if (marker === 0xff) { offset += 1; continue; }
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+      return { height: view.getUint16(offset + 5), width: view.getUint16(offset + 7) };
+    }
+    offset += 2 + view.getUint16(offset + 2);
+  }
+  return null;
+}
+
+function drawScaled(img, scale) {
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = Math.max(1, Math.round((img.naturalWidth || img.width) * scale));
+  canvas.height = Math.max(1, Math.round((img.naturalHeight || img.height) * scale));
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(img, 0, 0, width, height);
-  return canvasToBlob(canvas, quality);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
 }
 
+// Keeps the original resolution (up to 25 MP) and searches for the highest JPEG
+// quality that still fits the upload limit, so photos stay as close to 10 MB as possible.
 async function preparePhotoForCloudinary(file, onStatus = () => {}) {
-  if (file.size <= CONFIG.cloudinaryUploadTarget) return file;
+  const target = CONFIG.cloudinaryUploadTarget;
+  const size = await readImageSize(file).catch(() => null);
+  const pixels = size ? size.width * size.height : 0;
+  if (size && file.size <= target && pixels <= CONFIG.cloudinaryMaxPixels) return file;
   if (!file.type.startsWith("image/")) {
+    if (file.size <= target) return file;
     throw new Error(`${file.name} tem ${formatFileSize(file.size)} e passa do limite de 10 MB do Cloudinary.`);
   }
 
-  onStatus(`Arquivo com ${formatFileSize(file.size)}. Otimizando para caber no limite de 10 MB...`);
+  const img = await loadImageFile(file);
+  const width = img.naturalWidth || img.width;
+  const height = img.naturalHeight || img.height;
+  if (file.size <= target && width * height <= CONFIG.cloudinaryMaxPixels) return file;
 
-  const attempts = [
-    { maxEdge: 6400, quality: 0.92 },
-    { maxEdge: 6000, quality: 0.9 },
-    { maxEdge: 5600, quality: 0.9 },
-    { maxEdge: 5200, quality: 0.88 },
-    { maxEdge: 4800, quality: 0.88 },
-    { maxEdge: 4400, quality: 0.86 },
-    { maxEdge: 4000, quality: 0.84 },
-    { maxEdge: 3600, quality: 0.82 },
-    { maxEdge: 3200, quality: 0.8 },
-    { maxEdge: 2800, quality: 0.8 },
-    { maxEdge: 2400, quality: 0.8 },
-  ];
-
-  for (const attempt of attempts) {
-    const blob = await compressImageFile(file, attempt.maxEdge, attempt.quality);
-    if (blob.size <= CONFIG.cloudinaryUploadTarget) {
-      onStatus(`Otimizada para ${formatFileSize(blob.size)} com ${Math.round(attempt.quality * 100)}% de qualidade.`);
-      return new File([blob], jpgFileName(file.name), { type: "image/jpeg", lastModified: file.lastModified });
+  onStatus(`Arquivo com ${formatFileSize(file.size)}. Ajustando ao limite do Cloudinary com a menor perda possível...`);
+  let scale = Math.min(1, Math.sqrt((CONFIG.cloudinaryMaxPixels * 0.995) / (width * height)));
+  for (let attempt = 0; attempt < 6; attempt += 1, scale *= 0.9) {
+    const canvas = drawScaled(img, scale);
+    let best = await canvasToBlob(canvas, 0.98);
+    if (best.size > target) {
+      const floor = await canvasToBlob(canvas, 0.8);
+      if (floor.size > target) continue;
+      best = floor;
+      let low = 0.8;
+      let high = 0.98;
+      for (let step = 0; step < 5; step += 1) {
+        const quality = (low + high) / 2;
+        const blob = await canvasToBlob(canvas, quality);
+        if (blob.size <= target) { best = blob; low = quality; } else high = quality;
+      }
     }
+    const megapixels = (canvas.width * canvas.height / 1e6).toFixed(1).replace(".", ",");
+    onStatus(`Ajustada para ${formatFileSize(best.size)} · ${megapixels} MP.`);
+    return new File([best], jpgFileName(file.name), { type: "image/jpeg", lastModified: file.lastModified });
   }
 
-  throw new Error(`${file.name} continua acima de 10 MB mesmo mantendo 80% de qualidade. Exporte em JPG menor ou use um limite maior no Cloudinary.`);
+  throw new Error(`${file.name} continua acima de 10 MB mesmo reduzida. Exporte em JPG menor.`);
 }
 
 function formatPercent(value) {
@@ -1192,6 +1218,23 @@ function uploadToCloudinary(signature, file, onProgress) {
   });
 }
 
+async function uploadGalleryPhoto({ file, id, galleryId, phase }) {
+  for (let attempt = 0; ; attempt += 1) {
+    const uploadFile = await preparePhotoForCloudinary(file, message => setQueueNote(id, message));
+    const signature = await getJson("/private/gallery/upload-signature", {
+      method: "POST", body: JSON.stringify({ galleryId, displayName: fileBaseName(file.name), phase }),
+    });
+    try {
+      return await uploadToCloudinary(signature, uploadFile, percent => setQueueProgress(id, percent));
+    } catch (err) {
+      // If the account limit is lower than assumed, Cloudinary reports it; adjust once and retry.
+      const limit = Number((String(err.message).match(/Maximum is (\d+)/) || [])[1]);
+      if (attempt || !limit || limit - 128 * 1024 >= CONFIG.cloudinaryUploadTarget) throw err;
+      CONFIG.cloudinaryUploadTarget = limit - 128 * 1024;
+    }
+  }
+}
+
 async function startUploads(queue, button) {
   if (!state.selectedGallery || state.uploading) return;
   state.uploading = true;
@@ -1200,7 +1243,7 @@ async function startUploads(queue, button) {
   button.textContent = "Enviando...";
   renderQueue();
   renderFinalDelivery();
-  // Transfers overlap; registration stays ordered to preserve gallery metadata.
+  // Three transfers overlap; registration stays ordered to preserve gallery metadata.
   let registration = Promise.resolve();
   const consume = async () => {
     let item;
@@ -1210,11 +1253,7 @@ async function startUploads(queue, button) {
       try {
         if (!item.uploaded) {
           setQueueProgress(id, 12);
-          const uploadFile = await preparePhotoForCloudinary(file, message => setQueueNote(id, message));
-          const signature = await getJson("/private/gallery/upload-signature", {
-            method: "POST", body: JSON.stringify({ galleryId, displayName: fileBaseName(file.name), phase }),
-          });
-          item.uploaded = await uploadToCloudinary(signature, uploadFile, percent => setQueueProgress(id, percent));
+          item.uploaded = await uploadGalleryPhoto(item);
         }
         const uploaded = item.uploaded;
         const register = registration.then(() => getJson("/private/gallery/register-image", {
@@ -1242,7 +1281,7 @@ async function startUploads(queue, button) {
     }
   };
   try {
-    await Promise.all([consume(), consume()]);
+    await Promise.all([consume(), consume(), consume()]);
     const failed = state.uploads.filter(item => item.queue === queue && item.status === "error").length;
     showToast(failed ? `${failed} foto(s) falharam. Envie novamente para tentar só as pendentes.` : "Upload concluído.");
   } finally {
