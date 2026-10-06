@@ -16,15 +16,17 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 - Exclusão em lotes e "Concluir entrega": testadas com simulação e tela local. A galeria `gal_OFvN_CL1W9R7` ("Cobertura colocação de grau") tem 50 fotos não selecionadas já apagadas no Cloudinary com registro órfão; "Remover não selecionadas" deve limpar (`not_found` conta como removida).
 - Melhora de velocidade do admin: medida no servidor, falta Marcel confirmar.
 
-## Pagamentos (bloqueado)
+## Pagamentos (conta Asaas nova em configuração)
 
-- Clientes reais não conseguem pagar: o Asaas de produção responde `403 not_allowed_ip` para qualquer IP, inclusive do Mac residencial (Algar, BR). Lista de IPs da conta está vazia; provável restrição herdada da Fotop (validação de saque aponta para fotop.com.br). Aguardando suporte Asaas.
-- `ASAAS_API_KEY` no Worker hoje tem valor inválido; regravar após liberação. Webhook de produção "marcelconde.com.br - site" já criado (v3, não sequencial, eventos de cobrança).
+- Clientes reais ainda não conseguem pagar. Marcel abriu uma conta Asaas nova só para o site; a antiga fica só com a Fotop (nela a produção respondia `403 not_allowed_ip` para qualquer IP).
+- Conta nova vista em 2026-10-05: cadastro "Em análise", nenhum webhook salvo, Sandbox ainda não criado nela. Ainda não testada pela API (não se sabe se aceita chamadas de `us-east-1`).
+- `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` do Worker não pertencem à conta nova; regravar. O webhook "marcelconde.com.br - site" criado antes está na conta antiga.
 - Branch `asaas-only` (não mesclada) remove o Mercado Pago. Ela partiu de `8cbf660`; a `main` avançou (lotes, entrega, placement) — refazer o merge com cuidado em `worker.js` e nos testes.
 - D1 tinha só 2 cobranças Mercado Pago, ambas `rejected` (2026-10-01).
 
 ## Ambiente
 
-- Pode haver trabalho local não enviado no PC Windows; compare antes de tarefas entre máquinas.
+- PC Windows (2026-10-05): há um início da integração Lightroom sem commit, de 2026-09-26 (botão "Levar seleção ao Lightroom" no admin, `tools/lightroom/`, `docs/lightroom-classic.md`, testes); aguarda Marcel decidir se vai para uma branch `lightroom-wip`. Node não está instalado lá, então os testes não rodam nesse PC.
+- O navegador interno do Claude no Windows fica logado na conta Asaas nova; a aba "Chaves de API" é bloqueada para o Claude.
 
 Referências: `architecture.md`, `decisions.md`, `bugs.md`, `docs/`.
