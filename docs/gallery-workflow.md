@@ -42,7 +42,7 @@ Referência: https://developers.cloudflare.com/kv/concepts/how-kv-works/
 
 ## Pagamentos
 
-Cobranças usam somente Asaas: produção para clientes reais e Sandbox para clientes de teste. O checkout hospedado mostra os meios habilitados na conta; a API de cobrança permite Pix, boleto e cartão de crédito, mas não oferece débito nesse fluxo. Implantação, secrets e validação: `docs/asaas-payments.md`.
+Cobranças usam somente Asaas: produção para clientes reais e Sandbox para clientes de teste. Fotos extras mostram o QR Code Pix na própria galeria e oferecem cartão na página do Asaas, sem boleto; orçamentos usam o checkout hospedado com os meios habilitados na conta. Implantação, secrets e validação: `docs/asaas-payments.md`.
 
 Cobranças pendentes de fotos extras podem ser canceladas na galeria pelo cliente ou na seção Seleção do admin. O cancelamento confirma o estado com o provedor, encerra apenas a cobrança escolhida e preserva as fotos marcadas; o cliente pode retirar algumas e gerar uma nova cobrança. Pagamentos aprovados não usam esse fluxo.
 

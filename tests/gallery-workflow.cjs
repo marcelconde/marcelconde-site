@@ -153,6 +153,88 @@ test('client cancels only the pending Asaas charge for its gallery, then can cha
   assert.equal(await a.claimAsaasIntent(a.env, 'gallery:g', { id: 'pay_new' }), true);
 });
 
+// Minimal Asaas double holding one charge, so tests can follow what happens to it.
+function asaasCharges(a, { refusePix = false } = {}) {
+  const remote = { charge: null, calls: [] };
+  const reply = (body, status = 200) => new Response(JSON.stringify(body), { status });
+  a.env.ASAAS_SANDBOX_API_KEY = 'sandbox-test-key';
+  a.seed('private_client:c', { id: 'c', name: 'Client', email: 'client@example.test', isTest: true });
+  a.seed('private_gallery:g', { id: 'g', slug: 'race', clientId: 'c', title: 'Race', selectionLimit: 0, extraPhotoPriceCents: 1000, status: 'selection' });
+  a.context.fetch = async (url, options = {}) => {
+    const method = options.method || 'GET';
+    const body = options.body ? JSON.parse(options.body) : null;
+    remote.calls.push(method + ' ' + new URL(url).pathname.replace('/v3', ''));
+    if (url.includes('/customers?')) return reply({ data: [] });
+    if (url.endsWith('/customers')) return reply({ id: 'cus_1' });
+    if (url.includes('/payments?')) return reply({ data: remote.charge ? [remote.charge] : [] });
+    if (refusePix && body?.billingType === 'PIX') return reply({ errors: [{ description: 'Pix indisponível' }] }, 400);
+    if (url.endsWith('/payments')) {
+      remote.charge = { ...body, id: 'pay_remote', status: 'PENDING', invoiceUrl: 'https://sandbox.asaas.com/i/remote' };
+    } else if (url.endsWith('/payments/pay_remote/pixQrCode')) {
+      assert.equal(remote.charge.billingType, 'PIX');
+      return reply({ encodedImage: 'QUJD', payload: '000201pix' });
+    } else if (method === 'PUT') {
+      assert.deepEqual([body.value, body.dueDate], [remote.charge.value, remote.charge.dueDate]);
+      remote.charge = { ...remote.charge, billingType: body.billingType };
+    } else assert.match(url, /\/payments\/pay_remote$/);
+    return reply(remote.charge);
+  };
+  return remote;
+}
+
+test('a gallery charge opens as Pix with its QR Code and switches to card and back on the same charge', async () => {
+  const a = app();
+  const remote = asaasCharges(a);
+  const post = async (path, body, token = 'client-token') => {
+    const response = await a.request(path, body, token);
+    return { status: response.status, ...(await response.json()) };
+  };
+  const created = await post('/client-gallery/payment/create', { slug: 'race', document: '12345678901' });
+  assert.equal(created.status, 200, created.error);
+  const { id } = created.payment;
+  assert.deepEqual([created.payment.billingType, created.payment.qrCode, created.payment.qrCodeBase64], ['PIX', '000201pix', 'QUJD']);
+  assert.equal(created.payment.ticketUrl, 'https://sandbox.asaas.com/i/remote');
+  // The QR Code is never stored and page loads do not ask Asaas for it.
+  assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:' + id, null)).qrCode, undefined);
+  const current = path => a.request(path, undefined, 'client-token').then(response => response.json());
+  assert.equal((await current('/client-gallery/payment/current?slug=race')).payment.qrCode, '');
+  assert.equal((await current('/client-gallery/payment/current?slug=race&qr=1')).payment.qrCode, '000201pix');
+
+  assert.equal((await post('/client-gallery/payment/method', { slug: 'race', paymentId: id, method: 'card' }, 'wrong')).status, 401);
+  assert.equal((await post('/client-gallery/payment/method', { slug: 'race', paymentId: id, method: 'boleto' })).status, 400);
+  assert.equal((await post('/client-gallery/payment/method', { slug: 'race', paymentId: 'other', method: 'card' })).status, 409);
+  assert.equal(remote.charge.billingType, 'PIX');
+
+  const card = await post('/client-gallery/payment/method', { slug: 'race', paymentId: id, method: 'card' });
+  assert.deepEqual([card.status, card.payment.billingType, card.payment.qrCode], [200, 'CREDIT_CARD', '']);
+  assert.equal(remote.charge.billingType, 'CREDIT_CARD');
+  const pix = await post('/client-gallery/payment/method', { slug: 'race', paymentId: id, method: 'pix' });
+  assert.deepEqual([pix.status, pix.payment.billingType, pix.payment.qrCode], [200, 'PIX', '000201pix']);
+  assert.equal(remote.calls.filter(call => call === 'POST /payments').length, 1);
+
+  // A paid charge can no longer change method.
+  remote.charge.status = 'RECEIVED';
+  assert.equal((await post('/client-gallery/payment/method', { slug: 'race', paymentId: id, method: 'card' })).status, 409);
+  assert.equal(remote.charge.billingType, 'PIX');
+});
+
+test('when Asaas refuses Pix the sale falls back to one card charge', async () => {
+  const a = app();
+  const remote = asaasCharges(a, { refusePix: true });
+  const post = async (path, body) => {
+    const response = await a.request(path, body, 'client-token');
+    return { status: response.status, ...(await response.json()) };
+  };
+  const created = await post('/client-gallery/payment/create', { slug: 'race', document: '12345678901' });
+  assert.equal(created.status, 200, created.error);
+  assert.deepEqual([created.payment.billingType, created.payment.qrCode], ['CREDIT_CARD', '']);
+  assert.equal(remote.calls.filter(call => call === 'POST /payments').length, 2);
+  const pix = await post('/client-gallery/payment/method', { slug: 'race', paymentId: created.payment.id, method: 'pix' });
+  assert.equal(pix.status, 502);
+  assert.match(pix.error, /Pix indisponível/);
+  assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:' + created.payment.id, null)).billingType, 'CREDIT_CARD');
+});
+
 test('legacy Mercado Pago records never block selection nor reach a provider', async () => {
   const a = app();
   const payment = {

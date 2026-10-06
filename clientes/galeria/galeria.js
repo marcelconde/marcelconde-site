@@ -64,8 +64,12 @@ const paymentCard = paymentModal.querySelector(".payment-card");
 const paymentClose = document.getElementById("paymentClose");
 const paymentDescription = document.getElementById("paymentDescription");
 const paymentSuccess = document.getElementById("paymentSuccess");
+const paymentPending = document.getElementById("paymentPending");
+const paymentPix = document.getElementById("paymentPix");
+const paymentHosted = document.getElementById("paymentHosted");
+const paymentHostedText = document.getElementById("paymentHostedText");
+const paymentSwitch = document.getElementById("paymentSwitch");
 const paymentQr = document.getElementById("paymentQr");
-const paymentCopy = paymentModal.querySelector(".payment-copy");
 const paymentCode = document.getElementById("paymentCode");
 const copyPaymentCode = document.getElementById("copyPaymentCode");
 const paymentStatus = document.getElementById("paymentStatus");
@@ -781,16 +785,63 @@ function openPaymentModal(payment, pricing) {
   state.payment = payment;
   paymentSandboxNotice.classList.toggle("hidden", payment.environment !== "sandbox");
   paymentDescription.textContent = `${pricing.additionalSelection ? "Total adicional das fotos extras" : "Total das fotos extras"}: ${formatCurrency(payment.amountCents || pricing.totalCents || 0)}. Depois do pagamento aprovado, sua seleção será confirmada automaticamente.`;
-  const hosted = Boolean(payment.ticketUrl && !payment.qrCode);
-  paymentOpenLink.classList.toggle("hidden", !hosted);
-  if (hosted) paymentOpenLink.href = payment.ticketUrl;
-  paymentQr.innerHTML = payment.qrCodeBase64
-    ? `<img src="data:image/png;base64,${escapeHtml(payment.qrCodeBase64)}" alt="QR Code Pix">`
-    : hosted ? `<span>Escolha a forma de pagamento disponível na página segura do Asaas.</span>` : `<span>Use o código Pix abaixo.</span>`;
-  paymentCode.value = payment.qrCode || "";
+  renderPaymentMethod();
   setPaymentModalState("pending");
   paymentModal.classList.remove("hidden");
   startPaymentPolling(payment.id);
+}
+
+// Pix shows its QR Code here; card (and Pix without a QR Code) continues on the Asaas page.
+function renderPaymentMethod() {
+  const payment = state.payment || {};
+  const pix = Boolean(payment.qrCode);
+  const card = payment.billingType === "CREDIT_CARD";
+  paymentPix.classList.toggle("hidden", !pix);
+  paymentHosted.classList.toggle("hidden", pix);
+  paymentQr.innerHTML = payment.qrCodeBase64
+    ? `<img src="data:image/png;base64,${escapeHtml(payment.qrCodeBase64)}" alt="QR Code Pix">`
+    : "";
+  paymentQr.classList.toggle("hidden", !payment.qrCodeBase64);
+  paymentCode.value = payment.qrCode || "";
+  paymentHostedText.textContent = card
+    ? "Pague com cartão na página segura do Asaas. A confirmação aparece aqui automaticamente."
+    : payment.billingType === "PIX"
+      ? "Não foi possível carregar o QR Code agora. Abra a página segura do Asaas para pagar com Pix."
+      : "Conclua o pagamento na página segura do Asaas.";
+  paymentOpenLink.textContent = card ? "Abrir pagamento com cartão" : "Abrir pagamento";
+  if (/^https:\/\//.test(payment.ticketUrl || "")) paymentOpenLink.href = payment.ticketUrl;
+  else paymentOpenLink.removeAttribute("href");
+  paymentSwitch.dataset.method = payment.billingType === "PIX" ? "card" : "pix";
+  paymentSwitch.textContent = paymentSwitch.dataset.method === "card" ? "Pagar com cartão" : "Pagar com Pix";
+}
+
+async function changePaymentMethod() {
+  const payment = state.payment;
+  const method = paymentSwitch.dataset.method;
+  if (!payment?.id || !method) return;
+  // Opened during the click so the browser allows it; the address arrives after Asaas answers.
+  const tab = method === "card" ? window.open("", "_blank") : null;
+  paymentSwitch.disabled = true;
+  paymentSwitch.textContent = "Preparando...";
+  try {
+    const data = await api("/client-gallery/payment/method", {
+      method: "POST",
+      body: JSON.stringify({ slug, paymentId: payment.id, method }),
+    });
+    if (state.payment?.id !== payment.id) throw new Error("A cobrança mudou. Abra o pagamento novamente.");
+    state.payment = data.payment;
+    state.pendingPayment = data.payment;
+    if (tab && /^https:\/\//.test(data.payment.ticketUrl || "")) {
+      tab.opener = null;
+      tab.location.replace(data.payment.ticketUrl);
+    } else tab?.close();
+  } catch (err) {
+    tab?.close();
+    showToast(err.message || "Não foi possível mudar a forma de pagamento.");
+  } finally {
+    paymentSwitch.disabled = false;
+    renderPaymentMethod();
+  }
 }
 
 function setPaymentModalState(status, message = "") {
@@ -800,11 +851,7 @@ function setPaymentModalState(status, message = "") {
   paymentCard.classList.toggle("is-approved", approved);
   paymentCard.classList.toggle("is-rejected", rejected);
   paymentSuccess.classList.toggle("hidden", !approved);
-  const hosted = Boolean(state.payment?.ticketUrl && !state.payment?.qrCode);
-  paymentQr.classList.toggle("hidden", approved || rejected);
-  paymentCopy.classList.toggle("hidden", approved || rejected || hosted);
-  copyPaymentCode.classList.toggle("hidden", approved || rejected || hosted);
-  paymentOpenLink.classList.toggle("hidden", approved || rejected || !hosted);
+  paymentPending.classList.toggle("hidden", approved || rejected);
   paymentCancel.classList.toggle("hidden", approved || rejected || !state.payment?.providerPaymentId);
   paymentStatus.classList.toggle("is-approved", approved);
   paymentStatus.classList.toggle("is-rejected", rejected);
@@ -906,7 +953,7 @@ async function createPixPayment(existingDocument = "") {
 pendingPaymentBtn.addEventListener("click", async () => {
   pendingPaymentBtn.disabled = true;
   try {
-    const data = await api(`/client-gallery/payment/current?slug=${encodeURIComponent(slug)}`);
+    const data = await api(`/client-gallery/payment/current?slug=${encodeURIComponent(slug)}&qr=1`);
     const payment = data.payment;
     state.pendingPayment = payment || null;
     renderHeader();
@@ -1016,16 +1063,19 @@ paymentClose.addEventListener("click", closePaymentModal);
 paymentModal.addEventListener("click", (event) => {
   if (event.target === paymentModal) closePaymentModal();
 });
+paymentSwitch.addEventListener("click", changePaymentMethod);
+paymentCode.addEventListener("focus", () => paymentCode.select());
 copyPaymentCode.addEventListener("click", async () => {
   if (!paymentCode.value) return;
   try {
     await navigator.clipboard.writeText(paymentCode.value);
-    showToast("Código Pix copiado.");
   } catch {
     paymentCode.select();
     document.execCommand("copy");
-    showToast("Código Pix copiado.");
   }
+  copyPaymentCode.textContent = "Copiado";
+  setTimeout(() => { copyPaymentCode.textContent = "Copiar"; }, 2000);
+  showToast("Código Pix copiado.");
 });
 
 downloadAllBtn.addEventListener("click", async () => {

@@ -3053,6 +3053,7 @@ function publicPayment(payment = {}) {
     status: payment.status,
     amountCents: payment.amountCents || 0,
     providerPaymentId: payment.providerPaymentId || "",
+    billingType: payment.billingType || "",
     qrCode: payment.qrCode || "",
     qrCodeBase64: payment.qrCodeBase64 || "",
     ticketUrl: payment.ticketUrl || "",
@@ -3138,7 +3139,31 @@ function validateAsaasCharge(charge, payment, customer) {
     || Math.round(Number(charge.value) * 100) !== payment.amountCents) {
     throw new Error("Cobrança Asaas existente não corresponde ao pagamento solicitado.");
   }
-  return { providerPaymentId: charge.id, ticketUrl: charge.invoiceUrl, providerStatus: charge.status || "PENDING" };
+  return {
+    providerPaymentId: charge.id, ticketUrl: charge.invoiceUrl,
+    providerStatus: charge.status || "PENDING", billingType: charge.billingType || "",
+  };
+}
+
+// The QR Code is read from Asaas whenever the client opens the payment and is
+// never stored: Asaas issues a new one each time the charge is updated.
+async function asaasPixQr(env, payment) {
+  try {
+    const qr = await asaasRequest(env, payment.environment,
+      `/payments/${encodeURIComponent(payment.providerPaymentId)}/pixQrCode`);
+    const image = String(qr.encodedImage || "");
+    if (!qr.payload || !image || image.length > 200000 || !/^[A-Za-z0-9+/=]+$/.test(image)) return {};
+    return { qrCode: String(qr.payload), qrCodeBase64: image };
+  } catch (err) {
+    console.error("Asaas Pix QR error:", err);
+    return {};
+  }
+}
+
+async function publicPaymentWithPix(env, payment) {
+  const pix = payment.status === "pending" && payment.billingType === "PIX" && payment.providerPaymentId
+    ? await asaasPixQr(env, payment) : {};
+  return publicPayment({ ...payment, ...pix });
 }
 
 async function findAsaasCharge(env, payment, client, document = "") {
@@ -3148,7 +3173,7 @@ async function findAsaasCharge(env, payment, client, document = "") {
   return { customer, charge };
 }
 
-async function createAsaasCharge(env, payment, client, document = "") {
+async function createAsaasCharge(env, payment, client, document = "", billingType = "UNDEFINED") {
   if (!Number.isSafeInteger(payment.amountCents) || payment.amountCents < 500) {
     throw new Error("O Asaas exige valor mínimo de R$ 5,00 por cobrança.");
   }
@@ -3163,17 +3188,28 @@ async function createAsaasCharge(env, payment, client, document = "") {
     throw err;
   }
   const dueDate = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
-  const charge = existing || await asaasRequest(env, payment.environment, "/payments", {
+  const create = (type) => asaasRequest(env, payment.environment, "/payments", {
     method: "POST",
     body: JSON.stringify({
       customer,
-      billingType: "UNDEFINED",
+      billingType: type,
       value: Number((payment.amountCents / 100).toFixed(2)),
       dueDate,
       description: String(payment.description || "Pagamento Marcel Conde Fotografia").slice(0, 500),
       externalReference: payment.id,
     }),
   });
+  let charge = existing;
+  if (!charge) {
+    try {
+      charge = await create(billingType);
+    } catch (err) {
+      // Pix depends on the Asaas account (key, approval). A refused POST created
+      // no charge, so the card page can replace it without risking a duplicate.
+      if (billingType !== "PIX" || !err.definitiveFailure) throw err;
+      charge = await create("CREDIT_CARD");
+    }
+  }
   return validateAsaasCharge(charge, payment, customer);
 }
 
@@ -3529,6 +3565,48 @@ async function cancelGalleryPayment(env, request, gallery, paymentId, actor) {
       }, actor);
     } catch (err) { console.error("Gallery cancellation event error:", err); }
     return cancelled;
+  });
+  if (result?.reason === "reconciliation_in_progress") paymentConflict("A cobrança está sendo atualizada. Tente novamente em instantes.");
+  return result;
+}
+
+// Pix and card share one Asaas charge: changing its billing type keeps a single
+// payable charge and leaves boleto out of the hosted page.
+async function changeGalleryPaymentMethod(env, gallery, paymentId, method) {
+  const billingType = method === "pix" ? "PIX" : method === "card" ? "CREDIT_CARD" : "";
+  if (!billingType) throw Object.assign(new Error("Forma de pagamento inválida."), { status: 400 });
+  if (!env.GALLERY_DB) throw Object.assign(new Error("Pagamento temporariamente indisponível."), { status: 503 });
+  const key = privateGalleryPaymentKey(paymentId);
+  const stored = await readKvJson(env, key, null);
+  if (!stored || stored.galleryId !== gallery.id) paymentConflict("Cobrança não encontrada nesta galeria.");
+  if (stored.provider !== "asaas" || stored.status !== "pending" || !stored.providerPaymentId
+    || !["sandbox", "production"].includes(stored.environment)) {
+    paymentConflict("Esta cobrança não está pendente. Atualize a página.");
+  }
+
+  const result = await withPaymentReconciliationLock(env, stored.environment, stored.providerPaymentId, async () => {
+    const payment = await readKvJson(env, key, null);
+    if (payment?.status !== "pending" || payment.providerPaymentId !== stored.providerPaymentId) {
+      paymentConflict("Esta cobrança mudou de estado. Atualize a página.");
+    }
+    const active = await getCurrentGalleryPayment(env, gallery.id);
+    if (active?.id !== paymentId) paymentConflict("Esta cobrança não é mais a cobrança pendente da galeria.");
+    const path = `/payments/${encodeURIComponent(payment.providerPaymentId)}`;
+    const charge = await asaasRequest(env, payment.environment, path);
+    if (charge.id !== payment.providerPaymentId || charge.externalReference !== payment.id
+      || Math.round(Number(charge.value) * 100) !== payment.amountCents) {
+      paymentConflict("Dados da cobrança divergentes. Entre em contato.");
+    }
+    if (!["PENDING", "OVERDUE"].includes(charge.status)) {
+      paymentConflict("Esta cobrança não pode mais mudar de forma de pagamento. Atualize a página.");
+    }
+    const updated = charge.billingType === billingType ? charge : await asaasRequest(env, payment.environment, path, {
+      method: "PUT",
+      body: JSON.stringify({ billingType, value: charge.value, dueDate: charge.dueDate }),
+    });
+    const saved = { ...payment, ...validateAsaasCharge(updated, payment, charge.customer), updatedAt: new Date().toISOString() };
+    await writeKvJson(env, key, saved);
+    return saved;
   });
   if (result?.reason === "reconciliation_in_progress") paymentConflict("A cobrança está sendo atualizada. Tente novamente em instantes.");
   return result;
@@ -4399,7 +4477,7 @@ export default {
       }
       if (latest?.status === "pending" && latest.amountCents === pricing.totalCents
         && JSON.stringify(latest.selectedPublicIds || []) === JSON.stringify([...new Set(selection)])) {
-        return json({ ok: true, paymentRequired: true, pricing, payment: publicPayment(latest) }, 200, { "Cache-Control": "no-store" });
+        return json({ ok: true, paymentRequired: true, pricing, payment: await publicPaymentWithPix(env, latest) }, 200, { "Cache-Control": "no-store" });
       }
       if (latest && ["pending", "creating", "approved"].includes(latest.status)) {
         return errorJson("Já existe cobrança para esta galeria. Conclua ou cancele o pagamento antes de mudar a seleção.", 409);
@@ -4436,7 +4514,7 @@ export default {
       }
       await writeKvJson(env, privateGalleryPaymentKey(payment.id), { ...payment, status: "creating" });
       try {
-        const charge = await createAsaasCharge(env, payment, access.linkedClient, body.document);
+        const charge = await createAsaasCharge(env, payment, access.linkedClient, body.document, "PIX");
         const saved = { ...payment, ...charge, status: "pending" };
         await writeKvJson(env, privateGalleryPaymentKey(payment.id), saved);
         await writeKvJson(env, asaasPaymentKey(charge.providerPaymentId, environment), { kind: "gallery", id: payment.id });
@@ -4445,7 +4523,7 @@ export default {
         await appendPrivateGalleryEvent(env, request, gallery.id, "pagamento_criado", {
           paymentId: payment.id, providerPaymentId: charge.providerPaymentId, pricing,
         }, access.client);
-        return json({ ok: true, paymentRequired: true, pricing, payment: publicPayment(saved) }, 200, { "Cache-Control": "no-store" });
+        return json({ ok: true, paymentRequired: true, pricing, payment: await publicPaymentWithPix(env, saved) }, 200, { "Cache-Control": "no-store" });
       } catch (err) {
         console.error("Asaas gallery charge error:", err);
         await rejectFailedAsaasCreation(env, scope, payment, privateGalleryPaymentKey(payment.id), err);
@@ -4464,11 +4542,34 @@ export default {
       const payment = await getCurrentGalleryPayment(env, gallery.id);
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
+      const visible = payment && ["creating", "pending", "approved"].includes(payment.status) ? payment : null;
       return json({
         ok: true,
-        payment: payment && ["creating", "pending", "approved"].includes(payment.status) ? publicPayment(payment) : null,
+        // Only the open payment window needs the QR Code; page loads skip the Asaas request.
+        payment: visible && (url.searchParams.get("qr") === "1" ? await publicPaymentWithPix(env, visible) : publicPayment(visible)),
         pricing: calculateSelectionPricing(gallery, images, selection),
       }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/client-gallery/payment/method" && request.method === "POST") {
+      const body = await readJson(request);
+      const gallery = await getPrivateGalleryBySlug(env, slugify(body.slug || ""));
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      const access = await requireClientGalleryAccess(request, env, gallery);
+      if (access.error) return access.error;
+      const method = String(body.method || "");
+      try {
+        const payment = await changeGalleryPaymentMethod(env, gallery, String(body.paymentId || "").trim(), method);
+        return json({ ok: true, payment: await publicPaymentWithPix(env, payment) }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        if ([400, 409, 503].includes(err.status) && !String(err.message).startsWith("Asaas ")) {
+          return errorJson(err.message, err.status);
+        }
+        console.error("Gallery payment method error:", err);
+        return errorJson(method === "pix"
+          ? "Pix indisponível no momento. Pague com cartão ou tente novamente mais tarde."
+          : "Não foi possível abrir o pagamento com cartão. Tente novamente.", 502);
+      }
     }
 
     if (url.pathname === "/client-gallery/payment/cancel" && request.method === "POST") {

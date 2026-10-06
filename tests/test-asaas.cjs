@@ -169,6 +169,7 @@ test('test clients charge Sandbox and real clients charge production with separa
     assert.match(url, /\/payments$/);
     assert.equal(options.method, 'POST');
     const body = JSON.parse(options.body);
+    assert.equal(body.billingType, 'UNDEFINED'); // Quotes keep every method the account offers.
     return new Response(JSON.stringify({
       id: production ? 'pay_prod' : 'pay_test', customer: body.customer,
       externalReference: body.externalReference, value: body.value, status: 'PENDING',

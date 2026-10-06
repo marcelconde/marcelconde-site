@@ -563,8 +563,9 @@ body.selection-processing .workflow-status {
 
 .payment-card {
   position: relative;
-  width: min(520px, 100%);
+  width: min(460px, 100%);
   max-height: 92vh;
+  max-height: 92dvh;
   overflow: auto;
   border: 1px solid var(--line);
   background:
@@ -576,7 +577,7 @@ body.selection-processing .workflow-status {
 .payment-card h2 {
   margin: 0.45rem 0 0.75rem;
   font-family: var(--serif);
-  font-size: clamp(2.4rem, 8vw, 4.2rem);
+  font-size: clamp(2.2rem, 7vw, 3.2rem);
   line-height: 0.9;
 }
 
@@ -636,20 +637,102 @@ body.selection-processing .workflow-status {
   padding: 0 12px;
 }
 
-.payment-qr {
-  min-height: 220px;
+.payment-pending {
   display: grid;
-  place-items: center;
-  margin: 18px 0;
-  background: #f7f3ec;
-  color: #26231f;
-  padding: 18px;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.payment-pix {
+  display: grid;
+  gap: 10px;
+}
+
+.payment-qr {
+  justify-self: center;
+  background: #fff;
+  padding: 14px;
+  line-height: 0;
 }
 
 .payment-qr img {
-  width: min(260px, 100%);
+  width: min(220px, 60vw);
   height: auto;
   display: block;
+  image-rendering: pixelated;
+}
+
+.payment-card .payment-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.86rem;
+}
+
+.payment-code {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.payment-code input {
+  min-width: 0;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.04);
+  color: var(--ink);
+  padding: 0 12px;
+  font: 0.8rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-overflow: ellipsis;
+}
+
+.payment-hosted {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  padding: 18px;
+  text-align: center;
+}
+
+.payment-card .payment-hosted p {
+  margin: 0;
+}
+
+.payment-card a.btn,
+.payment-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding-block: 10px;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.payment-switch {
+  font-weight: 700;
+}
+
+.payment-switch:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.payment-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.payment-divider::before,
+.payment-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }
 
 .payment-success {
@@ -697,34 +780,98 @@ body.selection-processing .workflow-status {
 }
 
 .payment-copy {
-  display: grid;
-  gap: 8px;
+  margin-top: 4px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
-.payment-copy textarea {
-  width: 100%;
-  min-height: 96px;
-  border: 1px solid var(--line);
-  background: rgba(255,255,255,0.04);
-  color: var(--ink);
-  padding: 12px;
-  resize: vertical;
-}
-
 .payment-cancel {
   display: block;
-  margin-top: 14px;
-  border-color: var(--danger);
-  color: var(--ink);
+  margin: 8px auto 0;
+  padding: 8px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.84rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 
-.payment-status {
-  margin-bottom: 0;
+.payment-cancel:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.payment-card .payment-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 18px 0 0;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.payment-status::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: paymentWait 1.4s ease-in-out infinite;
+}
+
+.payment-status.is-approved::before,
+.payment-status.is-rejected::before {
+  display: none;
+}
+
+@keyframes paymentWait {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-status::before { animation: none; }
+}
+
+:root[data-theme="light"] .payment-card .btn-primary {
+  color: #f7f3ec;
+}
+
+:root[data-theme="light"] .payment-code input {
+  background: rgba(255,255,255,0.45);
+}
+
+/* Wide screens put the QR Code beside its instructions so nothing scrolls. */
+@media (min-width: 700px) {
+  .payment-card { width: min(600px, 100%); max-height: 96dvh; }
+  .payment-pix {
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: center;
+  }
+  .payment-qr { grid-row: 1 / span 3; }
+  .payment-qr img { width: 190px; }
+  .payment-card .payment-hint { text-align: left; align-self: end; }
+  .payment-copy { margin-top: 0; }
+  .payment-code { align-self: start; }
+}
+
+/* On phones the whole payment should fit without scrolling. */
+@media (max-width: 520px) {
+  .payment-modal { padding: 10px; }
+  .payment-card { max-height: 96dvh; }
+  .payment-card p { line-height: 1.5; }
+  .payment-pending { gap: 12px; margin-top: 14px; }
+  .payment-qr { padding: 10px; }
+  .payment-qr img { width: min(184px, 52vw); }
+  .payment-card .payment-status { margin-top: 14px; }
 }
 
 .payment-status.is-approved {
