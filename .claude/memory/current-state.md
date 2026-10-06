@@ -26,7 +26,7 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 
 ## Ambiente
 
-- PC Windows (2026-10-05): há um início da integração Lightroom sem commit, de 2026-09-26 (botão "Levar seleção ao Lightroom" no admin, `tools/lightroom/`, `docs/lightroom-classic.md`, testes); aguarda Marcel decidir se vai para uma branch `lightroom-wip`. Node não está instalado lá, então os testes não rodam nesse PC.
+- PC Windows (2026-10-05): há um início da integração Lightroom sem commit, de 2026-09-26 (botão "Levar seleção ao Lightroom" no admin, `tools/lightroom/`, `docs/lightroom-classic.md`, testes); aguarda Marcel decidir se vai para uma branch `lightroom-wip`. Node 24.19.0 instalado em 2026-10-05; testes 54/54 nesse PC (inclui os 2 do Lightroom local). Não há `package.json`: `npx` baixa o `wrangler` a cada uso; no PowerShell usar `npx.cmd`.
 - O navegador interno do Claude no Windows fica logado na conta Asaas nova; a aba "Chaves de API" é bloqueada para o Claude.
 
 Referências: `architecture.md`, `decisions.md`, `bugs.md`, `docs/`.

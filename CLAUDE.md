@@ -17,6 +17,7 @@ Este repositório contém o site de fotografia de Marcel Conde. Antes de alterar
 - Clientes de teste usam Asaas Sandbox. Não misture cobranças Sandbox e de produção, nem reutilize cadastros de outras integrações da mesma conta Asaas.
 - Não remova o binding D1 nem volte a ler apenas KV: isso ocultaria dados gravados depois da migração.
 - Mantenha autorização por cliente/galeria, autenticação de admin e validação do estado do provedor em qualquer novo fluxo de pagamento.
+- Tudo que for do site ou da empresa usa `contato@marcelconde.com.br` (cadastros, integrações, avisos, remetentes); não use e-mails pessoais de Marcel.
 - Não registre secrets, tokens, CPF/CNPJ de clientes, arquivos RAW ou caminhos locais privados no Git. Preserve `.claude/settings.local.json` e `.claude/worktrees/`.
 
 ## Publicação
