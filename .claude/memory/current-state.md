@@ -1,10 +1,10 @@
 # Estado atual
 
-Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (versão `944a0915`, commit `7d00802`). Reconfirme após novos commits ou trabalho feito no Windows.
+Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (código da versão `944a0915`, commit `7d00802`; versão ativa `beeb6a3e` só por troca de secret em 2026-10-05). Reconfirme após novos commits ou trabalho feito no Windows.
 
 ## Funcionando
 
-- Site/admin via GitHub Pages; API Worker `cloudinary` com `LIKES_KV`, `GALLERY_DB` (D1) e 12 secrets. Worker roda em `aws:us-east-1` (placement; header `cf-placement: remote-IAD`): D1 ~15 ms por consulta, contra ~140 ms a partir do Brasil.
+- Site/admin via GitHub Pages; API Worker `cloudinary` com `LIKES_KV`, `GALLERY_DB` (D1) e 13 secrets. Worker roda em `aws:us-east-1` (placement; header `cf-placement: remote-IAD`): D1 ~15 ms por consulta, contra ~140 ms a partir do Brasil.
 - Clientes reais/de teste, orçamentos e PDFs, galerias privadas, seleção persistente, histórico, filtros, busca, "Ver como cliente", CSV da seleção, máscara CPF/CNPJ (`document-mask.js`).
 - Galerias: exclusão em lotes pela Admin API do Cloudinary; seção "Fotos editadas" com conferência por nome de arquivo e "Concluir entrega" (`/private/gallery/complete-delivery`), que apaga os originais da seleção e guarda os nomes em `gallery.deliveredSelection`.
 - Upload de galeria: mantém resolução até 25 MP e busca a maior qualidade JPEG em ~9,9 MB (plano Free: 10 MB e 25 MP); 3 envios simultâneos. Portfólio também envia 3 por vez.
@@ -19,8 +19,8 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 ## Pagamentos (conta Asaas nova em configuração)
 
 - Clientes reais ainda não conseguem pagar. Marcel abriu uma conta Asaas nova só para o site; a antiga fica só com a Fotop (nela a produção respondia `403 not_allowed_ip` para qualquer IP).
-- Conta nova vista em 2026-10-05: cadastro "Em análise", nenhum webhook salvo, Sandbox ainda não criado nela. Ainda não testada pela API (não se sabe se aceita chamadas de `us-east-1`).
-- `ASAAS_API_KEY` e `ASAAS_WEBHOOK_TOKEN` do Worker não pertencem à conta nova; regravar. O webhook "marcelconde.com.br - site" criado antes está na conta antiga.
+- Conta nova (2026-10-05): cadastro "Em análise"; webhook de produção "marcelconde.com.br - site" salvo e ativo (v3, não sequencial, eventos CONFIRMED, RECEIVED, DELETED, REFUNDED, REPROVED_BY_RISK_ANALYSIS, CREDIT_CARD_CAPTURE_REFUSED); `ASAAS_WEBHOOK_TOKEN` regravado com o token dele. Sem IPs autorizados (API aceita qualquer IP) e validação de saque por webhook desabilitada. Sandbox não criado nela. Ainda não testada pela API a partir de `us-east-1`.
+- `ASAAS_API_KEY` do Worker ainda não é da conta nova; regravar depois de gerar a chave. O webhook de mesmo nome criado antes está na conta antiga.
 - Branch `asaas-only` (não mesclada) remove o Mercado Pago. Ela partiu de `8cbf660`; a `main` avançou (lotes, entrega, placement) — refazer o merge com cuidado em `worker.js` e nos testes.
 - D1 tinha só 2 cobranças Mercado Pago, ambas `rejected` (2026-10-01).
 
