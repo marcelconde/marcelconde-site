@@ -170,10 +170,6 @@ function privateGalleryLatestPaymentKey(id) {
   return `private_gallery_latest_payment:${id}`;
 }
 
-function mercadoPagoPaymentKey(providerPaymentId) {
-  return `mercadopago_payment:${providerPaymentId}`;
-}
-
 function asaasPaymentKey(providerPaymentId, environment) {
   return `asaas_payment:${environment}:${providerPaymentId}`;
 }
@@ -278,20 +274,12 @@ async function deleteGalleryRecord(env, key) {
   if (env.LIKES_KV) await env.LIKES_KV.delete(key);
 }
 
-async function changeStoredIds(env, key, changes, blockedIntentKey = "", blockedLatestPaymentKey = "") {
+async function changeStoredIds(env, key, changes, blockedIntentKey = "") {
   const current = await readKvJson(env, key, []);
   if (usesGalleryDatabase(env, key)) {
     // Each statement changes only its own photo, without replacing concurrent favorites.
     const blocked = blockedIntentKey
       ? "AND NOT EXISTS (SELECT 1 FROM gallery_records AS intent WHERE intent.key = ? AND json_extract(intent.value, '$.status') IN ('creating', 'pending'))"
-      : "";
-    const blockedLatest = blockedLatestPaymentKey
-      ? `AND NOT EXISTS (
-          SELECT 1 FROM gallery_records AS latest
-          JOIN gallery_records AS payment ON payment.key = 'private_gallery_payment:' || json_extract(latest.value, '$')
-          WHERE latest.key = ? AND json_extract(payment.value, '$.provider') = 'mercadopago'
-            AND json_extract(payment.value, '$.status') IN ('creating', 'pending')
-        )`
       : "";
     const result = await env.GALLERY_DB.prepare(`
       UPDATE gallery_records SET value = (
@@ -301,11 +289,10 @@ async function changeStoredIds(env, key, changes, blockedIntentKey = "", blocked
           UNION ALL
           SELECT json_extract(value, '$.publicId') FROM json_each(?) WHERE json_extract(value, '$.selected') = 1
         )
-      ) WHERE key = ? ${blocked} ${blockedLatest}
+      ) WHERE key = ? ${blocked}
     `).bind(JSON.stringify(changes), JSON.stringify(changes), key,
-      ...(blockedIntentKey ? [blockedIntentKey] : []),
-      ...(blockedLatestPaymentKey ? [blockedLatestPaymentKey] : [])).run();
-    if ((blockedIntentKey || blockedLatestPaymentKey) && (result.meta?.changes ?? result.changes) !== 1) return null;
+      ...(blockedIntentKey ? [blockedIntentKey] : [])).run();
+    if (blockedIntentKey && (result.meta?.changes ?? result.changes) !== 1) return null;
     return readKvJson(env, key, []);
   }
   const next = new Set(current);
@@ -315,10 +302,7 @@ async function changeStoredIds(env, key, changes, blockedIntentKey = "", blocked
 }
 
 async function changeGalleryFavorites(env, galleryId, changes) {
-  const latest = await getPrivateGalleryLatestPayment(env, galleryId);
-  if (!env.GALLERY_DB && latest?.provider === "mercadopago" && ["creating", "pending"].includes(latest.status)) return null;
-  return changeStoredIds(env, privateGallerySelectionKey(galleryId), changes,
-    `asaas_intent:gallery:${galleryId}`, privateGalleryLatestPaymentKey(galleryId));
+  return changeStoredIds(env, privateGallerySelectionKey(galleryId), changes, `asaas_intent:gallery:${galleryId}`);
 }
 
 async function prependStoredEvent(env, key, event, limit) {
@@ -2937,8 +2921,8 @@ async function sendPaymentApprovedEmail(env, gallery = {}, client = {}, payment 
   const providerPaymentId = emailHtml(payment.providerPaymentId || "");
   const internalPaymentId = emailHtml(payment.id || "");
   const description = emailHtml(payment.description || `Fotos extras — ${gallery.title || gallery.slug || "galeria"}`);
-  const paymentLabel = payment.provider === "asaas" ? "Pagamento" : "Pix";
-  const providerLabel = payment.provider === "asaas" ? "Asaas" : "Mercado Pago";
+  const paymentLabel = "Pagamento";
+  const providerLabel = "Asaas";
   const sandbox = payment.environment === "sandbox";
   const html = emailLayout(env, {
     preheader: `${sandbox ? "Pagamento fictício" : paymentLabel + " aprovado"} para ${gallery.title || gallery.slug || "galeria"}.`,
@@ -3236,8 +3220,7 @@ async function galleryPaymentPending(env, galleryId) {
     const intent = await readAsaasIntent(env, `gallery:${galleryId}`);
     if (["creating", "pending"].includes(intent?.status)) return true;
   }
-  const latest = await getPrivateGalleryLatestPayment(env, galleryId);
-  return latest?.provider === "mercadopago" && ["creating", "pending"].includes(latest.status);
+  return false;
 }
 
 // A timed-out POST may already have created a charge. Recover by reference;
@@ -3268,8 +3251,7 @@ async function rejectFailedAsaasCreation(env, scope, payment, key, error) {
 
 async function withPaymentReconciliationLock(env, environment, providerPaymentId, work) {
   if (!env.GALLERY_DB) throw new Error("Banco transacional indisponível para conferir pagamento.");
-  const provider = environment === "mercadopago" ? "mercadopago" : "asaas";
-  const key = `${provider}_reconcile:${environment}:${providerPaymentId}`;
+  const key = `asaas_reconcile:${environment}:${providerPaymentId}`;
   const value = JSON.stringify({ token: randomToken(12), expiresAt: Date.now() + 120000 });
   const inserted = await env.GALLERY_DB.prepare("INSERT OR IGNORE INTO gallery_records (key, value) VALUES (?, ?)")
     .bind(key, value).run();
@@ -3296,72 +3278,6 @@ function asaasChargeIsPaid(charge, payment) {
     && Math.round(Number(charge.value) * 100) === payment.amountCents;
 }
 
-async function createMercadoPagoPixPayment(env, request, payment, gallery, client) {
-  if (!env.MERCADO_PAGO_ACCESS_TOKEN) {
-    throw new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado no Worker.");
-  }
-
-  const apiUrl = "https://api.mercadopago.com/v1/payments";
-  const amount = Number((payment.amountCents / 100).toFixed(2));
-  const notificationUrl = `${new URL(request.url).origin}/payments/mercadopago/webhook`;
-  const body = {
-    transaction_amount: amount,
-    description: `Fotos extras — ${gallery.title || gallery.slug || "galeria"}`,
-    payment_method_id: "pix",
-    external_reference: payment.id,
-    notification_url: notificationUrl,
-    payer: {
-      email: normalizeEmail(client.email || ""),
-      first_name: cleanDisplayName(client.name || "Cliente"),
-    },
-    date_of_expiration: payment.expiresAt,
-  };
-
-  const res = await fetchWithTimeout(apiUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}`,
-      "X-Idempotency-Key": payment.id,
-    },
-    body: JSON.stringify(body),
-  }, 15000);
-
-  const text = await res.text();
-  let data = {};
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) {
-    throw new Error(`Mercado Pago ${res.status}: ${text}`);
-  }
-
-  const tx = data.point_of_interaction?.transaction_data || {};
-  if (["rejected", "cancelled", "refunded", "charged_back"].includes(data.status) || !tx.qr_code) {
-    throw new Error(`Mercado Pago não disponibilizou Pix: ${data.status || "unknown"} / ${data.status_detail || "missing_qr_code"}`);
-  }
-  return {
-    providerPaymentId: String(data.id || ""),
-    providerStatus: data.status || "",
-    qrCode: tx.qr_code || "",
-    qrCodeBase64: tx.qr_code_base64 || "",
-    ticketUrl: tx.ticket_url || "",
-    rawStatus: data.status_detail || "",
-  };
-}
-
-async function getMercadoPagoPayment(env, providerPaymentId) {
-  if (!env.MERCADO_PAGO_ACCESS_TOKEN) throw new Error("MERCADO_PAGO_ACCESS_TOKEN não configurado no Worker.");
-  const res = await fetchWithTimeout(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(providerPaymentId)}`, {
-    headers: {
-      Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}`,
-    },
-  }, 12000);
-  const text = await res.text();
-  let data = {};
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(`Mercado Pago ${res.status}: ${text}`);
-  return data;
-}
-
 function timingSafeEqualString(a = "", b = "") {
   const left = new TextEncoder().encode(String(a));
   const right = new TextEncoder().encode(String(b));
@@ -3369,129 +3285,6 @@ function timingSafeEqualString(a = "", b = "") {
   let result = 0;
   for (let i = 0; i < left.length; i++) result |= left[i] ^ right[i];
   return result === 0;
-}
-
-async function verifyMercadoPagoWebhookSignature(request, env, providerPaymentId = "") {
-  if (!env.MERCADO_PAGO_WEBHOOK_SECRET) return true;
-
-  const signatureHeader = request.headers.get("x-signature") || "";
-  const requestId = request.headers.get("x-request-id") || "";
-  const parts = Object.fromEntries(signatureHeader.split(",").map((part) => {
-    const [key, value] = part.split("=").map((item) => String(item || "").trim());
-    return [key, value];
-  }));
-  const ts = parts.ts || "";
-  const signature = parts.v1 || "";
-  if (!providerPaymentId || !requestId || !ts || !signature) return false;
-
-  const manifest = `id:${String(providerPaymentId).toLowerCase()};request-id:${requestId};ts:${ts};`;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(env.MERCADO_PAGO_WEBHOOK_SECRET),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const signed = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(manifest));
-  const expected = [...new Uint8Array(signed)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-  return timingSafeEqualString(expected, signature);
-}
-
-async function approveMercadoPagoPayment(env, request, providerPaymentId) {
-  if (!env.GALLERY_DB) return approveMercadoPagoPaymentLocked(env, request, providerPaymentId);
-  return withPaymentReconciliationLock(env, "mercadopago", providerPaymentId,
-    () => approveMercadoPagoPaymentLocked(env, request, providerPaymentId));
-}
-
-async function approveMercadoPagoPaymentLocked(env, request, providerPaymentId) {
-  if (!providerPaymentId || !env.LIKES_KV) return { ok: false, reason: "missing_payment_id" };
-
-  const paymentId = await env.LIKES_KV.get(mercadoPagoPaymentKey(providerPaymentId));
-  if (!paymentId) return { ok: false, reason: "payment_not_found" };
-
-  const payment = await readKvJson(env, privateGalleryPaymentKey(paymentId), null);
-  if (!payment) return { ok: false, reason: "payment_record_not_found" };
-
-  const mpPayment = await getMercadoPagoPayment(env, providerPaymentId);
-  if (payment.status === "cancelled" && mpPayment.status !== "cancelled") {
-    console.error("Mercado Pago cancelled payment changed; manual reconciliation required", payment.id);
-    return { ok: false, reason: "cancelled_payment_changed", payment };
-  }
-  const now = new Date().toISOString();
-  const nextPayment = {
-    ...payment,
-    providerStatus: mpPayment.status || payment.providerStatus || "",
-    providerStatusDetail: mpPayment.status_detail || payment.providerStatusDetail || "",
-    updatedAt: now,
-  };
-
-  if (mpPayment.status !== "approved") {
-    nextPayment.status = mpPayment.status === "cancelled" && payment.status === "cancelled"
-      ? "cancelled" : ["rejected", "cancelled", "refunded", "charged_back"].includes(mpPayment.status) ? "rejected" : "pending";
-    await writeKvJson(env, privateGalleryPaymentKey(payment.id), nextPayment);
-    return { ok: true, approved: false, payment: nextPayment };
-  }
-
-  if (payment.status === "approved" && payment.selectionCompletedAt) {
-    return { ok: true, approved: true, payment };
-  }
-
-  const gallery = await readKvJson(env, privateGalleryKey(payment.galleryId), null);
-  if (!gallery) return { ok: false, reason: "gallery_not_found", payment: nextPayment };
-  const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
-  const paymentClient = client || { email: payment.clientEmail || "", name: payment.clientName || "Cliente" };
-  const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
-  const completed = await completePrivateGallerySelection(
-    env,
-    request,
-    gallery,
-    paymentClient,
-    images,
-    payment.selectedPublicIds || [],
-    { ...payment, ...nextPayment, status: "approved", approvedAt: now }
-  );
-
-  nextPayment.status = "approved";
-  nextPayment.approvedAt = now;
-  nextPayment.selectionCompletedAt = completed.gallery.selectionCompletedAt;
-  nextPayment.amountCents = payment.amountCents || completed.pricing.totalCents || 0;
-
-  let approvedNotificationQueued = false;
-  let approvedNotificationError = "";
-  let approvedNotificationResendId = null;
-  if (!payment.approvedNotificationSentAt) {
-    try {
-      const resend = await sendPaymentApprovedEmail(
-        env,
-        completed.gallery,
-        paymentClient,
-        nextPayment,
-        completed.pricing
-      );
-      approvedNotificationQueued = true;
-      approvedNotificationResendId = resend?.id || null;
-      nextPayment.approvedNotificationSentAt = new Date().toISOString();
-      nextPayment.approvedNotificationResendId = approvedNotificationResendId;
-      delete nextPayment.approvedNotificationError;
-    } catch (err) {
-      approvedNotificationError = String(err?.message || err || "unknown");
-      nextPayment.approvedNotificationError = approvedNotificationError;
-      console.error("Payment approved email error:", err);
-    }
-  }
-
-  await writeKvJson(env, privateGalleryPaymentKey(payment.id), nextPayment);
-  await appendPrivateGalleryEvent(env, request, gallery.id, "pix_aprovado", {
-    paymentId: payment.id,
-    providerPaymentId,
-    amountCents: nextPayment.amountCents,
-    pricing: completed.pricing,
-    approvedNotificationQueued,
-    approvedNotificationError,
-    approvedNotificationResendId,
-  }, paymentClient);
-
-  return { ok: true, approved: true, payment: nextPayment };
 }
 
 async function reconcileAsaasPayment(env, request, providerPaymentId, environment) {
@@ -3688,11 +3481,9 @@ async function cancelGalleryPayment(env, request, gallery, paymentId, actor) {
   const current = await getCurrentGalleryPayment(env, gallery.id);
   if (current?.id !== paymentId) paymentConflict("Esta cobrança não é mais a cobrança pendente da galeria.");
 
-  const environment = stored.provider === "asaas" ? stored.environment : "mercadopago";
-  if (stored.provider === "asaas" && !["sandbox", "production"].includes(environment)) {
-    paymentConflict("Ambiente da cobrança inválido.");
-  }
-  if (!["asaas", "mercadopago"].includes(stored.provider)) paymentConflict("Provedor da cobrança inválido.");
+  if (stored.provider !== "asaas") paymentConflict("Provedor da cobrança inválido.");
+  const environment = stored.environment;
+  if (!["sandbox", "production"].includes(environment)) paymentConflict("Ambiente da cobrança inválido.");
 
   const result = await withPaymentReconciliationLock(env, environment, stored.providerPaymentId, async () => {
     const payment = await readKvJson(env, key, null);
@@ -3725,29 +3516,6 @@ async function cancelGalleryPayment(env, request, gallery, paymentId, actor) {
         }
         const deletion = await asaasRequest(env, environment, `/payments/${encodeURIComponent(payment.providerPaymentId)}`, { method: "DELETE" });
         if (deletion.deleted === false) throw new Error("O Asaas não confirmou o cancelamento. Tente novamente mais tarde.");
-      }
-    } else {
-      const providerPayment = await getMercadoPagoPayment(env, payment.providerPaymentId);
-      if (String(providerPayment.id) !== payment.providerPaymentId
-        || providerPayment.external_reference !== payment.id
-        || Math.round(Number(providerPayment.transaction_amount) * 100) !== payment.amountCents) {
-        paymentConflict("Dados da cobrança divergentes. Entre em contato antes de cancelar.");
-      }
-      if (providerPayment.status === "approved") {
-        await approveMercadoPagoPaymentLocked(env, request, payment.providerPaymentId);
-        paymentConflict("O pagamento já foi aprovado e não pode ser cancelado. Entre em contato para solicitar estorno.");
-      }
-      if (providerPayment.status !== "cancelled") {
-        if (providerPayment.status !== "pending") paymentConflict("O Mercado Pago não permite cancelar esta cobrança no estado atual.");
-        const response = await fetchWithTimeout(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(payment.providerPaymentId)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.MERCADO_PAGO_ACCESS_TOKEN}` },
-          body: JSON.stringify({ status: "cancelled" }),
-        }, 12000);
-        const cancelled = await response.json().catch(() => ({}));
-        if (!response.ok || String(cancelled.id) !== payment.providerPaymentId || cancelled.status !== "cancelled") {
-          throw new Error("O Mercado Pago não confirmou o cancelamento. Tente novamente mais tarde.");
-        }
       }
     }
 
@@ -3919,34 +3687,6 @@ export default {
       } catch (err) {
         console.error("Asaas webhook error:", err);
         return errorJson("Erro ao processar webhook do Asaas.", 503);
-      }
-    }
-
-    if (url.pathname === "/payments/mercadopago/webhook" && ["GET", "POST"].includes(request.method)) {
-      let body = {};
-      if (request.method === "POST") body = await readJson(request);
-
-      const providerPaymentId = String(
-        url.searchParams.get("data.id") ||
-        url.searchParams.get("id") ||
-        body?.data?.id ||
-        body?.id ||
-        ""
-      ).trim();
-
-      if (!providerPaymentId) return errorJson("Missing Mercado Pago payment id", 400);
-
-      const validSignature = await verifyMercadoPagoWebhookSignature(request, env, providerPaymentId);
-      if (!validSignature) return errorJson("Invalid Mercado Pago webhook signature", 401);
-
-      try {
-        const result = await approveMercadoPagoPayment(env, request, providerPaymentId);
-        return json({ ok: true, ...result }, 200, { "Cache-Control": "no-store" });
-      } catch (err) {
-        console.error("Mercado Pago webhook error:", err);
-        return errorJson("Erro ao processar webhook do Mercado Pago.", 500, {
-          detail: String(err?.message || err || "unknown"),
-        });
       }
     }
 
@@ -4256,9 +3996,8 @@ export default {
         return errorJson("Tipo de cliente e orçamento incompatíveis.", 409);
       }
       const environment = asaasEnvironmentForClient(linkedClient);
-      // Until production Asaas is enabled, preserve the existing real-client
-      // acceptance flow. Test clients always require Sandbox payment.
-      const paymentRequired = snapshot.totalCents > 0 && (linkedClient.isTest === true || Boolean(env.ASAAS_API_KEY));
+      // Asaas is the only payment provider: test clients use Sandbox, real clients production.
+      const paymentRequired = snapshot.totalCents > 0;
       if (paymentRequired && ![11, 14].includes(signerDocument.replace(/\D/g, "").length)) {
         return errorJson("Informe um CPF ou CNPJ válido para pagar o orçamento.", 400);
       }
@@ -4631,56 +4370,6 @@ export default {
       if (!pricing.requiresPayment) {
         return json({ ok: true, paymentRequired: false, pricing }, 200, { "Cache-Control": "no-store" });
       }
-      if (access.linkedClient?.isTest !== true && !env.ASAAS_API_KEY) {
-        const previousId = await readKvJson(env, privateGalleryLatestPaymentKey(gallery.id), null);
-        const previous = previousId ? await readKvJson(env, privateGalleryPaymentKey(previousId), null) : null;
-        if (previous && ["creating", "pending", "approved"].includes(previous.status)) {
-          if (previous.provider === "mercadopago" && previous.status === "pending"
-            && previous.amountCents === pricing.totalCents
-            && JSON.stringify(previous.selectedPublicIds || []) === JSON.stringify([...new Set(selection)])) {
-            return json({ ok: true, paymentRequired: true, pricing, payment: publicPayment(previous) }, 200, { "Cache-Control": "no-store" });
-          }
-          return errorJson("Já existe uma cobrança para esta galeria. Conclua-a antes de gerar outra.", 409);
-        }
-        const now = Date.now();
-        const payment = {
-          id: `pay_${randomToken(12)}`,
-          provider: "mercadopago",
-          status: "pending",
-          galleryId: gallery.id,
-          gallerySlug: gallery.slug,
-          clientEmail: normalizeEmail(access.linkedClient?.email || access.client?.email || ""),
-          clientName: access.linkedClient?.name || access.client?.name || "Cliente",
-          selectedPublicIds: [...new Set(selection)],
-          pricing,
-          amountCents: pricing.totalCents,
-          createdAt: new Date(now).toISOString(),
-          updatedAt: new Date(now).toISOString(),
-          expiresAt: new Date(now + 1000 * 60 * 30).toISOString(),
-        };
-        try {
-          const mp = await createMercadoPagoPixPayment(env, request, payment, gallery, access.linkedClient || access.client);
-          const saved = {
-            ...payment,
-            providerPaymentId: mp.providerPaymentId,
-            providerStatus: mp.providerStatus,
-            providerStatusDetail: mp.rawStatus,
-            qrCode: mp.qrCode,
-            qrCodeBase64: mp.qrCodeBase64,
-            ticketUrl: mp.ticketUrl,
-          };
-          await writeKvJson(env, privateGalleryPaymentKey(saved.id), saved, { expirationTtl: 60 * 60 * 24 * 7 });
-          await env.LIKES_KV.put(mercadoPagoPaymentKey(saved.providerPaymentId), saved.id, { expirationTtl: 60 * 60 * 24 * 7 });
-          await writeKvJson(env, privateGalleryLatestPaymentKey(gallery.id), saved.id, { expirationTtl: 60 * 60 * 24 * 7 });
-          await appendPrivateGalleryEvent(env, request, gallery.id, "pix_criado", {
-            paymentId: saved.id, providerPaymentId: saved.providerPaymentId, pricing,
-          }, access.client);
-          return json({ ok: true, paymentRequired: true, pricing, payment: publicPayment(saved) }, 200, { "Cache-Control": "no-store" });
-        } catch (err) {
-          console.error("Mercado Pago create payment error:", err);
-          return errorJson("Não foi possível gerar o Pix agora.", 502);
-        }
-      }
       if (!access.linkedClient) return errorJson("Cliente da galeria não encontrado.", 409);
       const environment = asaasEnvironmentForClient(access.linkedClient);
       try { asaasApiConfig(env, environment); }
@@ -4815,10 +4504,10 @@ export default {
         try {
           const result = payment.provider === "asaas"
             ? await reconcileAsaasPayment(env, request, payment.providerPaymentId, payment.environment)
-            : await approveMercadoPagoPayment(env, request, payment.providerPaymentId);
+            : {};
           if (result.payment) currentPayment = result.payment;
         } catch (err) {
-          console.error("Mercado Pago payment status check failed:", err);
+          console.error("Payment status check failed:", err);
         }
       }
 

@@ -23,7 +23,7 @@ function app() {
   const tasks = [];
   const context = vm.createContext({ crypto: webcrypto, Request, Response, Headers, URL, URLSearchParams, AbortController, TextEncoder, TextDecoder, btoa, atob, console, setTimeout, clearTimeout, fetch: () => { throw Error('Unexpected external request'); } });
   const source = fs.readFileSync(require.resolve('../worker.js'), 'utf8').replace('export default {', 'globalThis.worker = {');
-  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, createMercadoPagoPixPayment, claimAsaasIntent, saveClientPassword, saveUserPassword};', context);
+  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, claimAsaasIntent, saveClientPassword, saveUserPassword};', context);
   const env = { LIKES_KV: kv, GALLERY_DB: database, ADMIN_KEY: 'local-test-key' };
   const seed = (key, value) => data.set(key, JSON.stringify(value));
   const request = (path, body, token = 'local-test-key') => context.worker.fetch(new Request('https://example.test' + path, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : {body: JSON.stringify(body)}) }), env, {waitUntil(p) { tasks.push(p); }});
@@ -153,44 +153,21 @@ test('client cancels only the pending Asaas charge for its gallery, then can cha
   assert.equal(await a.claimAsaasIntent(a.env, 'gallery:g', { id: 'pay_new' }), true);
 });
 
-test('admin can cancel a specific pending Mercado Pago charge, but cannot cancel another gallery or a paid charge', async () => {
+test('legacy Mercado Pago records never block selection nor reach a provider', async () => {
   const a = app();
-  a.env.MERCADO_PAGO_ACCESS_TOKEN = 'mp-test-key';
   const payment = {
     id: 'pay_mp_local', provider: 'mercadopago', providerPaymentId: '987', galleryId: 'g',
     status: 'pending', amountCents: 1000, selectedPublicIds: ['a'],
   };
   await a.writeKvJson(a.env, 'private_gallery_payment:pay_mp_local', payment);
   await a.writeKvJson(a.env, 'private_gallery_latest_payment:g', payment.id);
-  assert.equal((await a.request('/client-gallery/favorites',
-    { slug: 'race', changes: [{ publicId: 'a', selected: false }] }, 'client-token')).status, 409);
-  assert.equal((await a.request('/private/galleries', { id: 'g', selectionLimit: 0 })).status, 409);
   const calls = [];
-  a.context.fetch = async (url, options = {}) => {
-    calls.push(options.method || 'GET');
-    assert.equal(url, 'https://api.mercadopago.com/v1/payments/987');
-    assert.equal(options.headers.Authorization, 'Bearer mp-test-key');
-    return new Response(JSON.stringify({ id: 987, external_reference: payment.id,
-      transaction_amount: 10, status: options.method === 'PUT' ? 'cancelled' : 'pending' }));
-  };
-  assert.equal((await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: payment.id }, 'wrong')).status, 401);
-  assert.equal((await a.request('/private/gallery/payment/cancel', { galleryId: 'other', paymentId: payment.id })).status, 404);
-  assert.deepEqual(calls, []);
-  const response = await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: payment.id });
-  assert.equal(response.status, 200, await response.text());
-  assert.deepEqual(calls, ['GET', 'PUT']);
-  assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:pay_mp_local', null)).status, 'cancelled');
+  a.context.fetch = async (url) => { calls.push(url); return new Response('{}'); };
   assert.equal((await a.request('/client-gallery/favorites',
     { slug: 'race', changes: [{ publicId: 'a', selected: false }] }, 'client-token')).status, 200);
-  const second = await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: payment.id });
-  assert.equal(second.status, 200);
-  assert.deepEqual(calls, ['GET', 'PUT']);
-
-  const paid = { ...payment, id: 'pay_paid', providerPaymentId: '988', status: 'approved' };
-  await a.writeKvJson(a.env, 'private_gallery_payment:pay_paid', paid);
-  await a.writeKvJson(a.env, 'private_gallery_latest_payment:g', paid.id);
-  assert.equal((await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: paid.id })).status, 409);
-  assert.deepEqual(calls, ['GET', 'PUT']);
+  assert.equal((await a.request('/private/gallery/payment/cancel', { galleryId: 'g', paymentId: payment.id })).status, 409);
+  assert.equal((await a.request('/payments/mercadopago/webhook', { id: '987' })).status, 405);
+  assert.deepEqual(calls, []);
 });
 
 test('a provider charge with mismatched reference is never cancelled', async () => {
@@ -255,14 +232,6 @@ test('admin preview is gallery-scoped, expires and cannot mutate selection or ge
   assert.equal((await a.request('/client-gallery?slug=other',undefined,token)).status,401);
   a.seed('gallery_preview:'+token,{galleryId:'g',expiresAt:Date.now()-1});
   assert.equal((await a.request('/client-gallery?slug=race',undefined,token)).status,401);
-});
-
-test('provider rejection or missing QR never becomes a usable pending Pix', async () => {
-  const a=app();
-  for (const body of [{status:'rejected',status_detail:'rejected_high_risk'}, {status:'pending'}]) {
-    a.context.fetch=async()=>new Response(JSON.stringify(body),{status:201});
-    await assert.rejects(a.createMercadoPagoPixPayment({MERCADO_PAGO_ACCESS_TOKEN:'test'},new Request('https://example.test'),{id:'pay',amountCents:1000},{title:'Race'},{email:'client@example.test'}), /não disponibilizou Pix/);
-  }
 });
 
 test('removing unselected photos deletes in batches and only drops confirmed records', async () => {
