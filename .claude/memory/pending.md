@@ -3,8 +3,8 @@
 Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou deixar para depois.
 
 - **Asaas — conta nova só do site** (a antiga fica com a Fotop; o chamado do `403 not_allowed_ip` deixou de bloquear o site). Não voltar ao Mercado Pago. Falta:
-  1. Marcel: aguardar a aprovação do cadastro ("Em análise"), gerar a chave de API na conta nova (não enviar no chat) e rodar o teste do Mac que só grava `ASAAS_API_KEY` no Worker se HTTP 200.
-  2. Se a produção recusar IP fora do Brasil, isolar as rotas de pagamento ou remover `placement` do `wrangler.jsonc`.
+  1. Aguardar o Asaas aprovar o cadastro (documentação e geral em análise; dados bancários pendentes — Marcel confere em Minha conta se falta enviar algo).
+  2. Testar a produção a partir do Worker (não há rota de diagnóstico; hoje só com cobrança real). Se recusar IP fora do Brasil, isolar as rotas de pagamento ou remover `placement` do `wrangler.jsonc`.
   3. Mesclar `asaas-only` na `main`, publicar Pages e depois o Worker.
   4. Cobrança real ≥ R$ 5 e conferência de webhook, saldo e e-mail; Sandbox conforme `docs/asaas-payments.md`.
   5. Na conta antiga: excluir as chaves criadas/expostas em 2026-10-01/02 (não a da Fotop) e o webhook "marcelconde.com.br - site". Remover secrets e webhook do Mercado Pago.

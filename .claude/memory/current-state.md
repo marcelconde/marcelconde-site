@@ -19,8 +19,8 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 ## Pagamentos (conta Asaas nova em configuração)
 
 - Clientes reais ainda não conseguem pagar. Marcel abriu uma conta Asaas nova só para o site; a antiga fica só com a Fotop (nela a produção respondia `403 not_allowed_ip` para qualquer IP).
-- Conta nova (2026-10-05): cadastro "Em análise"; webhook de produção "marcelconde.com.br - site" salvo e ativo (v3, não sequencial, eventos CONFIRMED, RECEIVED, DELETED, REFUNDED, REPROVED_BY_RISK_ANALYSIS, CREDIT_CARD_CAPTURE_REFUSED); `ASAAS_WEBHOOK_TOKEN` regravado com o token dele. Sem IPs autorizados (API aceita qualquer IP) e validação de saque por webhook desabilitada. Sandbox não criado nela. Ainda não testada pela API a partir de `us-east-1`.
-- `ASAAS_API_KEY` do Worker ainda não é da conta nova; regravar depois de gerar a chave. O webhook de mesmo nome criado antes está na conta antiga.
+- Conta nova (2026-10-05): cadastro em análise (`myAccount/status`: commercialInfo APPROVED, bankAccountInfo PENDING, documentation e general AWAITING_APPROVAL); webhook de produção "marcelconde.com.br - site" salvo e ativo (v3, não sequencial, eventos CONFIRMED, RECEIVED, DELETED, REFUNDED, REPROVED_BY_RISK_ANALYSIS, CREDIT_CARD_CAPTURE_REFUSED); `ASAAS_WEBHOOK_TOKEN` regravado com o token dele. Sem IPs autorizados (API aceita qualquer IP) e validação de saque por webhook desabilitada. Sandbox não criado nela. Chave de produção respondeu HTTP 200 a partir do PC no Brasil; chamada a partir do Worker (`us-east-1`) ainda não testada.
+- `ASAAS_API_KEY` do Worker regravada em 2026-10-05 com a chave "marcelconde.com.br - site" da conta nova (gravada só após HTTP 200). O webhook de mesmo nome criado antes está na conta antiga.
 - Branch `asaas-only` (não mesclada) remove o Mercado Pago. Ela partiu de `8cbf660`; a `main` avançou (lotes, entrega, placement) — refazer o merge com cuidado em `worker.js` e nos testes.
 - D1 tinha só 2 cobranças Mercado Pago, ambas `rejected` (2026-10-01).
 
