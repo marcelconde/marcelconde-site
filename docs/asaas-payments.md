@@ -26,7 +26,7 @@ Configurar no Asaas webhooks de cobranças com esses tokens, separados por ambie
 - Produção: `https://api.marcelconde.com.br/payments/asaas/webhook`
 - Sandbox: `https://api.marcelconde.com.br/payments/asaas/sandbox/webhook`
 
-Eventos de cobrança devem incluir pagamento confirmado, recebido, recusado, excluído e estornado. O Worker autentica cada webhook pelo cabeçalho `asaas-access-token`, ignora cobranças de outras integrações da mesma conta e consulta as cobranças do site diretamente no ambiente correto. Se o webhook falhar, a consulta de status na página do cliente também tenta conciliar.
+Eventos de cobrança devem incluir pagamento confirmado, recebido, recusado, excluído e estornado. O Worker autentica cada webhook pelo cabeçalho `asaas-access-token`, ignora cobranças de outras integrações da mesma conta e consulta as cobranças do site diretamente no ambiente correto. Se o webhook falhar, a consulta de status na página do cliente também tenta conciliar. O Asaas não tem status `DELETED`: uma cobrança removida mantém o status anterior e vem com `deleted: true`. Só resposta HTTP 200 conta como entrega; após 15 falhas seguidas o Asaas pausa a fila do webhook.
 
 ## Publicação e validação
 

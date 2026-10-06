@@ -9,6 +9,9 @@ Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou
   4. Na conta antiga: excluir as chaves criadas/expostas em 2026-10-01/02 (não a da Fotop) e o webhook "marcelconde.com.br - site". Remover secrets e webhook do Mercado Pago.
   5. Sandbox: a conta nova não tem Sandbox; conferir se `ASAAS_SANDBOX_API_KEY` e o webhook Sandbox atuais continuam válidos ou criar o Sandbox da conta nova.
   6. Marcel confere no painel, em Chaves de API, que a chave do site não tem "Permitir que esta chave execute operações de saque via API" ligado; o site só cria e consulta cobranças.
+  7. Webhook: em 2026-10-05 havia 2 eventos penalizados (cobranças canceladas respondiam 503; corrigido no commit `1451480`). Conferir no Asaas que zeraram e que a fila segue ativa.
+  8. Decidir com Marcel: divergência que exige conferência manual (pago com valor ou referência diferente, cobrança cancelada que reaparece) responde 503 ao Asaas a cada tentativa e pode pausar a fila após 15 falhas. Avaliar responder 200 e avisar o admin por e-mail.
+  9. Débito na fatura do Asaas falhou em 2026-10-05 com erro 500 do servidor 3DS do Santander (`emv3dsweb.santander.com.br`), fora do site. Repetir o teste com crédito ou outro banco.
 - **Orçamentos ainda oferecem boleto:** a fatura usa `UNDEFINED`. Perguntar a Marcel se quer o mesmo tratamento das fotos extras (Pix na página, cartão no Asaas, sem boleto).
 - **Lightroom sem commit no PC Windows:** Marcel ainda não respondeu se o trabalho de 2026-09-26 vai para a branch `lightroom-wip`. Não enviar para a `main` (publicaria o botão no admin).
 - **Validar login no uso real:** (1) captcha resolvido de verdade é aceito (se a secret estiver errada, ninguém passa do 2º erro); (2) e-mail de conta bloqueada chega com o botão de redefinir; (3) bloquear/desbloquear em Clientes e Usuários.
