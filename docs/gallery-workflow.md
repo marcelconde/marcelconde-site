@@ -3,6 +3,8 @@
 ## Comportamento
 
 - Fotos inclusas é a quantidade já contratada. Zero significa que todas as selecionadas são cobradas pelo preço configurado em Preços. Não significa bloquear seleção.
+- Em "em edição" (sem download liberado) o cliente não recebe fotos nem capa e não altera a seleção; vê apenas o aviso de que as fotos estão sendo editadas. Reabrir a seleção no admin volta a mostrar as fotos.
+- `content-guard.js` desestimula cópia na galeria do cliente: sem menu de contexto, arrastar, salvar ou imprimir, e a página é limpa ao abrir as ferramentas de desenvolvedor. É só dissuasão: a marca d'água é desenhada pelo navegador sobre a foto e a API entrega a URL do arquivo no Cloudinary.
 - O admin guarda rascunhos das configurações por usuário e galeria em `sessionStorage`. Trocar de seção, navegar dentro da mesma aba e atualizar a página preserva o rascunho. Salvar ou Publicar aplica as alterações no servidor; publicar continua enviando e-mail.
 - Upload mantém uma fila aditiva na página, com duas transferências simultâneas e registros ordenados. Arquivos adicionados durante o envio entram na fila. Uma falha de registro reaproveita o arquivo já enviado ao Cloudinary. A fila de arquivos não sobrevive a fechar/recarregar a página; há aviso antes de sair durante envios pendentes.
 - Favoritos são salvos antes da confirmação. Alterações ainda sem resposta ficam em `localStorage`, separadas por cliente e galeria, e são reenviadas após conexão/retorno. Confirmação aguarda sincronização. Somente a confirmação ou pagamento aprovado inicia a edição.

@@ -49,6 +49,7 @@ const pricingSummary = document.getElementById("pricingSummary");
 const workflowStatus = document.getElementById("workflowStatus");
 const photoGrid = document.getElementById("photoGrid");
 const loadSentinel = document.getElementById("loadSentinel");
+const galleryViewbar = document.getElementById("galleryViewbar");
 const completeBtn = document.getElementById("completeBtn");
 const pendingPaymentBtn = document.getElementById("pendingPaymentBtn");
 const selectAllBtn = document.getElementById("selectAllBtn");
@@ -148,13 +149,9 @@ function hasCompletedSelection() {
   return Boolean(state.gallery?.selectionCompletedAt) && !state.gallery?.allowDownload;
 }
 
-function hasPendingExtraSelection() {
-  const pricing = state.gallery?.pricing || {};
-  return Boolean(pricing.requiresPayment) || Number(pricing.extraCount || 0) > 0;
-}
-
 function showCompletionStatus() {
-  return hasCompletedSelection() && state.gallery?.status === "editing" && !hasPendingExtraSelection();
+  // "Em edição" is closed to the client: the server sends no photos until the admin reopens the selection.
+  return state.gallery?.status === "editing" && !state.gallery?.allowDownload;
 }
 
 function getToken() {
@@ -271,6 +268,7 @@ function renderWorkflowStatus() {
   if (!showCompletionStatus()) {
     document.body.classList.remove("selection-processing");
     if (galleryHero) galleryHero.hidden = false;
+    galleryViewbar.hidden = false;
     photoGrid.hidden = false;
     loadSentinel.hidden = false;
     workflowStatus.hidden = true;
@@ -279,8 +277,16 @@ function renderWorkflowStatus() {
   }
 
   const hasPayment = Boolean(state.gallery?.selectionPaymentId);
+  const completed = Boolean(state.gallery?.selectionCompletedAt);
   document.body.classList.add("selection-processing");
+  // Photos already on the page are removed too, not only hidden.
+  state.images = [];
+  state.nextCursor = null;
+  photoGrid.innerHTML = "";
+  if (state.currentImage) closeLightbox();
+  if (galleryHeroBg) galleryHeroBg.style.backgroundImage = "";
   if (galleryHero) galleryHero.hidden = true;
+  galleryViewbar.hidden = true;
   photoGrid.hidden = true;
   loadSentinel.hidden = true;
   completeBtn.classList.add("hidden");
@@ -290,9 +296,9 @@ function renderWorkflowStatus() {
   selectionCounter.textContent = "Fotos em edição";
   workflowStatus.hidden = false;
   workflowStatus.innerHTML = `
-    <span class="eyebrow">${hasPayment ? "Pagamento confirmado" : "Seleção recebida"}</span>
-    <h2>${hasPayment ? "Pagamento e seleção concluídos" : "Seleção concluída"}</h2>
-    <p>As fotos selecionadas já estão em processo de edição. Aguarde o retorno por e-mail ou WhatsApp com o link para baixar as imagens assim que a entrega final estiver liberada.</p>
+    <span class="eyebrow">${hasPayment ? "Pagamento confirmado" : completed ? "Seleção recebida" : "Galeria em edição"}</span>
+    <h2>${hasPayment ? "Pagamento e seleção concluídos" : completed ? "Seleção concluída" : "Fotos em edição"}</h2>
+    <p>Suas fotos estão sendo editadas. Você receberá um aviso por e-mail assim que estiverem prontas para baixar.</p>
   `;
 }
 

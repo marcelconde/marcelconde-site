@@ -39,6 +39,8 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font: inherit; cursor: pointer; }
 .hidden { display: none !important; }
+/* Layout rules such as display:grid would otherwise override the hidden attribute. */
+[hidden] { display: none !important; }
 
 .client-topbar {
   position: fixed;
@@ -983,3 +985,16 @@ body.selection-processing .workflow-status {
   pointer-events: none;
 }
 .gallery-notice:empty, .gallery-notice[hidden] { display: none; }
+
+/* Deterrents against saving photos; see /content-guard.js. */
+.photo-card img,
+.lightbox img,
+.gallery-hero-bg {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+
+@media print {
+  body { display: none; }
+}

@@ -3623,6 +3623,12 @@ async function changeGalleryPaymentMethod(env, gallery, paymentId, method) {
   return result;
 }
 
+// While the photographer edits, the client sees only a status message. Reopening
+// the selection in the admin shows the photos again.
+function galleryHiddenFromClient(gallery = {}) {
+  return gallery.status === "editing" && gallery.allowDownload !== true;
+}
+
 function visibleGalleryImages(gallery = {}, images = []) {
   if (gallery.status === "final") {
     const finalImages = images.filter((image) => image.phase === "final");
@@ -4268,7 +4274,7 @@ export default {
           title: gallery.title,
           subtitle: gallery.subtitle || "",
           status: gallery.status || "selection",
-          coverUrl: gallery.coverUrl || images[0]?.url || null,
+          coverUrl: galleryHiddenFromClient(gallery) ? null : gallery.coverUrl || images[0]?.url || null,
           totalImages: visibleGalleryImages(gallery, images).length,
           totalSelected: selection.length,
           url: clientGalleryUrl(env, gallery.slug),
@@ -4292,7 +4298,8 @@ export default {
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
       const canDownload = gallery.status === "final" || gallery.allowDownload === true;
-      const page = images.slice(cursor, cursor + limit).map((image) => {
+      const hidden = galleryHiddenFromClient(gallery);
+      const page = hidden ? [] : images.slice(cursor, cursor + limit).map((image) => {
         const item = thumbnailImage(image);
         if (canDownload) item.downloadUrl = cloudinaryAttachmentUrl(image.url);
         return item;
@@ -4303,13 +4310,16 @@ export default {
       }
 
       return json({
-        gallery: { ...publicPrivateGallery(gallery, images, selection), adminPreview: Boolean(access.preview), selectionOwnerId: gallery.clientId || access.client.email },
+        gallery: {
+          ...publicPrivateGallery(gallery, images, selection), ...(hidden ? { coverUrl: null } : {}),
+          adminPreview: Boolean(access.preview), selectionOwnerId: gallery.clientId || access.client.email,
+        },
         images: page,
         paging: {
           cursor,
           limit,
-          total: images.length,
-          nextCursor: cursor + page.length < images.length ? cursor + page.length : null,
+          total: hidden ? 0 : images.length,
+          nextCursor: !hidden && cursor + page.length < images.length ? cursor + page.length : null,
         },
       }, 200, { "Cache-Control": "no-store" });
     }
@@ -4325,6 +4335,7 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
+      if (galleryHiddenFromClient(gallery)) return errorJson("As fotos desta galeria estão em edição. Fale com o fotógrafo para alterar a seleção.", 409);
       const changes = url.pathname.endsWith("/favorites") ? body.changes : [{ publicId, selected }];
       if (!Array.isArray(changes) || !changes.length || changes.length > 100) return errorJson("Seleção inválida.", 400);
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
@@ -4372,6 +4383,7 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
       if (gallery.status === "final") return errorJson("A seleção desta galeria já foi encerrada.", 409);
+      if (galleryHiddenFromClient(gallery)) return errorJson("As fotos desta galeria estão em edição. Fale com o fotógrafo para alterar a seleção.", 409);
 
       const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
       const current = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);

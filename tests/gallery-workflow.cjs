@@ -97,6 +97,30 @@ test('a pending Asaas charge freezes gallery favorites and completion', async ()
     { slug: 'race', changes: [{ publicId: 'b', selected: true }] }, 'client-token')).status, 200);
 });
 
+test('a gallery in editing sends the client no photos and refuses changes until the admin reopens it', async () => {
+  const a = app();
+  const editing = { id: 'g', slug: 'race', clientId: 'c', title: 'Race', selectionLimit: 15, status: 'editing', selectionCompletedAt: '2026-10-05T00:00:00.000Z', coverUrl: 'https://example.test/a' };
+  a.seed('private_gallery:g', editing);
+  const view = async () => (await a.request('/client-gallery?slug=race', undefined, 'client-token')).json();
+  const favorite = () => a.request('/client-gallery/favorites', { slug: 'race', changes: [{ publicId: 'b', selected: true }] }, 'client-token');
+
+  const closed = await view();
+  assert.deepEqual([closed.images.length, closed.paging.total, closed.paging.nextCursor, closed.gallery.coverUrl], [0, 0, null, null]);
+  assert.deepEqual([closed.gallery.status, closed.gallery.totalSelected], ['editing', 1]);
+  assert.equal((await favorite()).status, 409);
+  assert.equal((await a.request('/client-gallery/select-all', { slug: 'race' }, 'client-token')).status, 409);
+  assert.deepEqual(Array.from(await a.readKvJson(a.env, 'private_gallery_selection:g', [])), ['a']);
+
+  // Photos released for download are shown even while the status says editing.
+  await a.writeKvJson(a.env, 'private_gallery:g', { ...editing, allowDownload: true });
+  assert.equal((await view()).images.length, 3);
+
+  await a.writeKvJson(a.env, 'private_gallery:g', editing);
+  await a.savePrivateGallery(a.env, { id: 'g', status: 'selection' });
+  assert.equal((await view()).images.length, 3);
+  assert.equal((await favorite()).status, 200);
+});
+
 test('a client can retrieve an in-progress gallery charge without creating another one', async () => {
   const a = app();
   const payment = {
