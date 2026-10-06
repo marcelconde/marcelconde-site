@@ -535,7 +535,7 @@ body.selection-processing .workflow-status {
   position: fixed;
   left: 50%;
   bottom: 22px;
-  z-index: 100;
+  z-index: 130; /* Above the payment window, so its messages stay readable. */
   transform: translate(-50%, 18px);
   opacity: 0;
   pointer-events: none;

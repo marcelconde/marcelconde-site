@@ -27,6 +27,7 @@ const state = {
   payment: null,
   pendingPayment: null,
   paymentPoll: null,
+  pixUnavailable: false,
   pending: new Map(),
   syncPromise: null,
   draftLoaded: false,
@@ -69,6 +70,7 @@ const paymentPix = document.getElementById("paymentPix");
 const paymentHosted = document.getElementById("paymentHosted");
 const paymentHostedText = document.getElementById("paymentHostedText");
 const paymentSwitch = document.getElementById("paymentSwitch");
+const paymentDivider = paymentModal.querySelector(".payment-divider");
 const paymentQr = document.getElementById("paymentQr");
 const paymentCode = document.getElementById("paymentCode");
 const copyPaymentCode = document.getElementById("copyPaymentCode");
@@ -813,6 +815,10 @@ function renderPaymentMethod() {
   else paymentOpenLink.removeAttribute("href");
   paymentSwitch.dataset.method = payment.billingType === "PIX" ? "card" : "pix";
   paymentSwitch.textContent = paymentSwitch.dataset.method === "card" ? "Pagar com cartão" : "Pagar com Pix";
+  // Pix depends on the Asaas account; when it is refused, only the working option is shown.
+  const noPix = paymentSwitch.dataset.method === "pix" && (payment.pixAvailable === false || state.pixUnavailable);
+  paymentSwitch.classList.toggle("hidden", noPix);
+  paymentDivider.classList.toggle("hidden", noPix);
 }
 
 async function changePaymentMethod() {
@@ -837,6 +843,7 @@ async function changePaymentMethod() {
     } else tab?.close();
   } catch (err) {
     tab?.close();
+    if (method === "pix" && /Pix indisponível/.test(err.message || "")) state.pixUnavailable = true;
     showToast(err.message || "Não foi possível mudar a forma de pagamento.");
   } finally {
     paymentSwitch.disabled = false;

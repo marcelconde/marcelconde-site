@@ -3054,6 +3054,7 @@ function publicPayment(payment = {}) {
     amountCents: payment.amountCents || 0,
     providerPaymentId: payment.providerPaymentId || "",
     billingType: payment.billingType || "",
+    pixAvailable: payment.pixRefused !== true,
     qrCode: payment.qrCode || "",
     qrCodeBase64: payment.qrCodeBase64 || "",
     ticketUrl: payment.ticketUrl || "",
@@ -3200,6 +3201,7 @@ async function createAsaasCharge(env, payment, client, document = "", billingTyp
     }),
   });
   let charge = existing;
+  let pixRefused = false;
   if (!charge) {
     try {
       charge = await create(billingType);
@@ -3207,10 +3209,11 @@ async function createAsaasCharge(env, payment, client, document = "", billingTyp
       // Pix depends on the Asaas account (key, approval). A refused POST created
       // no charge, so the card page can replace it without risking a duplicate.
       if (billingType !== "PIX" || !err.definitiveFailure) throw err;
+      pixRefused = true;
       charge = await create("CREDIT_CARD");
     }
   }
-  return validateAsaasCharge(charge, payment, customer);
+  return { ...validateAsaasCharge(charge, payment, customer), ...(pixRefused ? { pixRefused } : {}) };
 }
 
 // D1 owns the unique charge-creation claim. KV reads alone cannot prevent two
@@ -3307,6 +3310,11 @@ async function withPaymentReconciliationLock(env, environment, providerPaymentId
   }
 }
 
+// Asaas has no DELETED status: a removed charge keeps its last status and sets `deleted`.
+function asaasChargeDeleted(charge = {}) {
+  return charge.deleted === true;
+}
+
 function asaasChargeIsPaid(charge, payment) {
   return ["CONFIRMED", "RECEIVED"].includes(charge.status)
     && charge.id === payment.providerPaymentId
@@ -3350,7 +3358,7 @@ async function reconcileAsaasPaymentLocked(env, request, providerPaymentId, envi
     }
   }
   const charge = await asaasRequest(env, environment, `/payments/${encodeURIComponent(providerPaymentId)}`);
-  if (payment.status === "cancelled" && charge.status !== "DELETED") {
+  if (payment.status === "cancelled" && !asaasChargeDeleted(charge)) {
     console.error("Asaas cancelled payment changed; manual reconciliation required", payment.id);
     return { ok: false, reason: "cancelled_payment_changed", payment };
   }
@@ -3366,14 +3374,14 @@ async function reconcileAsaasPaymentLocked(env, request, providerPaymentId, envi
     return { ok: true, approved: true, payment };
   }
   const now = new Date().toISOString();
-  const nextPayment = { ...payment, providerStatus: charge.status || "", updatedAt: now };
+  const nextPayment = { ...payment, providerStatus: asaasChargeDeleted(charge) ? "DELETED" : charge.status || "", updatedAt: now };
   if (["CONFIRMED", "RECEIVED"].includes(charge.status) && !asaasChargeIsPaid(charge, payment)) {
     console.error("Asaas paid charge does not match local payment; manual reconciliation required", payment.id);
     return { ok: false, reason: "paid_charge_mismatch", payment };
   }
   if (!asaasChargeIsPaid(charge, payment)) {
-    nextPayment.status = charge.status === "DELETED" && payment.status === "cancelled"
-      ? "cancelled" : ["DELETED", "REFUNDED", "REPROVED_BY_RISK_ANALYSIS"].includes(charge.status)
+    nextPayment.status = asaasChargeDeleted(charge) && payment.status === "cancelled"
+      ? "cancelled" : asaasChargeDeleted(charge) || ["REFUNDED", "REPROVED_BY_RISK_ANALYSIS"].includes(charge.status)
         ? "rejected" : "pending";
     await writeKvJson(env, key, nextPayment);
     await setAsaasIntentStatus(env, `${reference.kind}:${reference.kind === "quote" ? reference.id : payment.galleryId}`, payment.id, nextPayment.status);
@@ -3546,7 +3554,7 @@ async function cancelGalleryPayment(env, request, gallery, paymentId, actor) {
         await reconcileAsaasPaymentLocked(env, request, payment.providerPaymentId, environment);
         paymentConflict("O pagamento já foi confirmado e não pode ser cancelado. Entre em contato para solicitar estorno.");
       }
-      if (charge.status !== "DELETED") {
+      if (!asaasChargeDeleted(charge)) {
         if (!["PENDING", "OVERDUE"].includes(charge.status)) {
           paymentConflict("O Asaas não permite cancelar esta cobrança no estado atual.");
         }
@@ -3597,14 +3605,17 @@ async function changeGalleryPaymentMethod(env, gallery, paymentId, method) {
       || Math.round(Number(charge.value) * 100) !== payment.amountCents) {
       paymentConflict("Dados da cobrança divergentes. Entre em contato.");
     }
-    if (!["PENDING", "OVERDUE"].includes(charge.status)) {
+    if (asaasChargeDeleted(charge) || !["PENDING", "OVERDUE"].includes(charge.status)) {
       paymentConflict("Esta cobrança não pode mais mudar de forma de pagamento. Atualize a página.");
     }
     const updated = charge.billingType === billingType ? charge : await asaasRequest(env, payment.environment, path, {
       method: "PUT",
       body: JSON.stringify({ billingType, value: charge.value, dueDate: charge.dueDate }),
     });
-    const saved = { ...payment, ...validateAsaasCharge(updated, payment, charge.customer), updatedAt: new Date().toISOString() };
+    const saved = {
+      ...payment, ...validateAsaasCharge(updated, payment, charge.customer),
+      ...(billingType === "PIX" ? { pixRefused: false } : {}), updatedAt: new Date().toISOString(),
+    };
     await writeKvJson(env, key, saved);
     return saved;
   });

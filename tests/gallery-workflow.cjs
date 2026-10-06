@@ -176,11 +176,43 @@ function asaasCharges(a, { refusePix = false } = {}) {
     } else if (method === 'PUT') {
       assert.deepEqual([body.value, body.dueDate], [remote.charge.value, remote.charge.dueDate]);
       remote.charge = { ...remote.charge, billingType: body.billingType };
+    } else if (method === 'DELETE') {
+      // Asaas keeps the status of a removed charge and only flags it as deleted.
+      remote.charge = { ...remote.charge, deleted: true };
+      return reply({ deleted: true, id: 'pay_remote' });
     } else assert.match(url, /\/payments\/pay_remote$/);
     return reply(remote.charge);
   };
   return remote;
 }
+
+test('Asaas flags removed charges instead of changing their status: webhooks are acknowledged and the gallery is released', async () => {
+  const a = app();
+  const remote = asaasCharges(a);
+  a.env.ASAAS_SANDBOX_WEBHOOK_TOKEN = 'sandbox-token';
+  const post = (path, body) => a.request(path, body, 'client-token');
+  const webhook = () => a.context.worker.fetch(new Request('https://example.test/payments/asaas/sandbox/webhook', {
+    method: 'POST', headers: { 'asaas-access-token': 'sandbox-token', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event: 'PAYMENT_DELETED', payment: { id: 'pay_remote' } }),
+  }), a.env, { waitUntil() {} });
+  const stored = id => a.readKvJson(a.env, 'private_gallery_payment:' + id, null);
+
+  // Cancelled on the site: the PAYMENT_DELETED webhook must not be retried forever.
+  let { payment } = await (await post('/client-gallery/payment/create', { slug: 'race', document: '12345678901' })).json();
+  assert.equal((await post('/client-gallery/payment/cancel', { slug: 'race', paymentId: payment.id })).status, 200);
+  assert.deepEqual([remote.charge.status, remote.charge.deleted], ['PENDING', true]);
+  assert.equal((await webhook()).status, 200);
+  assert.equal((await stored(payment.id)).status, 'cancelled');
+
+  // Removed in the Asaas panel while still pending here: the sale is released.
+  remote.charge = null;
+  ({ payment } = await (await post('/client-gallery/payment/create', { slug: 'race', document: '12345678901' })).json());
+  remote.charge.deleted = true;
+  assert.equal((await post('/client-gallery/payment/method', { slug: 'race', paymentId: payment.id, method: 'card' })).status, 409);
+  assert.equal((await webhook()).status, 200);
+  assert.equal((await stored(payment.id)).status, 'rejected');
+  assert.equal((await post('/client-gallery/favorites', { slug: 'race', changes: [{ publicId: 'b', selected: true }] })).status, 200);
+});
 
 test('a gallery charge opens as Pix with its QR Code and switches to card and back on the same charge', async () => {
   const a = app();
@@ -192,7 +224,7 @@ test('a gallery charge opens as Pix with its QR Code and switches to card and ba
   const created = await post('/client-gallery/payment/create', { slug: 'race', document: '12345678901' });
   assert.equal(created.status, 200, created.error);
   const { id } = created.payment;
-  assert.deepEqual([created.payment.billingType, created.payment.qrCode, created.payment.qrCodeBase64], ['PIX', '000201pix', 'QUJD']);
+  assert.deepEqual([created.payment.billingType, created.payment.qrCode, created.payment.qrCodeBase64, created.payment.pixAvailable], ['PIX', '000201pix', 'QUJD', true]);
   assert.equal(created.payment.ticketUrl, 'https://sandbox.asaas.com/i/remote');
   // The QR Code is never stored and page loads do not ask Asaas for it.
   assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:' + id, null)).qrCode, undefined);
@@ -227,7 +259,7 @@ test('when Asaas refuses Pix the sale falls back to one card charge', async () =
   };
   const created = await post('/client-gallery/payment/create', { slug: 'race', document: '12345678901' });
   assert.equal(created.status, 200, created.error);
-  assert.deepEqual([created.payment.billingType, created.payment.qrCode], ['CREDIT_CARD', '']);
+  assert.deepEqual([created.payment.billingType, created.payment.qrCode, created.payment.pixAvailable], ['CREDIT_CARD', '', false]);
   assert.equal(remote.calls.filter(call => call === 'POST /payments').length, 2);
   const pix = await post('/client-gallery/payment/method', { slug: 'race', paymentId: created.payment.id, method: 'pix' });
   assert.equal(pix.status, 502);
