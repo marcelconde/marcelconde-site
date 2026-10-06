@@ -1,6 +1,6 @@
 # Estado atual
 
-Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (código da versão `944a0915`, commit `7d00802`; versão ativa `beeb6a3e` só por troca de secret em 2026-10-05). Reconfirme após novos commits ou trabalho feito no Windows.
+Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (versão `1479898e`, commit `902f241`). Reconfirme após novos commits ou trabalho feito no Windows.
 
 ## Funcionando
 
@@ -9,7 +9,7 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 - Galerias: exclusão em lotes pela Admin API do Cloudinary; seção "Fotos editadas" com conferência por nome de arquivo e "Concluir entrega" (`/private/gallery/complete-delivery`), que apaga os originais da seleção e guarda os nomes em `gallery.deliveredSelection`.
 - Upload de galeria: mantém resolução até 25 MP e busca a maior qualidade JPEG em ~9,9 MB (plano Free: 10 MB e 25 MP); 3 envios simultâneos. Portfólio também envia 3 por vez.
 - Proteção de login (admin e cliente, 2026-10-05): após 1 senha errada exige Cloudflare Turnstile (site key em `login-guard.js`, `TURNSTILE_SECRET_KEY` no Worker); após 5 erros em 24 h a conta bloqueia, envia e-mail com botão de redefinição e só libera com nova senha. O admin vê contas bloqueadas e pode bloquear/desbloquear em Clientes ("Acesso e senha") e em Usuários; bloqueio do admin derruba sessões e resiste a redefinição. Estado em D1: `login_guard:<escopo>:<email>` (`lockedBy`: `attempts` ou `admin`).
-- Testes: `node --test tests/*.cjs` — 52/52 em 2026-10-05.
+- Testes: `node --test tests/*.cjs` — 51/51 em 2026-10-05.
 
 ## Ainda não validado no uso real
 
@@ -21,12 +21,12 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 - Clientes reais ainda não conseguem pagar. Marcel abriu uma conta Asaas nova só para o site; a antiga fica só com a Fotop (nela a produção respondia `403 not_allowed_ip` para qualquer IP).
 - Conta nova (2026-10-05): cadastro em análise (`myAccount/status`: commercialInfo APPROVED, bankAccountInfo PENDING, documentation e general AWAITING_APPROVAL); webhook de produção "marcelconde.com.br - site" salvo e ativo (v3, não sequencial, eventos CONFIRMED, RECEIVED, DELETED, REFUNDED, REPROVED_BY_RISK_ANALYSIS, CREDIT_CARD_CAPTURE_REFUSED); `ASAAS_WEBHOOK_TOKEN` regravado com o token dele. Sem IPs autorizados (API aceita qualquer IP) e validação de saque por webhook desabilitada. Sandbox não criado nela. Chave de produção respondeu HTTP 200 a partir do PC no Brasil; chamada a partir do Worker (`us-east-1`) ainda não testada.
 - `ASAAS_API_KEY` do Worker regravada em 2026-10-05 com a chave "marcelconde.com.br - site" da conta nova (gravada só após HTTP 200). O webhook de mesmo nome criado antes está na conta antiga.
-- Branch `asaas-only` (não mesclada) remove o Mercado Pago. Ela partiu de `8cbf660`; a `main` avançou (lotes, entrega, placement) — refazer o merge com cuidado em `worker.js` e nos testes.
+- Mercado Pago removido do código (merge da `asaas-only`, commit `902f241`, publicado em 2026-10-05); `/payments/mercadopago/webhook` responde 405. Os secrets `MERCADO_PAGO_*` ainda existem no Worker, sem uso. A branch remota `asaas-only` já está mesclada e pode ser apagada.
 - D1 tinha só 2 cobranças Mercado Pago, ambas `rejected` (2026-10-01).
 
 ## Ambiente
 
-- PC Windows (2026-10-05): há um início da integração Lightroom sem commit, de 2026-09-26 (botão "Levar seleção ao Lightroom" no admin, `tools/lightroom/`, `docs/lightroom-classic.md`, testes); aguarda Marcel decidir se vai para uma branch `lightroom-wip`. Node 24.19.0 instalado em 2026-10-05; testes 54/54 nesse PC (inclui os 2 do Lightroom local). Não há `package.json`: `npx` baixa o `wrangler` a cada uso; no PowerShell usar `npx.cmd`.
+- PC Windows (2026-10-05): há um início da integração Lightroom sem commit, de 2026-09-26 (botão "Levar seleção ao Lightroom" no admin, `tools/lightroom/`, `docs/lightroom-classic.md`, testes); aguarda Marcel decidir se vai para uma branch `lightroom-wip`. Node 24.19.0 instalado em 2026-10-05; testes 53/53 nesse PC (51 da `main` + 2 do Lightroom local). Não há `package.json`: `npx` baixa o `wrangler` a cada uso; no PowerShell usar `npx.cmd`.
 - O navegador interno do Claude no Windows fica logado na conta Asaas nova; a aba "Chaves de API" é bloqueada para o Claude.
 
 Referências: `architecture.md`, `decisions.md`, `bugs.md`, `docs/`.
