@@ -12,6 +12,7 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 - Galeria "em edição" (2026-10-05): o cliente não recebe fotos nem capa e não altera a seleção; vê só o aviso de edição até o admin reabrir a seleção ou liberar o download. `content-guard.js` na galeria do cliente bloqueia menu de contexto, arrastar, salvar e imprimir e limpa a página ao abrir as ferramentas de desenvolvedor (só dissuasão).
 - Proteção de login (admin e cliente, 2026-10-05): após 1 senha errada exige Cloudflare Turnstile (site key em `login-guard.js`, `TURNSTILE_SECRET_KEY` no Worker); após 5 erros em 24 h a conta bloqueia, envia e-mail com botão de redefinição e só libera com nova senha. O admin vê contas bloqueadas e pode bloquear/desbloquear em Clientes ("Acesso e senha") e em Usuários; bloqueio do admin derruba sessões e resiste a redefinição. Estado em D1: `login_guard:<escopo>:<email>` (`lockedBy`: `attempts` ou `admin`).
 - Testes: `node --test tests/*.cjs` — 55/55 em 2026-10-05.
+- Portfólio (2026-10-20): 1.205 fotos de `L:CâmeraPortfolio 2026` (seleção feita no chat do claude.ai) enviadas direto ao Cloudinary em 19 álbuns; contagens conferidas pela API. Pets → Animais, Esportes → Eventos Esportivos (Corridas → Corrida). Álbuns novos: Corporativo, Eventos, Formatura, Viagem, Retratos (1 foto) e Eventos Esportivos/Beach Tênis; capas automáticas (primeira foto por nome). 68 fotos que já estavam no site ficaram de fora; as pastas "Para editar (RAW)" e Produtos (só RAW) não foram enviadas.
 
 ## Ainda não validado no uso real
 
@@ -29,6 +30,7 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 ## Ambiente
 
 - PC Windows (2026-10-05): há um início da integração Lightroom sem commit, de 2026-09-26 (botão "Levar seleção ao Lightroom" no admin, `tools/lightroom/`, `docs/lightroom-classic.md`, testes); aguarda Marcel decidir se vai para uma branch `lightroom-wip`. Node 24.19.0 instalado em 2026-10-05; testes 57/57 nesse PC (55 da `main` + 2 do Lightroom local). Não há `package.json`: `npx` baixa o `wrangler` a cada uso; no PowerShell usar `npx.cmd`.
+- Cloudinary direto do PC Windows: credencial na variável de usuário `CLOUDINARY_URL` (chave "claude-portfolio-windows", criada por Marcel em 2026-10-20); ler sem exibir. Portfólio = pastas `portfolio/...` (`asset_folder`); o site lista os álbuns sozinho e `?refresh=1` renova o cache do Worker. Padrão das fotos do portfólio: lado maior 2048 px, JPEG q88 (mozjpeg, 4:4:4), sem metadados; cópias preparadas em `L:CâmeraPortfolio 2026 - pronto para o site`.
 - O navegador interno do Claude no Windows fica logado na conta Asaas nova; a aba "Chaves de API" é bloqueada para o Claude.
 
 Referências: `architecture.md`, `decisions.md`, `bugs.md`, `docs/`.
