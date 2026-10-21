@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/admin/admin.css?v=20261020-01">
+  <link rel="stylesheet" href="/admin/admin.css?v=20261020-02">
   <link rel="stylesheet" href="/admin/workspace.css?v=20260915-01">
 </head>
 <body class="workspace-page">
@@ -92,6 +92,7 @@
     <nav class="tabs" aria-label="Seções do admin">
       <button class="tab active" aria-current="page" data-view="albumsView" type="button">Portfólios</button>
       <button class="tab" data-view="likesView" type="button">Curtidas</button>
+      <button class="tab" data-view="reviewsView" type="button">Avaliações</button>
       <a class="tab" href="/admin/clientes/">Clientes</a>
       <a class="tab" href="/admin/orcamentos/">Orçamentos</a>
       <a class="tab" href="/admin/galerias/">Galerias</a>
@@ -193,6 +194,29 @@
         </section>
       </section>
 
+      <section class="view hidden" id="reviewsView">
+        <div class="content-head likes-head">
+          <div>
+            <span class="eyebrow">Clientes</span>
+            <h1>Avaliações</h1>
+            <p>O pedido sai sozinho no dia seguinte à entrega final, às 10h. Só aparece no site o que você publicar e o cliente autorizou.</p>
+          </div>
+          <button class="btn btn-primary" id="refreshReviewsBtn" type="button">Atualizar</button>
+        </div>
+
+        <div class="admin-card-panel">
+          <h2>Recebidas</h2>
+          <p>Publique as que devem aparecer nos depoimentos da página inicial.</p>
+          <div class="admin-list" id="reviewsList"></div>
+        </div>
+
+        <div class="admin-card-panel">
+          <h2>Pedidos</h2>
+          <p>Galerias entregues e a situação do pedido de avaliação. Use "Pedir avaliação" para clientes antigos.</p>
+          <div class="admin-list" id="reviewRequestsList"></div>
+        </div>
+      </section>
+
       <section class="view hidden" id="likesView">
         <div class="content-head likes-head">
           <div>
@@ -264,6 +288,6 @@
 
   <script src="/theme.js?v=20260915-03"></script>
   <script src="/login-guard.js?v=20261005-02"></script>
-  <script src="/admin/admin.js?v=20261020-01"></script>
+  <script src="/admin/admin.js?v=20261020-02"></script>
 </body>
 </html>

@@ -455,6 +455,7 @@ document.querySelectorAll(".tab[data-view]").forEach((tab) => {
     tab.setAttribute("aria-current", "page");
     document.getElementById(tab.dataset.view).classList.remove("hidden");
     if (tab.dataset.view === "likesView") await loadLikesOverview();
+    if (tab.dataset.view === "reviewsView") await loadReviewsView();
     if (tab.dataset.view === "usersView") await loadUsersView();
     if (tab.dataset.view === "auditView") await loadAuditLogs();
   });
@@ -1349,3 +1350,114 @@ inviteAcceptForm?.addEventListener("submit", async (event) => {
     showLogin("Não consegui validar a sessão.");
   }
 })();
+
+// ── AVALIAÇÕES ───────────────────────────────────────────────
+const reviewsList = $("#reviewsList");
+const reviewRequestsList = $("#reviewRequestsList");
+const REVIEW_STATUS = { pending: "Aguardando você", published: "Publicada no site", hidden: "Oculta" };
+
+function adminMessageRow(title, detail = "") {
+  return `<div class="admin-row"><div><strong>${escapeHtml(title)}</strong>${detail ? `<small>${escapeHtml(detail)}</small>` : ""}</div></div>`;
+}
+
+function reviewStars(rating = 0) {
+  const value = Math.max(0, Math.min(5, Number(rating) || 0));
+  return "★".repeat(value) + "☆".repeat(5 - value);
+}
+
+function renderReviewsView({ reviews = [], requests = [], delivered = [] } = {}) {
+  reviewsList.innerHTML = reviews.length ? reviews.map((review) => {
+    const id = escapeHtml(review.galleryId);
+    const actions = [
+      review.publish && review.status !== "published"
+        ? `<button class="btn btn-primary btn-small" data-review="${id}" data-status="published" type="button">Publicar no site</button>` : "",
+      review.status === "hidden"
+        ? `<button class="btn btn-ghost btn-small" data-review="${id}" data-status="pending" type="button">Voltar para análise</button>`
+        : `<button class="btn btn-ghost btn-small" data-review="${id}" data-status="hidden" type="button">${review.status === "published" ? "Tirar do site" : "Ocultar"}</button>`,
+    ].join("");
+    return `
+      <div class="admin-row review-row">
+        <div>
+          <strong>${reviewStars(review.rating)} ${escapeHtml(review.name || "Cliente")}</strong>
+          <small>${escapeHtml(review.galleryTitle || "")} · ${escapeHtml(formatDate(review.updatedAt || review.createdAt))}${review.isTest ? " · cliente de teste" : ""}</small>
+          <small>${escapeHtml(REVIEW_STATUS[review.status] || review.status || "")}${review.publish ? "" : " · o cliente não autorizou publicar"}</small>
+        </div>
+        <div>
+          <p>${escapeHtml(review.text || "")}</p>
+          ${review.photo?.url ? `<img src="${escapeHtml(review.photo.url.replace("/upload/", "/upload/f_auto,q_auto,w_160,h_160,c_fill/"))}" alt="Foto escolhida pelo cliente">` : ""}
+          <div class="review-actions">${actions}</div>
+        </div>
+      </div>`;
+  }).join("") : adminMessageRow("Nenhuma avaliação ainda.", "Elas chegam quando o cliente responde ao e-mail do dia seguinte à entrega.");
+
+  const reviewed = new Set(reviews.map((review) => review.galleryId));
+  const rows = [
+    ...requests.filter((request) => !reviewed.has(request.galleryId)).map((request) => {
+      const status = request.sentAt
+        ? `Pedido enviado em ${formatDate(request.sentAt)}`
+        : request.attempts ? `Envio falhou: ${request.lastError || "erro"}` : `Pedido agendado para ${formatDate(request.sendAt)}`;
+      return { id: request.galleryId, title: request.galleryTitle, name: request.name, status, label: request.sentAt ? "Reenviar pedido" : "Enviar agora" };
+    }),
+    ...delivered.map((item) => ({ id: item.galleryId, title: item.galleryTitle, name: item.name, status: "Entregue, sem pedido de avaliação", label: "Pedir avaliação" })),
+  ];
+  reviewRequestsList.innerHTML = rows.length ? rows.map((row) => `
+    <div class="admin-row">
+      <div>
+        <strong>${escapeHtml(row.title || "Galeria")}</strong>
+        <small>${escapeHtml(row.name || "")} · ${escapeHtml(row.status)}</small>
+      </div>
+      <button class="btn btn-ghost btn-small" data-request="${escapeHtml(row.id)}" type="button">${escapeHtml(row.label)}</button>
+    </div>`).join("") : adminMessageRow("Nenhum pedido pendente.");
+}
+
+async function loadReviewsView() {
+  reviewsList.innerHTML = adminMessageRow("Carregando avaliações...");
+  reviewRequestsList.innerHTML = "";
+  try {
+    renderReviewsView(await getJson("/private/reviews"));
+  } catch {
+    reviewsList.innerHTML = adminMessageRow("Erro ao carregar avaliações.", "Verifique se o Worker atualizado está publicado.");
+  }
+}
+
+reviewsList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-review]");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const res = await workerFetch("/private/review/status", {
+      method: "POST",
+      body: JSON.stringify({ galleryId: button.dataset.review, status: button.dataset.status }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Não foi possível atualizar a avaliação.");
+    showToast(button.dataset.status === "published" ? "Avaliação publicada no site." : "Avaliação atualizada.");
+    await loadReviewsView();
+  } catch (err) {
+    showToast(err.message);
+    button.disabled = false;
+  }
+});
+
+reviewRequestsList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-request]");
+  if (!button) return;
+  if (!confirm("Enviar agora o e-mail pedindo a avaliação deste cliente?")) return;
+  button.disabled = true;
+  button.textContent = "Enviando...";
+  try {
+    const res = await workerFetch("/private/review/request", {
+      method: "POST",
+      body: JSON.stringify({ galleryId: button.dataset.request }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Não foi possível enviar o pedido.");
+    showToast("Pedido de avaliação enviado ao cliente.");
+    await loadReviewsView();
+  } catch (err) {
+    showToast(err.message);
+    button.disabled = false;
+  }
+});
+
+$("#refreshReviewsBtn").addEventListener("click", loadReviewsView);

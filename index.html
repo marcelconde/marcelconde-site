@@ -1164,6 +1164,14 @@
       display: block;
     }
 
+    .slide-photo {
+      display: block;
+      width: 84px;
+      height: 84px;
+      object-fit: cover;
+      margin: 0 0 1rem;
+    }
+
     .slide-name {
       font-family: var(--serif);
       font-size: 1.5rem;
@@ -2204,11 +2212,12 @@
     // -------------------------------------------------------
     // TESTIMONIALS SLIDER
     // -------------------------------------------------------
-    const slides = document.querySelectorAll('.testimonial-slide');
-    const dots   = document.querySelectorAll('.slider-dot');
-    let current  = 0;
+    let slides  = document.querySelectorAll('.testimonial-slide');
+    let dots    = document.querySelectorAll('.slider-dot');
+    let current = 0;
 
     function goTo(n) {
+      if (!slides.length) return;
       slides[current].classList.remove('active');
       dots[current].classList.remove('active');
       dots[current].setAttribute('aria-selected', 'false');
@@ -2220,7 +2229,39 @@
 
     document.getElementById('slider-prev')?.addEventListener('click', () => goTo(current - 1));
     document.getElementById('slider-next')?.addEventListener('click', () => goTo(current + 1));
-    dots.forEach((dot, i) => dot.addEventListener('click', () => goTo(i)));
+    document.querySelector('.slider-dots')?.addEventListener('click', (event) => {
+      const dot = event.target.closest('.slider-dot');
+      if (dot) goTo([...dots].indexOf(dot));
+    });
+
+    // Avaliações reais de clientes, publicadas no admin, substituem os depoimentos fixos da página.
+    async function loadReviews() {
+      try {
+        const { reviews = [] } = await fetch('https://api.marcelconde.com.br/reviews').then((r) => r.json());
+        const wrapper = document.querySelector('.testimonials .slider-wrapper');
+        const controls = wrapper?.querySelector('.slider-controls');
+        const dotsBox = wrapper?.querySelector('.slider-dots');
+        if (!reviews.length || !controls || !dotsBox) return;
+        const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        wrapper.querySelectorAll('.testimonial-slide').forEach((el) => el.remove());
+        controls.insertAdjacentHTML('beforebegin', reviews.map((review, i) => `
+          <div class="testimonial-slide${i === 0 ? ' active' : ''}" role="group" aria-label="Depoimento ${i + 1} de ${reviews.length}">
+            <div class="slide-meta">
+              <span class="slide-quote-mark" aria-hidden="true">"</span>
+              ${review.photo ? `<img class="slide-photo" src="${esc(review.photo)}" alt="Foto de ${esc(review.name)} por Marcel Conde" loading="lazy" decoding="async">` : ''}
+              <span class="slide-name">${esc(review.name)}</span>
+              <div class="slide-stars" aria-label="${Number(review.rating)} estrelas">${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</div>
+            </div>
+            <p class="slide-text">"${esc(review.text)}"</p>
+          </div>`).join(''));
+        dotsBox.innerHTML = reviews.map((_, i) => `<button class="slider-dot${i === 0 ? ' active' : ''}" role="tab" aria-label="Depoimento ${i + 1}" aria-selected="${i === 0}"></button>`).join('');
+        slides = wrapper.querySelectorAll('.testimonial-slide');
+        dots = dotsBox.querySelectorAll('.slider-dot');
+        current = 0;
+      } catch {
+        // sem avaliações publicadas ou sem conexão: ficam os depoimentos da página
+      }
+    }
 
     // -------------------------------------------------------
     // CUSTOM CURSOR
@@ -2485,10 +2526,12 @@
       requestIdleCallback(() => loadPortfolio(), { timeout: 2000 });
       requestIdleCallback(() => initHeroReel(), { timeout: 1500 });
       requestIdleCallback(() => loadAboutPhoto(), { timeout: 2000 });
+      requestIdleCallback(() => loadReviews(), { timeout: 3000 });
     } else {
       setTimeout(() => loadPortfolio(), 0);
       setTimeout(() => initHeroReel(), 0);
       setTimeout(() => loadAboutPhoto(), 0);
+      setTimeout(() => loadReviews(), 0);
     }
 
   </script>

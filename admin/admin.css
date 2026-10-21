@@ -1197,3 +1197,28 @@ label {
 .login-captcha[hidden] {
   display: none;
 }
+
+.review-row {
+  align-items: start;
+}
+
+.review-row p {
+  margin: 0 0 10px;
+  color: var(--ink);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.review-row img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
