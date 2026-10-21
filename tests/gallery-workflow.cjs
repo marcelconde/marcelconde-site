@@ -160,6 +160,46 @@ test('a hidden portfolio album leaves the public site, stays in the admin and ca
   assert.equal((await publico('/album?path=portfolio/Batizado')).status, 200);
 });
 
+test('the whole portfolio comes in one cached answer; only the admin forces a rebuild; hidden albums and the sitemap follow it', async () => {
+  const a = app();
+  Object.assign(a.env, { CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' });
+  const guardado = new Map();
+  a.context.caches = { default: {
+    match: async (req) => guardado.get(req.url)?.clone(),
+    put: async (req, res) => { guardado.set(req.url, res.clone()); },
+    delete: async (req) => guardado.delete(req.url),
+  } };
+  const pastas = { portfolio: ['Batizado', 'Esportes'], 'portfolio/Esportes': ['Vôlei'] };
+  let consultas = 0;
+  a.context.fetch = async (url) => {
+    consultas++;
+    if (url.includes('/folders/')) {
+      const path = decodeURIComponent(url.split('/folders/')[1]);
+      return new Response(JSON.stringify({ folders: (pastas[path] || []).map((name) => ({ name, path: `${path}/${name}` })) }));
+    }
+    return new Response(JSON.stringify({ resources: [{ public_id: 'p1', secure_url: 'https://example.test/p1.jpg', width: 10, height: 20 }] }));
+  };
+  const publico = (path) => a.context.worker.fetch(new Request('https://example.test' + path), a.env, { waitUntil() {} });
+
+  const p = await (await publico('/portfolio')).json();
+  assert.deepEqual(p.albums.map((album) => [album.title, album.count, album.children.map((child) => child.title)]), [['Batizado', 1, []], ['Esportes', 1, ['Vôlei']]]);
+  assert.deepEqual([p.albums[0].cover, p.about], [{ url: 'https://example.test/p1.jpg', width: 10, height: 20 }, 'https://example.test/p1.jpg']);
+  const montagem = consultas;
+  await publico('/portfolio');
+  await publico('/portfolio?refresh=1');
+  assert.equal(consultas, montagem, 'visitante usa o que está guardado, mesmo pedindo refresh');
+  await a.request('/portfolio?refresh=1');
+  assert.ok(consultas > montagem, 'o admin consegue refazer');
+
+  await a.request('/admin/album-visibility', { path: 'portfolio/Batizado', hidden: true });
+  assert.deepEqual((await (await publico('/portfolio')).json()).albums.map((album) => album.title), ['Esportes']);
+  assert.deepEqual((await (await a.request('/portfolio')).json()).albums.map((album) => album.title), ['Batizado', 'Esportes']);
+  const sitemap = await (await publico('/sitemap-portfolio.xml')).text();
+  assert.match(sitemap, /categoria\.html\?slug=Esportes</);
+  assert.match(sitemap, /slug=Esportes%2FV%C3%B4lei/);
+  assert.doesNotMatch(sitemap, /Batizado/);
+});
+
 test('a client can retrieve an in-progress gallery charge without creating another one', async () => {
   const a = app();
   const payment = {

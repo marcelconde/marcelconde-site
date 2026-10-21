@@ -420,11 +420,6 @@ async function checkAdmin(request, env) {
   return !!(await getCurrentAdmin(request, env));
 }
 
-async function requireAdmin(request, env) {
-  if (await checkAdmin(request, env)) return null;
-  return errorJson("Unauthorized", 401);
-}
-
 async function requireAdminUser(request, env) {
   const user = await getCurrentAdmin(request, env);
   if (!user) return { error: errorJson("Unauthorized", 401), user: null };
@@ -456,6 +451,133 @@ async function appendAuditLog(env, request, user, action, entity, details = {}) 
   } catch (err) {
     console.error("Audit log failed:", err);
   }
+}
+
+async function mapLimit(items, limit, work) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      out[index] = await work(items[index], index);
+    }
+  }));
+  return out;
+}
+
+// Fotos de um álbum do Cloudinary, sem as apagadas pelo admin, com a capa primeiro.
+async function loadAlbumData(env, cloudName, auth, path) {
+  const res = await fetchWithTimeout(
+    `https://api.cloudinary.com/v1_1/${cloudName}/resources/search`,
+    {
+      method: "POST",
+      headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        expression: `asset_folder="${path}" AND resource_type:image`,
+        sort_by: [{ public_id: "asc" }],
+        max_results: 500,
+        with_field: ["context", "metadata"],
+      }),
+    },
+    15000
+  );
+  const text = await res.text();
+  if (!res.ok) return { ok: false, status: res.status, text, contentType: res.headers.get("Content-Type") || "text/plain" };
+
+  const data = JSON.parse(text);
+  let images = (data.resources || []).map((r) => ({
+    url: r.secure_url, public_id: r.public_id,
+    display_name: r.display_name || "", filename: r.filename || "",
+    width: r.width, height: r.height, format: r.format,
+  }));
+  const deletedAssets = await getDeletedAssets(env, path);
+  if (deletedAssets.size) {
+    images = images.filter((image) => !deletedAssets.has(sanitizePublicId(image.public_id)));
+  }
+  images.sort((a, b) => {
+    const na = getAssetName(a), nb = getAssetName(b);
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
+  const storedCover = await getStoredCover(env, path);
+  let cover = null;
+  let coverSource = "display_name";
+  if (storedCover?.public_id) {
+    cover = images.find((image) => image.public_id === storedCover.public_id) || null;
+    if (cover) coverSource = "kv";
+  }
+  if (!cover) cover = pickCover(images);
+  if (cover?.public_id) {
+    images = [cover, ...images.filter((image) => image.public_id !== cover.public_id)];
+  }
+  return {
+    ok: true,
+    data: {
+      title: path.split("/").pop(), path,
+      thumbnail: cover?.url ?? null, images,
+      cover_public_id: cover?.public_id ?? null,
+      cover_source: coverSource,
+      cover_debug: cover ? { public_id: cover.public_id, display_name: cover.display_name, filename: cover.filename } : null,
+    },
+  };
+}
+
+// O portfólio inteiro numa resposta só (álbuns, sub-álbuns, capa, quantidade e algumas fotos de cada um).
+// Montá-lo consulta o Cloudinary umas 40 vezes; por isso fica guardado e é refeito em segundo plano.
+const PORTFOLIO_MAX_AGE_MS = 30 * 60 * 1000;
+
+async function buildPortfolio(env, cloudName, auth) {
+  const folders = async (path) => {
+    const res = await fetchWithTimeout(
+      `https://api.cloudinary.com/v1_1/${cloudName}/folders/${path}`,
+      { headers: { Authorization: `Basic ${auth}` } },
+      12000
+    );
+    if (!res.ok) throw new Error(`Cloudinary folders ${res.status}`);
+    return ((await res.json()).folders || []).map((folder) => ({ title: folder.name, path: folder.path }));
+  };
+  const summary = async (path) => {
+    const album = await loadAlbumData(env, cloudName, auth, path);
+    if (!album.ok) throw new Error(`Cloudinary search ${album.status}`);
+    const [cover] = album.data.images;
+    return {
+      cover: cover ? { url: cover.url, width: cover.width, height: cover.height } : null,
+      count: album.data.images.length,
+      samples: album.data.images.slice(0, 9).map((image) => image.url),
+    };
+  };
+  const albums = await mapLimit(await folders("portfolio"), 4, async (album) => {
+    const children = await mapLimit(await folders(album.path), 4, async (child) => ({ ...child, ...(await summary(child.path)), children: [] }));
+    return { ...album, ...(await summary(album.path)), children };
+  });
+  const about = await loadAlbumData(env, cloudName, auth, "site/about").catch(() => null);
+  return {
+    generatedAt: new Date().toISOString(),
+    albums,
+    about: about?.ok ? about.data.thumbnail : null,
+  };
+}
+
+function visiblePortfolio(portfolio, hidden = []) {
+  if (!hidden.length) return portfolio;
+  return {
+    ...portfolio,
+    albums: portfolio.albums
+      .filter((album) => !isAlbumHidden(hidden, album.path))
+      .map((album) => ({ ...album, children: (album.children || []).filter((child) => !isAlbumHidden(hidden, child.path)) })),
+  };
+}
+
+function portfolioSitemap(portfolio) {
+  const day = String(portfolio.generatedAt || "").slice(0, 10);
+  const slugs = [];
+  for (const album of portfolio.albums) {
+    const slug = album.path.replace(/^portfolio\//, "");
+    if (album.count || album.children.some((child) => child.count)) slugs.push(slug);
+    for (const child of album.children) if (child.count) slugs.push(child.path.replace(/^portfolio\//, ""));
+  }
+  const escape = (value) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const urls = slugs.map((slug) => `  <url><loc>${escape(`https://marcelconde.com.br/categoria.html?slug=${encodeURIComponent(slug)}`)}</loc>${day ? `<lastmod>${day}</lastmod>` : ""}</url>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
 }
 
 function isAllowedAssetPath(path) {
@@ -1669,6 +1791,7 @@ async function clearWorkerCache(cache, request, path = "") {
 
   for (const origin of origins) {
     urls.add(`${origin}/albums`);
+    urls.add(`${origin}/portfolio`);
 
     if (path) {
       urls.add(`${origin}/album?path=${encodeURIComponent(path)}`);
@@ -1761,17 +1884,6 @@ function authPepper(env) {
 
 function adminEmail(env) {
   return normalizeEmail(env.ADMIN_EMAIL || "marcel.conde@hotmail.com");
-}
-
-async function getStoredAdmin(env) {
-  return getAdminUser(env, adminEmail(env));
-}
-
-async function saveAdminPassword(env, password) {
-  return saveUserPassword(env, adminEmail(env), password, {
-    name: env.ADMIN_NAME || "Marcel Conde",
-    role: "admin",
-  });
 }
 
 // ── PROTEÇÃO DE LOGIN ─────────────────────────────────────────
@@ -2363,28 +2475,6 @@ async function sendClientGalleryInviteEmail(env, email, token, gallery = {}, cli
   } catch {
     return { raw: text };
   }
-}
-
-async function sendClientGalleryTemporaryPasswordEmail(env, email, gallery = {}, client = {}, temporaryPassword = "") {
-  const galleryLoginUrl = clientGalleryLoginUrl(env, gallery.slug || "");
-  const galleryTitle = gallery.title || "sua galeria";
-  const html = emailLayout(env, {
-    preheader: `Acesse ${galleryTitle} com sua senha temporária.`,
-    eyebrow: "Galeria privada",
-    title: "Sua galeria está disponível",
-    intro: `Olá ${emailHtml(client.name || email)}, sua galeria <strong>${emailHtml(galleryTitle)}</strong> está disponível na área do cliente.`,
-    body: `<p style="margin:0;">Use os dados abaixo para entrar. Por segurança, você deverá criar uma senha definitiva antes de acessar as fotos.</p>${temporaryPasswordEmailBlock(email, temporaryPassword)}`,
-    ctaLabel: "Entrar e acessar galeria",
-    ctaUrl: galleryLoginUrl,
-    secondaryCtaLabel: "Área do cliente",
-    secondaryCtaUrl: clientLoginUrl(env),
-    footerNote: "A senha temporária deixa de funcionar depois que você cadastrar a senha definitiva.",
-  });
-  return sendResendMessage(env, {
-    to: [email],
-    subject: `Sua galeria está disponível — ${galleryTitle}`,
-    html,
-  });
 }
 
 async function sendClientGalleryLoginEmail(env, email, gallery = {}, client = {}) {
@@ -6342,13 +6432,15 @@ export default {
     }
 
     const cache        = caches.default;
-    const forceRefresh = url.searchParams.get("refresh") === "1";
+    // Só o admin força a atualização: ela consulta o Cloudinary, que tem limite de consultas por hora.
+    const forceRefresh = url.searchParams.get("refresh") === "1" && await checkAdmin(request, env);
     const cacheKey     = makeCacheKey(request.url);
 
     // Álbuns ocultos no admin somem do site público; quem está logado no admin continua vendo todos.
     // O cache guarda a lista completa e o filtro vale a cada pedido.
     const assetPath = url.pathname === "/albums" ? (url.searchParams.get("path") || "portfolio")
-      : url.pathname === "/album" ? (url.searchParams.get("path") || "") : "";
+      : url.pathname === "/album" ? (url.searchParams.get("path") || "")
+        : ["/portfolio", "/sitemap-portfolio.xml"].includes(url.pathname) ? "portfolio" : "";
     const hiddenAlbums = assetPath.startsWith("portfolio") ? await getHiddenAlbums(env) : [];
     const showHidden = hiddenAlbums.length > 0 && await checkAdmin(request, env);
     if (hiddenAlbums.length && !showHidden && isAlbumHidden(hiddenAlbums, assetPath)) {
@@ -6367,6 +6459,37 @@ export default {
       }
       return new Response(body, { status: response.status, headers });
     };
+
+    if (url.pathname === "/portfolio" || url.pathname === "/sitemap-portfolio.xml") {
+      const portfolioKey = makeCacheKey(`${url.origin}/portfolio`);
+      const auth = btoa(`${apiKey}:${apiSecret}`);
+      const stored = forceRefresh ? null : await cache.match(portfolioKey);
+      let portfolio = stored ? await stored.json().catch(() => null) : null;
+      const rebuild = async () => {
+        const fresh = await buildPortfolio(env, cloudName, auth);
+        await cache.put(portfolioKey, new Response(JSON.stringify(fresh), {
+          headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=604800" },
+        }));
+        return fresh;
+      };
+      if (!portfolio) {
+        try {
+          portfolio = await rebuild();
+        } catch (err) {
+          console.error("Portfolio build failed:", err);
+          return errorJson("Portfólio indisponível no momento.", 503);
+        }
+      } else if (Date.now() - Date.parse(portfolio.generatedAt || 0) > PORTFOLIO_MAX_AGE_MS) {
+        ctx.waitUntil(rebuild().catch((err) => console.error("Portfolio refresh failed:", err)));
+      }
+      const view = showHidden ? portfolio : visiblePortfolio(portfolio, hiddenAlbums);
+      if (url.pathname === "/sitemap-portfolio.xml") {
+        return new Response(portfolioSitemap(view), {
+          headers: { ...corsHeaders(), "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" },
+        });
+      }
+      return json(view, 200, { ...cacheHeaders(60), ...(hiddenAlbums.length ? { Vary: "Authorization, X-Admin-Token" } : {}) });
+    }
 
     if (!forceRefresh) {
       const cached = await cache.match(cacheKey);
@@ -6404,72 +6527,14 @@ export default {
         if (!path) return errorJson("Missing ?path=", 400);
         if (!path.startsWith("portfolio/") && !path.startsWith("site/")) return errorJson("Invalid path.", 400);
 
-        const res = await fetchWithTimeout(
-          `https://api.cloudinary.com/v1_1/${cloudName}/resources/search`,
-          {
-            method: "POST",
-            headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              expression: `asset_folder="${path}" AND resource_type:image`,
-              sort_by: [{ public_id: "asc" }],
-              max_results: 500,
-              with_field: ["context", "metadata"],
-            }),
-          },
-          15000
-        );
-        const text = await res.text();
-        if (!res.ok) {
-          return new Response(text, {
-            status: res.status,
-            headers: { ...corsHeaders(), "Content-Type": res.headers.get("Content-Type") || "text/plain", "X-Worker-Cache": "BYPASS_ERROR" },
+        const album = await loadAlbumData(env, cloudName, auth, path);
+        if (!album.ok) {
+          return new Response(album.text, {
+            status: album.status,
+            headers: { ...corsHeaders(), "Content-Type": album.contentType, "X-Worker-Cache": "BYPASS_ERROR" },
           });
         }
-        const data = JSON.parse(text);
-        let images = (data.resources || []).map((r) => ({
-          url: r.secure_url, public_id: r.public_id,
-          display_name: r.display_name || "", filename: r.filename || "",
-          width: r.width, height: r.height, format: r.format,
-        }));
-        const deletedAssets = await getDeletedAssets(env, path);
-        if (deletedAssets.size) {
-          images = images.filter((image) => !deletedAssets.has(sanitizePublicId(image.public_id)));
-        }
-        images.sort((a, b) => {
-          const na = getAssetName(a), nb = getAssetName(b);
-          return na < nb ? -1 : na > nb ? 1 : 0;
-        });
-        const storedCover = await getStoredCover(env, path);
-        let cover = null;
-        let coverSource = "display_name";
-
-        if (storedCover?.public_id) {
-          cover = images.find((image) => image.public_id === storedCover.public_id) || null;
-          if (cover) coverSource = "kv";
-        }
-
-        if (!cover) {
-          cover = pickCover(images);
-        }
-
-        if (cover?.public_id) {
-          images = [
-            cover,
-            ...images.filter((image) => image.public_id !== cover.public_id),
-          ];
-        }
-
-        response = json(
-          {
-            title: path.split("/").pop(), path,
-            thumbnail: cover?.url ?? null, images,
-            cover_public_id: cover?.public_id ?? null,
-            cover_source: coverSource,
-            cover_debug: cover ? { public_id: cover.public_id, display_name: cover.display_name, filename: cover.filename } : null,
-          },
-          200,
-          { ...cacheHeaders(60), "X-Worker-Cache": forceRefresh ? "REFRESH" : "MISS" }
-        );
+        response = json(album.data, 200, { ...cacheHeaders(60), "X-Worker-Cache": forceRefresh ? "REFRESH" : "MISS" });
       }
 
       else {

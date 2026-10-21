@@ -1,0 +1,18 @@
+# Roda os testes a cada envio para o GitHub. O site continua publicado pelo GitHub Pages a partir da main;
+# um X vermelho aqui avisa que algo quebrou antes que alguém perceba no site.
+name: Testes
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test tests/*.cjs
