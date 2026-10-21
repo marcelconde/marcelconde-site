@@ -1,6 +1,6 @@
 # Estado atual
 
-Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (versão `ea5fa866`, commit `b661ac4`). Reconfirme após novos commits ou trabalho feito no Windows.
+Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (versão `436e22e8`, commit `b1478cd`). Reconfirme após novos commits ou trabalho feito no Windows.
 
 ## Funcionando
 
@@ -11,8 +11,9 @@ Verificado em 2026-10-05: `main` = `origin/main`. Worker `cloudinary` publicado 
 - Fotos extras (2026-10-05): a cobrança nasce como Pix e o QR Code aparece no modal da galeria; "Pagar com cartão" troca o tipo da mesma cobrança e abre a página do Asaas, sem boleto; se o Asaas recusar Pix, a cobrança sai como cartão. Rota `/client-gallery/payment/method`. Detalhes em `docs/asaas-payments.md`.
 - Galeria "em edição" (2026-10-05): o cliente não recebe fotos nem capa e não altera a seleção; vê só o aviso de edição até o admin reabrir a seleção ou liberar o download. `content-guard.js` na galeria do cliente bloqueia menu de contexto, arrastar, salvar e imprimir e limpa a página ao abrir as ferramentas de desenvolvedor (só dissuasão).
 - Proteção de login (admin e cliente, 2026-10-05): após 1 senha errada exige Cloudflare Turnstile (site key em `login-guard.js`, `TURNSTILE_SECRET_KEY` no Worker); após 5 erros em 24 h a conta bloqueia, envia e-mail com botão de redefinição e só libera com nova senha. O admin vê contas bloqueadas e pode bloquear/desbloquear em Clientes ("Acesso e senha") e em Usuários; bloqueio do admin derruba sessões e resiste a redefinição. Estado em D1: `login_guard:<escopo>:<email>` (`lockedBy`: `attempts` ou `admin`).
-- Testes: `node --test tests/*.cjs` — 55/55 em 2026-10-05.
+- Testes: `node --test tests/*.cjs` — 56/56 em 2026-10-20.
 - Portfólio (2026-10-20): 1.205 fotos de `L:CâmeraPortfolio 2026` (seleção feita no chat do claude.ai) enviadas direto ao Cloudinary em 19 álbuns; contagens conferidas pela API. Pets → Animais, Esportes → Eventos Esportivos (Corridas → Corrida). Álbuns novos: Corporativo, Eventos, Formatura, Viagem, Retratos (1 foto) e Eventos Esportivos/Beach Tênis; capas automáticas (primeira foto por nome). 68 fotos que já estavam no site ficaram de fora; as pastas "Para editar (RAW)" e Produtos (só RAW) não foram enviadas.
+- Ocultar álbum do portfólio (2026-10-20): botão "Ocultar do site / Mostrar no site" no álbum aberto do admin; lista em KV `portfolio_hidden_albums`. O site público deixa de listar o álbum (e os de dentro) e `/album` responde 404; o admin pede as listas identificado e vê todos, marcados "Oculto". Validado só nos testes; falta Marcel usar.
 
 ## Ainda não validado no uso real
 
