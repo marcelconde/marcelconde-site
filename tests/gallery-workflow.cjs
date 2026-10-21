@@ -121,6 +121,45 @@ test('a gallery in editing sends the client no photos and refuses changes until 
   assert.equal((await favorite()).status, 200);
 });
 
+test('a hidden portfolio album leaves the public site, stays in the admin and can be shown again', async () => {
+  const a = app();
+  Object.assign(a.env, { CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' });
+  a.context.caches = { default: { match: async () => undefined, put: async () => {} } };
+  const pastas = { portfolio: ['Batizado', 'Esportes'], 'portfolio/Esportes': ['Vôlei'] };
+  a.context.fetch = async (url) => {
+    if (url.includes('/folders/')) {
+      const path = decodeURIComponent(url.split('/folders/')[1]);
+      return new Response(JSON.stringify({ folders: (pastas[path] || []).map((name) => ({ name, path: `${path}/${name}` })) }));
+    }
+    assert.match(url, /\/resources\/search$/);
+    return new Response(JSON.stringify({ resources: [{ public_id: 'p1', secure_url: 'https://example.test/p1.jpg', width: 10, height: 10 }] }));
+  };
+  const publico = (path) => a.context.worker.fetch(new Request('https://example.test' + path), a.env, { waitUntil() {} });
+  const nomes = async (response) => (await response.json()).map((album) => album.path);
+  const ocultar = (path, hidden, token) => a.request('/admin/album-visibility', { path, hidden }, token);
+
+  assert.deepEqual(await nomes(await publico('/albums?path=portfolio')), ['portfolio/Batizado', 'portfolio/Esportes']);
+  assert.equal((await ocultar('portfolio/Batizado', true, 'wrong')).status, 401);
+  assert.equal((await ocultar('portfolio', true)).status, 400);
+  assert.equal((await ocultar('portfolio/Batizado', true)).status, 200);
+
+  assert.deepEqual(await nomes(await publico('/albums?path=portfolio')), ['portfolio/Esportes']);
+  assert.equal((await publico('/album?path=portfolio/Batizado')).status, 404);
+  // o admin, identificado, continua vendo e abrindo o álbum oculto
+  assert.deepEqual(await nomes(await a.request('/albums?path=portfolio')), ['portfolio/Batizado', 'portfolio/Esportes']);
+  assert.equal((await a.request('/album?path=portfolio/Batizado')).status, 200);
+  assert.deepEqual(Array.from((await (await a.request('/admin/album-visibility')).json()).hiddenAlbums), ['portfolio/Batizado']);
+
+  // ocultar um álbum esconde os que estão dentro dele
+  assert.equal((await ocultar('portfolio/Esportes', true)).status, 200);
+  assert.deepEqual(await nomes(await publico('/albums?path=portfolio/Esportes')), []);
+  assert.equal((await publico('/album?path=' + encodeURIComponent('portfolio/Esportes/Vôlei'))).status, 404);
+
+  assert.equal((await ocultar('portfolio/Batizado', false)).status, 200);
+  assert.deepEqual(await nomes(await publico('/albums?path=portfolio')), ['portfolio/Batizado']);
+  assert.equal((await publico('/album?path=portfolio/Batizado')).status, 200);
+});
+
 test('a client can retrieve an in-progress gallery charge without creating another one', async () => {
   const a = app();
   const payment = {

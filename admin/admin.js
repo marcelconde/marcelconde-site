@@ -12,6 +12,7 @@ const state = {
   likesByIndex: {},
   likesByAsset: {},
   coverPublicId: "",
+  hiddenAlbums: [],
   deletedPublicIds: new Set(),
   currentUser: null,
   loading: false,
@@ -64,6 +65,7 @@ const newAlbumTarget = $("#newAlbumTarget");
 const createAlbumBtn = $("#createAlbumBtn");
 const viewAlbumBtn = $("#viewAlbumBtn");
 const clearCacheBtn = $("#clearCacheBtn");
+const toggleHiddenBtn = $("#toggleHiddenBtn");
 const deleteAlbumBtn = $("#deleteAlbumBtn");
 const toastEl = $("#toast");
 const likedGrid = $("#likedGrid");
@@ -460,7 +462,7 @@ document.querySelectorAll(".tab[data-view]").forEach((tab) => {
 
 async function fetchAlbumsAt(path) {
   const qs = path ? `?path=${encodeURIComponent(path)}&refresh=1` : "?refresh=1";
-  const res = await fetch(`${CONFIG.workerUrl}/albums${qs}`);
+  const res = await workerFetch(`/albums${qs}`, { cache: "no-store" });
   if (!res.ok) return [];
   return res.json();
 }
@@ -480,8 +482,12 @@ async function fetchAlbumTree(path = "portfolio", depth = -1, parent = "") {
 async function loadAlbums(forceRefresh = false) {
   albumList.innerHTML = `<div class="album-item"><strong>Carregando...</strong></div>`;
 
-  state.albums = (await fetchAlbumTree("portfolio"))
-    .sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
+  const [albums, visibility] = await Promise.all([
+    fetchAlbumTree("portfolio"),
+    getJson("/admin/album-visibility").catch(() => ({ hiddenAlbums: state.hiddenAlbums })),
+  ]);
+  state.hiddenAlbums = visibility.hiddenAlbums || [];
+  state.albums = albums.sort((a, b) => a.path.localeCompare(b.path, "pt-BR"));
   renderAlbumList();
   updateNewAlbumTarget();
 
@@ -504,6 +510,7 @@ function renderAlbumList() {
         <strong>${escapeHtml(albumName(album.path))}</strong>
         <small>${escapeHtml(album.path)}</small>
       </span>
+      ${hiddenBy(album.path) ? `<span class="album-kind album-hidden" title="Não aparece no site">Oculto</span>` : ""}
       <span class="album-kind">${album.depth ? "Sub" : "Top"}</span>
     </button>
   `).join("");
@@ -513,6 +520,40 @@ function renderAlbumList() {
     btn.addEventListener("click", () => selectAlbum(btn.dataset.path));
   });
 }
+
+// Álbum oculto por ele mesmo ou por um álbum acima dele (ocultar um álbum esconde os de dentro).
+function hiddenBy(path = "") {
+  return state.hiddenAlbums.find((item) => path === item || path.startsWith(`${item}/`)) || "";
+}
+
+function renderVisibility() {
+  const path = state.selectedPath;
+  const by = hiddenBy(path);
+  toggleHiddenBtn.disabled = !path || path === "portfolio" || Boolean(by && by !== path);
+  toggleHiddenBtn.textContent = by === path ? "Mostrar no site" : "Ocultar do site";
+  toggleHiddenBtn.title = by && by !== path ? `Oculto porque o álbum "${albumName(by)}" está oculto.` : "";
+  albumPathLabel.textContent = by ? `${path} · oculto do site` : path;
+}
+
+toggleHiddenBtn.addEventListener("click", async () => {
+  const path = state.selectedPath;
+  if (!path) return;
+  const hidden = hiddenBy(path) !== path;
+  toggleHiddenBtn.disabled = true;
+  try {
+    const data = await getJson("/admin/album-visibility", {
+      method: "POST",
+      body: JSON.stringify({ path, hidden }),
+    });
+    state.hiddenAlbums = data.hiddenAlbums || [];
+    renderAlbumList();
+    showToast(hidden ? "Álbum oculto: não aparece mais no site." : "Álbum visível no site de novo.");
+  } catch (err) {
+    showToast(err.message || "Não foi possível mudar a visibilidade do álbum.");
+  } finally {
+    renderVisibility();
+  }
+});
 
 function filterAlbumList() {
   const query = $("#albumSearch").value.trim().toLocaleLowerCase("pt-BR");
@@ -546,11 +587,12 @@ async function selectAlbum(path) {
   deleteAlbumBtn.disabled = !path || path === "portfolio";
   viewAlbumBtn.classList.remove("disabled");
   viewAlbumBtn.href = `/categoria.html?slug=${encodeURIComponent(state.selectedSlug)}`;
+  renderVisibility();
   updateNewAlbumTarget();
 
   try {
     const [album, likes] = await Promise.all([
-      fetch(`${CONFIG.workerUrl}/album?path=${encodeURIComponent(path)}&refresh=1`).then((r) => r.ok ? r.json() : { images: [] }),
+      workerFetch(`/album?path=${encodeURIComponent(path)}&refresh=1`, { cache: "no-store" }).then((r) => r.ok ? r.json() : { images: [] }),
       getJson(`/likes?album=${encodeURIComponent(state.selectedSlug)}`),
     ]);
 
@@ -965,7 +1007,7 @@ async function loadLikesOverview() {
     try {
       const slug = albumSlug(album.path);
       const [albumData, likesData] = await Promise.all([
-        fetch(`${CONFIG.workerUrl}/album?path=${encodeURIComponent(album.path)}&refresh=1`).then((r) => r.ok ? r.json() : { images: [] }),
+        workerFetch(`/album?path=${encodeURIComponent(album.path)}&refresh=1`, { cache: "no-store" }).then((r) => r.ok ? r.json() : { images: [] }),
         getJson(`/likes?album=${encodeURIComponent(slug)}`),
       ]);
 

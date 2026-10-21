@@ -528,6 +528,10 @@ select:focus {
   flex-shrink: 0;
 }
 
+.album-kind.album-hidden {
+  color: var(--muted);
+}
+
 .upload-panel {
   margin-top: 26px;
   padding: 16px;

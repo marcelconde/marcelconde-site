@@ -77,6 +77,19 @@ function albumCoverKey(path = "") {
   return `album_cover:${path}`;
 }
 
+const HIDDEN_ALBUMS_KEY = "portfolio_hidden_albums";
+
+// Álbuns do portfólio ocultos no admin. Ocultar um álbum esconde também os que estão dentro dele.
+async function getHiddenAlbums(env) {
+  if (!env.LIKES_KV) return [];
+  const list = await env.LIKES_KV.get(HIDDEN_ALBUMS_KEY, "json");
+  return Array.isArray(list) ? list.filter((path) => typeof path === "string") : [];
+}
+
+function isAlbumHidden(hidden = [], path = "") {
+  return hidden.some((item) => path === item || path.startsWith(`${item}/`));
+}
+
 function deletedAssetsKey(path = "") {
   return `album_deleted_assets:${path}`;
 }
@@ -6188,6 +6201,32 @@ export default {
       return json({ ok: true, path });
     }
 
+    if (url.pathname === "/admin/album-visibility" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      return json({ hiddenAlbums: await getHiddenAlbums(env) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/admin/album-visibility" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const body = await readJson(request);
+      const path = String(body.path || "").replace(/\/+/g, "/").trim();
+      const parts = path.split("/").filter(Boolean);
+      if (!path.startsWith("portfolio/") || parts.length < 2 || parts.some((part) => part === "." || part === "..")) {
+        return errorJson("Álbum inválido.", 400);
+      }
+
+      const hidden = body.hidden === true;
+      const current = await getHiddenAlbums(env);
+      const next = hidden ? [...new Set([...current, path])].sort() : current.filter((item) => item !== path);
+      await env.LIKES_KV.put(HIDDEN_ALBUMS_KEY, JSON.stringify(next));
+      await appendAuditLog(env, request, user, hidden ? "ocultar_album" : "mostrar_album", "album", { path });
+      return json({ ok: true, path, hidden, hiddenAlbums: next }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/admin/delete-album" && request.method === "POST") {
       const { error, user } = await requireAdminUser(request, env);
       if (error) return error;
@@ -6199,6 +6238,11 @@ export default {
       }
 
       const stats = await deleteAlbumRecursive(env, request, path);
+      const hiddenAlbums = await getHiddenAlbums(env);
+      if (isAlbumHidden(hiddenAlbums, path) && env.LIKES_KV) {
+        await env.LIKES_KV.put(HIDDEN_ALBUMS_KEY,
+          JSON.stringify(hiddenAlbums.filter((item) => item !== path && !item.startsWith(`${path}/`))));
+      }
       const parentPath = path.split("/").slice(0, -1).join("/") || "portfolio";
       await clearWorkerCache(caches.default, request, parentPath);
       await appendAuditLog(env, request, user, "excluir_album", "album", { path, ...stats });
@@ -6301,9 +6345,32 @@ export default {
     const forceRefresh = url.searchParams.get("refresh") === "1";
     const cacheKey     = makeCacheKey(request.url);
 
+    // Álbuns ocultos no admin somem do site público; quem está logado no admin continua vendo todos.
+    // O cache guarda a lista completa e o filtro vale a cada pedido.
+    const assetPath = url.pathname === "/albums" ? (url.searchParams.get("path") || "portfolio")
+      : url.pathname === "/album" ? (url.searchParams.get("path") || "") : "";
+    const hiddenAlbums = assetPath.startsWith("portfolio") ? await getHiddenAlbums(env) : [];
+    const showHidden = hiddenAlbums.length > 0 && await checkAdmin(request, env);
+    if (hiddenAlbums.length && !showHidden && isAlbumHidden(hiddenAlbums, assetPath)) {
+      return url.pathname === "/albums"
+        ? json([], 200, { "Cache-Control": "no-store" })
+        : errorJson("Álbum não encontrado.", 404);
+    }
+    const visible = async (response) => {
+      if (!hiddenAlbums.length) return response;
+      const headers = new Headers(response.headers);
+      headers.append("Vary", "Authorization, X-Admin-Token");
+      let body = response.body;
+      if (url.pathname === "/albums" && !showHidden && response.ok) {
+        const albums = await response.clone().json().catch(() => null);
+        if (Array.isArray(albums)) body = JSON.stringify(albums.filter((album) => !isAlbumHidden(hiddenAlbums, album.path)));
+      }
+      return new Response(body, { status: response.status, headers });
+    };
+
     if (!forceRefresh) {
       const cached = await cache.match(cacheKey);
-      if (cached) return withCacheStatus(cached, "HIT");
+      if (cached) return visible(withCacheStatus(cached, "HIT"));
     }
 
     const auth = btoa(`${apiKey}:${apiSecret}`);
@@ -6410,14 +6477,14 @@ export default {
       }
 
       ctx.waitUntil(cache.put(cacheKey, response.clone()));
-      return response;
+      return visible(response);
     } catch (err) {
       const cached = await cache.match(cacheKey);
       if (cached) {
         const headers = new Headers(cached.headers);
         headers.set("X-Worker-Cache", "STALE_ON_ERROR");
         headers.set("X-Worker-Error", String(err?.message || err || "unknown"));
-        return new Response(cached.body, { status: cached.status, headers });
+        return visible(new Response(cached.body, { status: cached.status, headers }));
       }
       return errorJson("Cloudinary worker timeout or fetch error", 504, {
         detail: String(err?.message || err || "unknown"),
