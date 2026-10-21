@@ -616,7 +616,12 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      object-position: 72% center;
+      object-position: center;
+      /* no computador a foto ocupa só a área visível, à direita do texto */
+      left: 38%;
+      width: 62%;
+      -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 30%);
+      mask-image: linear-gradient(to right, transparent 0%, #000 30%);
       opacity: 0;
       transition: opacity 1.6s ease;
       filter: brightness(0.82) saturate(0.88);
@@ -1631,6 +1636,10 @@
       }
 
       .hero-reel-img {
+        left: 0;
+        width: 100%;
+        -webkit-mask-image: none;
+        mask-image: none;
         object-position: center center;
         filter: brightness(0.58) saturate(0.76) contrast(0.98) blur(1px);
         transform: scale(1.04);
@@ -2419,11 +2428,12 @@
         return src.replace(/\/upload\/(?:[a-z]+_[^,/]+(?:,[a-z]+_[^,/]+)*\/)?/, `/upload/${t}/`);
       }
 
-      // Mobile: crop vertical; desktop: landscape 16:9
+      // g_auto: o Cloudinary detecta pessoas e rostos e recorta em volta deles.
+      // Mobile: tela inteira vertical; desktop: área à direita do texto.
       const isMobile = window.innerWidth <= 768;
       const transform = isMobile
-        ? 'f_auto,q_auto,w_800,h_1200,c_fill'
-        : 'f_auto,q_auto,w_1920,h_1080,c_fill';
+        ? 'f_auto,q_auto,w_800,h_1200,c_fill,g_auto'
+        : 'f_auto,q_auto,w_1280,h_1080,c_fill,g_auto';
 
       try {
         const portfolio = await getPortfolio();
