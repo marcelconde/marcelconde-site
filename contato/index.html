@@ -7,18 +7,24 @@
   <meta name="description" content="Entre em contato com Marcel Conde Fotografia em Recife-PE para orçamento de casamento, ensaio, evento corporativo, drone e mais.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://marcelconde.com.br/contato/">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;0,700;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="preload" href="/fonts/cormorant-garamond-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/inter-normal-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/fonts/fonts.css?v=20261020-01">
   <link rel="icon" href="/images/favicon.png" type="image/png">
 
   <!-- Google Analytics / Google tag -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-R8TFN8B8YY');
+    // O Analytics (cerca de 190 KB) carrega depois que a página apareceu, sem disputar com fotos e fontes.
+    window.addEventListener('load', () => setTimeout(() => {
+      const ga = document.createElement('script');
+      ga.async = true;
+      ga.src = 'https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY';
+      document.head.appendChild(ga);
+    }, 2000));
   </script>
 
   <style>

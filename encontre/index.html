@@ -7,12 +7,18 @@
   <link rel="canonical" href="https://marcelconde.com.br/encontre/">
 
   <!-- Google Analytics / Google tag -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-R8TFN8B8YY');
+    // O Analytics (cerca de 190 KB) carrega depois que a página apareceu, sem disputar com fotos e fontes.
+    window.addEventListener('load', () => setTimeout(() => {
+      const ga = document.createElement('script');
+      ga.async = true;
+      ga.src = 'https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY';
+      document.head.appendChild(ga);
+    }, 2000));
   </script>
 
   <style>

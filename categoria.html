@@ -7,7 +7,6 @@
   <title>Álbum — Marcel Conde Fotografia</title>
   <meta name="description" content="Galeria de fotos de Marcel Conde — fotógrafo profissional em Recife-PE.">
   <meta name="robots" content="index, follow">
-  <link rel="canonical" href="https://marcelconde.com.br/categoria.html">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://marcelconde.com.br/categoria.html">
   <meta property="og:title" content="Álbum — Marcel Conde Fotografia">
@@ -16,12 +15,18 @@
   <meta property="og:site_name" content="Marcel Conde Fotografia">
 
   <!-- Google Analytics / Google tag -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', 'G-R8TFN8B8YY');
+    // O Analytics (cerca de 190 KB) carrega depois que a página apareceu, sem disputar com fotos e fontes.
+    window.addEventListener('load', () => setTimeout(() => {
+      const ga = document.createElement('script');
+      ga.async = true;
+      ga.src = 'https://www.googletagmanager.com/gtag/js?id=G-R8TFN8B8YY';
+      document.head.appendChild(ga);
+    }, 2000));
   </script>
 
   <style>
@@ -839,7 +844,7 @@
         item.dataset.index = String(index);
 
         const img = document.createElement("img");
-        img.src = cloudUrl(src, 'f_auto,q_auto,w_1400');
+        img.src = cloudUrl(src, 'f_auto,q_auto:best,w_2048,c_limit');
         img.alt = `${decodeURIComponent(String(slug)).replace(/\+/g, " ")} ${index + 1}`;
         img.loading = index <= 1 ? "eager" : "lazy";
         img.decoding = "async";
@@ -964,6 +969,28 @@
     });
 
     // ─── Load album from worker ───
+    // Título, descrição e endereço canônico de cada álbum, para o Google tratar cada um como página própria.
+    function setAlbumMeta(title, slugValue, image) {
+      const pageUrl = `https://marcelconde.com.br/categoria.html?slug=${encodeURIComponent(slugValue)}`;
+      const description = `${title}: fotos de Marcel Conde, fotógrafo profissional em Recife e Olinda (PE).`;
+      document.title = `${title} — Marcel Conde | Fotógrafo em Recife e Olinda`;
+      const set = (selector, attr, value) => {
+        let el = document.head.querySelector(selector);
+        if (!el && selector.startsWith("link")) {
+          el = document.createElement("link");
+          el.rel = "canonical";
+          document.head.appendChild(el);
+        }
+        if (el) el.setAttribute(attr, value);
+      };
+      set('link[rel="canonical"]', "href", pageUrl);
+      set('meta[name="description"]', "content", description);
+      set('meta[property="og:url"]', "content", pageUrl);
+      set('meta[property="og:title"]', "content", document.title);
+      set('meta[property="og:description"]', "content", description);
+      if (image) set('meta[property="og:image"]', "content", cloudUrl(image, "f_auto,q_auto,w_1200,h_630,c_fill"));
+    }
+
     async function load() {
       const slugDecoded = decodeURIComponent(String(slug)).replace(/\+/g, " ");
       const albumPath   = `portfolio/${slugDecoded}`;
@@ -971,7 +998,7 @@
       // 1) Check if this path has sub-folders
       try {
         const foldersRes = await fetch(
-          `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}&refresh=1`,
+          `${WORKER_BASE}/albums?path=${encodeURIComponent(albumPath)}`,
           { cache: "no-store" }
         );
 
@@ -981,23 +1008,24 @@
           if (Array.isArray(folders) && folders.length > 0) {
             titleEl.textContent = slugDecoded;
             gridEl.innerHTML    = "";
+            setAlbumMeta(slugDecoded, slugDecoded);
 
-            for (const folder of folders) {
-              const folderSlug = folder.slug;
-              const folderPath = folder.path;
-              const childSlug  = `${slugDecoded}/${folderSlug}`;
-
-              let thumb = null;
+            // As capas dos sub-álbuns chegam em paralelo e entram na ordem da lista.
+            const thumbs = await Promise.all(folders.map(async (folder) => {
               try {
-                const albumRes = await fetch(
-                  `${WORKER_BASE}/album?path=${encodeURIComponent(folderPath)}&refresh=1`,
-                  { cache: "no-store" }
-                );
-                if (albumRes.ok) {
-                  const albumData = await albumRes.json();
-                  thumb = albumData.thumbnail || albumData.images?.[0]?.url || null;
-                }
-              } catch {}
+                const albumRes = await fetch(`${WORKER_BASE}/album?path=${encodeURIComponent(folder.path)}`);
+                if (!albumRes.ok) return null;
+                const albumData = await albumRes.json();
+                return albumData.thumbnail || albumData.images?.[0]?.url || null;
+              } catch {
+                return null;
+              }
+            }));
+
+            for (const [folderIndex, folder] of folders.entries()) {
+              const folderSlug = folder.slug;
+              const childSlug  = `${slugDecoded}/${folderSlug}`;
+              const thumb = thumbs[folderIndex];
 
               if (!thumb) continue;
 
@@ -1027,7 +1055,7 @@
 
       // 2) No sub-folders — load as photo album
       const res = await fetch(
-        `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}&refresh=1`,
+        `${WORKER_BASE}/album?path=${encodeURIComponent(albumPath)}`,
         { cache: "no-store" }
       );
       if (!res.ok) throw new Error(`Worker /album ${res.status}`);
@@ -1052,6 +1080,12 @@
         return;
       }
 
+      setAlbumMeta(data.title || slugTitle, slugDecoded, list[0]?.url);
+
+      // A grade é em colunas: o topo de cada coluna aparece primeiro e carrega na hora.
+      const columns = parseInt(getComputedStyle(gridEl).columnCount, 10) || 1;
+      const perColumn = Math.ceil(list.length / columns);
+
       list.forEach((item, index) => {
         const src = item.url;
         const publicId = item.public_id || "";
@@ -1059,10 +1093,15 @@
         wrap.className = "img-wrap";
 
         const img    = document.createElement("img");
-        img.src      = cloudUrl(src, 'f_auto,q_auto,w_900');
-        img.loading  = index < 4 ? "eager" : "lazy";
+        const topOfColumn = index % perColumn < 2;
+        img.src      = cloudUrl(src, 'f_auto,q_auto,w_960');
+        img.srcset   = [480, 720, 960, 1280].map((w) => `${cloudUrl(src, `f_auto,q_auto,w_${w}`)} ${w}w`).join(", ");
+        img.sizes    = "(max-width: 480px) 100vw, (max-width: 800px) 50vw, (max-width: 1200px) 33vw, 25vw";
+        if (item.width && item.height) { img.width = item.width; img.height = item.height; }
+        img.loading  = topOfColumn ? "eager" : "lazy";
+        if (index % perColumn === 0) img.fetchPriority = "high";
         img.decoding = "async";
-        img.alt      = `${slugTitle} ${index + 1}`;
+        img.alt      = `${slugTitle} — foto ${index + 1} de Marcel Conde, fotógrafo em Recife e Olinda`;
 
         // Overlay com botões sociais
         const overlay = document.createElement("div");
