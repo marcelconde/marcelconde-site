@@ -7,6 +7,10 @@
   "placement": {
     "region": "aws:us-east-1"
   },
+  // De hora em hora: envia os pedidos de avaliação marcados para o dia seguinte à entrega.
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
   "kv_namespaces": [
     {
       "binding": "LIKES_KV",

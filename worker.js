@@ -252,7 +252,7 @@ function publicClientUser(user = {}) {
 }
 
 function usesGalleryDatabase(env, key) {
-  return Boolean(env.GALLERY_DB) && /^(?:private_gallery(?:_|:)|private_galleries_index$|private_client:|private_clients_index$|admin_audit_logs$)/.test(key);
+  return Boolean(env.GALLERY_DB) && /^(?:private_gallery(?:_|:)|private_galleries_index$|private_client:|private_clients_index$|admin_audit_logs$|review(?:_request)?:)/.test(key);
 }
 
 async function readKvJson(env, key, fallback) {
@@ -2235,6 +2235,155 @@ function clientGalleryUrl(env, slug) {
   return `${origin}/clientes/galeria/?slug=${encodeURIComponent(slug)}`;
 }
 
+// ── AVALIAÇÕES ──────────────────────────────────────────────
+// Depois da entrega final, o cliente recebe no dia seguinte, às 10h de Recife, um pedido de avaliação.
+// A avaliação fica pendente até o admin publicar; só as publicadas e autorizadas aparecem no site.
+const REVIEW_MAX_TEXT = 1000;
+
+function reviewRequestKey(galleryId) {
+  return `review_request:${galleryId}`;
+}
+
+function reviewKey(galleryId) {
+  return `review:${galleryId}`;
+}
+
+// 10h em Recife (UTC-3, sem horário de verão) do dia seguinte.
+function nextReviewSendAt(now = new Date()) {
+  const recife = new Date(now.getTime() - 3 * 3600000);
+  return new Date(Date.UTC(recife.getUTCFullYear(), recife.getUTCMonth(), recife.getUTCDate() + 1, 13, 0, 0)).toISOString();
+}
+
+function firstName(name = "") {
+  return String(name || "").trim().split(/\s+/)[0] || "";
+}
+
+async function scheduleReviewRequest(env, gallery, client, { sendAt = nextReviewSendAt(), resend = false } = {}) {
+  if (!env.GALLERY_DB || !gallery?.id || !client?.email) return null;
+  if (await readKvJson(env, reviewKey(gallery.id), null)) return null; // já avaliou
+  const current = await readKvJson(env, reviewRequestKey(gallery.id), null);
+  if (current?.sentAt && !resend) return current; // um pedido automático por galeria
+  const request = {
+    galleryId: gallery.id,
+    clientId: client.id || gallery.clientId || "",
+    email: normalizeEmail(client.email),
+    name: client.name || "",
+    galleryTitle: gallery.title || gallery.slug || "sua galeria",
+    token: current?.token || randomToken(18),
+    isTest: client.isTest === true,
+    createdAt: current?.createdAt || new Date().toISOString(),
+    sendAt,
+    sentAt: null,
+    attempts: 0,
+    lastError: "",
+  };
+  await writeKvJson(env, reviewRequestKey(gallery.id), request);
+  return request;
+}
+
+function reviewPageUrl(env, token) {
+  const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
+  return `${origin}/avaliar/?t=${encodeURIComponent(token)}`;
+}
+
+async function sendReviewRequestEmail(env, request) {
+  if (!env.RESEND_API_KEY) throw new Error("RESEND_API_KEY não configurada no Worker.");
+  const name = firstName(request.name);
+  const html = emailLayout(env, {
+    preheader: "Leva menos de um minuto e ajuda muito o meu trabalho.",
+    eyebrow: "Sua opinião",
+    title: "Como foi a sua experiência?",
+    intro: `${name ? `Olá ${emailHtml(name)}, ` : "Olá, "}espero que você tenha gostado das fotos de <strong>${emailHtml(request.galleryTitle)}</strong>.`,
+    body: `<p style="margin:0;">Sua avaliação leva menos de um minuto e ajuda outras pessoas a conhecerem o meu trabalho. Se quiser, escolha também uma das suas fotos para aparecer junto.</p>`,
+    ctaLabel: "Avaliar minha experiência",
+    ctaUrl: reviewPageUrl(env, request.token),
+    ...(env.GOOGLE_REVIEW_URL ? { secondaryCtaLabel: "Avaliar no Google", secondaryCtaUrl: env.GOOGLE_REVIEW_URL } : {}),
+  });
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: resendFrom(env),
+      to: [request.email],
+      subject: `Como foram suas fotos? — ${request.galleryTitle}`,
+      html,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Resend ${res.status}: ${text}`);
+  return text ? JSON.parse(text) : {};
+}
+
+async function deliverReviewRequest(env, request) {
+  try {
+    await sendReviewRequestEmail(env, request);
+    const sent = { ...request, sentAt: new Date().toISOString(), lastError: "" };
+    await writeKvJson(env, reviewRequestKey(request.galleryId), sent);
+    return sent;
+  } catch (err) {
+    const failed = { ...request, attempts: Number(request.attempts || 0) + 1, lastError: String(err?.message || err).slice(0, 300) };
+    await writeKvJson(env, reviewRequestKey(request.galleryId), failed);
+    throw err;
+  }
+}
+
+// Chamado de hora em hora pelo agendamento do Worker (wrangler.jsonc → triggers.crons).
+async function sendDueReviewRequests(env, now = new Date()) {
+  if (!env.GALLERY_DB) return { sent: 0, failed: 0 };
+  const { results = [] } = await env.GALLERY_DB.prepare(
+    `SELECT value FROM gallery_records WHERE key LIKE 'review_request:%'
+       AND json_extract(value, '$.sentAt') IS NULL
+       AND json_extract(value, '$.sendAt') <= ?
+       AND COALESCE(json_extract(value, '$.attempts'), 0) < 3
+     LIMIT 20`
+  ).bind(now.toISOString()).all();
+  let sent = 0, failed = 0;
+  for (const row of results) {
+    const request = JSON.parse(row.value);
+    if (await readKvJson(env, reviewKey(request.galleryId), null)) {
+      await writeKvJson(env, reviewRequestKey(request.galleryId), { ...request, sentAt: now.toISOString(), skipped: "already_reviewed" });
+      continue;
+    }
+    try {
+      await deliverReviewRequest(env, request);
+      sent++;
+    } catch (err) {
+      failed++;
+      console.error("Review request email failed:", request.galleryId, err);
+    }
+  }
+  return { sent, failed };
+}
+
+async function findReviewRequestByToken(env, token) {
+  const row = await env.GALLERY_DB.prepare(
+    "SELECT value FROM gallery_records WHERE key LIKE 'review_request:%' AND json_extract(value, '$.token') = ?"
+  ).bind(token).first();
+  return row ? JSON.parse(row.value) : null;
+}
+
+async function listReviewRecords(env, prefix) {
+  const { results = [] } = await env.GALLERY_DB.prepare(
+    "SELECT value FROM gallery_records WHERE key LIKE ?"
+  ).bind(`${prefix}%`).all();
+  return results.map((row) => JSON.parse(row.value)).filter(Boolean)
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+}
+
+function publicReview(review) {
+  return {
+    name: review.name,
+    rating: review.rating,
+    text: review.text,
+    photo: review.photo?.url ? review.photo.url.replace("/upload/", "/upload/f_auto,q_auto,w_720/") : null,
+    createdAt: review.createdAt,
+  };
+}
+
+function cleanReviewName(value = "") {
+  return String(value || "").replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 60);
+}
+
 function clientLoginUrl(env) {
   const origin = String(env.SITE_URL || "https://marcelconde.com.br").replace(/\/+$/, "");
   return `${origin}/clientes/login/`;
@@ -3849,6 +3998,11 @@ function adminInviteUrl(env, token) {
 }
 
 export default {
+  // De hora em hora (wrangler.jsonc → triggers.crons): envia os pedidos de avaliação que venceram.
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(sendDueReviewRequests(env).catch((err) => console.error("Review requests failed:", err)));
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
@@ -5459,6 +5613,10 @@ export default {
       }
       gallery.updatedAt = new Date().toISOString();
       await writeKvJson(env, privateGalleryKey(gallery.id), gallery);
+      // Entrega final enviada: o pedido de avaliação sai no dia seguinte, às 10h.
+      if (emailType === "final_delivery" && resend && !emailError) {
+        await scheduleReviewRequest(env, gallery, client).catch((err) => console.error("Review request schedule failed:", err));
+      }
 
       await appendAuditLog(env, request, user, "publicar_galeria_cliente", "private_galleries", {
         galleryId: gallery.id,
@@ -6338,6 +6496,139 @@ export default {
       await appendAuditLog(env, request, user, "excluir_album", "album", { path, ...stats });
 
       return json({ ok: true, path, ...stats });
+    }
+
+    // ── AVALIAÇÕES ─────────────────────────────────────────────
+
+    if (url.pathname === "/review" && ["GET", "POST"].includes(request.method)) {
+      if (!env.GALLERY_DB) return errorJson("Avaliações indisponíveis no momento.", 503);
+      const body = request.method === "POST" ? await readJson(request) : {};
+      const token = String(url.searchParams.get("t") || body.t || "").trim();
+      const pedido = token.length >= 16 ? await findReviewRequestByToken(env, token) : null;
+      const gallery = pedido ? await readKvJson(env, privateGalleryKey(pedido.galleryId), null) : null;
+      if (!pedido || !gallery) return errorJson("Link de avaliação inválido. Peça um novo link ao fotógrafo.", 404);
+
+      const photos = (await readKvJson(env, privateGalleryImagesKey(gallery.id), []))
+        .filter((image) => image?.phase === "final" && image.url)
+        .slice(0, 24)
+        .map((image) => ({ public_id: image.public_id, url: image.url }));
+      const existing = await readKvJson(env, reviewKey(gallery.id), null);
+      const googleReviewUrl = env.GOOGLE_REVIEW_URL || "";
+
+      if (request.method === "GET") {
+        return json({
+          ok: true,
+          name: firstName(pedido.name),
+          galleryTitle: pedido.galleryTitle,
+          photos,
+          googleReviewUrl,
+          review: existing ? {
+            rating: existing.rating, text: existing.text, name: existing.name,
+            publish: existing.publish, photoPublicId: existing.photo?.public_id || "",
+          } : null,
+        }, 200, { "Cache-Control": "no-store" });
+      }
+
+      const rating = Number(body.rating);
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) return errorJson("Escolha uma nota de 1 a 5 estrelas.", 400);
+      const text = String(body.text || "").trim().slice(0, REVIEW_MAX_TEXT);
+      if (text.length < 3) return errorJson("Escreva um comentário curto sobre a experiência.", 400);
+      const publish = body.publish === true;
+      const photo = publish && body.photoPublicId ? photos.find((item) => item.public_id === body.photoPublicId) || null : null;
+      if (publish && body.photoPublicId && !photo) return errorJson("Escolha uma das fotos da sua galeria.", 400);
+
+      const now = new Date().toISOString();
+      const review = {
+        galleryId: gallery.id,
+        clientId: pedido.clientId,
+        email: pedido.email,
+        galleryTitle: pedido.galleryTitle,
+        name: cleanReviewName(body.name) || firstName(pedido.name) || "Cliente",
+        rating,
+        text,
+        publish,
+        photo,
+        // uma avaliação editada volta para conferência; uma oculta pelo admin continua oculta
+        status: existing?.status === "hidden" ? "hidden" : "pending",
+        isTest: pedido.isTest === true,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      };
+      await writeKvJson(env, reviewKey(gallery.id), review);
+      ctx.waitUntil(appendPrivateGalleryEvent(env, request, gallery.id, existing ? "cliente_editou_avaliacao" : "cliente_avaliou",
+        { rating, publish }, { email: pedido.email, name: review.name }).catch(() => {}));
+      return json({ ok: true, googleReviewUrl }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/reviews" && request.method === "GET") {
+      const reviews = env.GALLERY_DB ? await listReviewRecords(env, "review:") : [];
+      return json({
+        reviews: reviews.filter((review) => review.status === "published" && review.publish && !review.isTest).slice(0, 30).map(publicReview),
+      }, 200, { "Cache-Control": "public, max-age=300" });
+    }
+
+    if (url.pathname === "/private/reviews" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      if (!env.GALLERY_DB) return errorJson("Banco de dados indisponível.", 503);
+      const reviews = await listReviewRecords(env, "review:");
+      const requests = await listReviewRecords(env, "review_request:");
+      const known = new Set([...reviews, ...requests].map((item) => item.galleryId));
+      // galerias já entregues que ainda não receberam pedido: para pedir a clientes antigos
+      const ids = (await readKvJson(env, privateGalleriesIndexKey(), [])).slice(0, 300);
+      const delivered = [];
+      for (const id of ids) {
+        if (known.has(id)) continue;
+        const gallery = await readKvJson(env, privateGalleryKey(id), null);
+        if (gallery?.status !== "final") continue;
+        const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+        if (!client?.email) continue;
+        delivered.push({ galleryId: id, galleryTitle: gallery.title || gallery.slug || id, name: client.name || client.email, isTest: client.isTest === true, deliveredAt: gallery.lastDeliveryEmailAt || gallery.updatedAt || null });
+      }
+      return json({
+        reviews: reviews.map((review) => ({ ...review, email: undefined })),
+        requests: requests.map(({ token, email, ...rest }) => rest),
+        delivered,
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/review/status" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      if (!env.GALLERY_DB) return errorJson("Banco de dados indisponível.", 503);
+      const body = await readJson(request);
+      const galleryId = String(body.galleryId || "").trim();
+      const status = String(body.status || "");
+      if (!["published", "hidden", "pending"].includes(status)) return errorJson("Situação inválida.", 400);
+      const review = galleryId ? await readKvJson(env, reviewKey(galleryId), null) : null;
+      if (!review) return errorJson("Avaliação não encontrada.", 404);
+      if (status === "published" && !review.publish) return errorJson("O cliente não autorizou publicar esta avaliação.", 409);
+      const next = { ...review, status, updatedAt: new Date().toISOString() };
+      await writeKvJson(env, reviewKey(galleryId), next);
+      await appendAuditLog(env, request, user, status === "published" ? "publicar_avaliacao" : "ocultar_avaliacao", "review", { galleryId, status });
+      return json({ ok: true, review: { ...next, email: undefined } });
+    }
+
+    if (url.pathname === "/private/review/request" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      if (!env.GALLERY_DB) return errorJson("Banco de dados indisponível.", 503);
+      const body = await readJson(request);
+      const gallery = await readKvJson(env, privateGalleryKey(String(body.galleryId || "").trim()), null);
+      if (!gallery) return errorJson("Galeria não encontrada.", 404);
+      if (gallery.status !== "final") return errorJson("Peça a avaliação depois da entrega final.", 409);
+      const client = gallery.clientId ? await readKvJson(env, privateClientKey(gallery.clientId), null) : null;
+      if (!client?.email) return errorJson("Cliente da galeria sem e-mail.", 409);
+      if (await readKvJson(env, reviewKey(gallery.id), null)) return errorJson("Este cliente já avaliou.", 409);
+      const pedido = await scheduleReviewRequest(env, gallery, client, { sendAt: new Date().toISOString(), resend: true });
+      try {
+        const sent = await deliverReviewRequest(env, pedido);
+        await appendAuditLog(env, request, user, "pedir_avaliacao", "review", { galleryId: gallery.id });
+        const { token, email, ...rest } = sent;
+        return json({ ok: true, request: rest });
+      } catch (err) {
+        return errorJson("Não foi possível enviar o e-mail agora. Tente de novo em alguns minutos.", 502);
+      }
     }
 
     // ── CURTIDAS ─────────────────────────────────────────────────

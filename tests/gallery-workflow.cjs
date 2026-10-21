@@ -14,7 +14,8 @@ function app() {
     let args = [];
     return { bind(...values) { args = values; return this; },
       async first() { return stmt.get(...args) || null; },
-      async run() { return stmt.run(...args); } };
+      async run() { return stmt.run(...args); },
+      async all() { return { results: stmt.all(...args) }; } };
   }};
   const kv = {
     async get(key, type) { const value = data.get(key); return value == null ? null : type === 'json' ? JSON.parse(value) : value; },
@@ -23,7 +24,7 @@ function app() {
   const tasks = [];
   const context = vm.createContext({ crypto: webcrypto, Request, Response, Headers, URL, URLSearchParams, AbortController, TextEncoder, TextDecoder, btoa, atob, console, setTimeout, clearTimeout, fetch: () => { throw Error('Unexpected external request'); } });
   const source = fs.readFileSync(require.resolve('../worker.js'), 'utf8').replace('export default {', 'globalThis.worker = {');
-  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, claimAsaasIntent, saveClientPassword, saveUserPassword};', context);
+  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, claimAsaasIntent, saveClientPassword, saveUserPassword, sendDueReviewRequests};', context);
   const env = { LIKES_KV: kv, GALLERY_DB: database, ADMIN_KEY: 'local-test-key' };
   const seed = (key, value) => data.set(key, JSON.stringify(value));
   const request = (path, body, token = 'local-test-key') => context.worker.fetch(new Request('https://example.test' + path, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : {body: JSON.stringify(body)}) }), env, {waitUntil(p) { tasks.push(p); }});
@@ -198,6 +199,81 @@ test('the whole portfolio comes in one cached answer; only the admin forces a re
   assert.match(sitemap, /categoria\.html\?slug=Esportes</);
   assert.match(sitemap, /slug=Esportes%2FV%C3%B4lei/);
   assert.doesNotMatch(sitemap, /Batizado/);
+});
+
+test('after the final delivery the client is asked for a review the next day; only reviews the admin publishes reach the site', async () => {
+  const a = app();
+  a.env.RESEND_API_KEY = 'resend-test';
+  a.env.GOOGLE_REVIEW_URL = 'https://g.page/r/teste/review';
+  const emails = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(url, 'https://api.resend.com/emails');
+    emails.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ id: 'email_' + emails.length }));
+  };
+  await a.saveClientPassword(a.env, 'client@example.test', 'right-password');
+  a.seed('private_gallery:g', { id: 'g', slug: 'race', clientId: 'c', title: 'Race', status: 'final', selectionLimit: 15 });
+  a.seed('private_gallery_images:g', [
+    { public_id: 'f1', phase: 'final', url: 'https://res.cloudinary.com/x/image/upload/v1/f1.jpg' },
+    { public_id: 's1', phase: 'selection', url: 'https://example.test/s1' },
+  ]);
+  const publicar = await a.request('/private/gallery/publish', { galleryId: 'g' });
+  assert.equal(publicar.status, 200, await publicar.clone().text());
+  assert.match(emails[0].subject, /Suas fotos estão prontas/);
+  const pedido = JSON.parse((await a.env.GALLERY_DB.prepare('SELECT value FROM gallery_records WHERE key = ?').bind('review_request:g').first()).value);
+  assert.equal(pedido.sentAt, null);
+  assert.match(pedido.sendAt, /T13:00:00\.000Z$/, 'dia seguinte, 10h em Recife');
+
+  // o envio de hora em hora só manda quando chega a hora, e uma vez só
+  assert.deepEqual({ ...(await a.sendDueReviewRequests(a.env, new Date())) }, { sent: 0, failed: 0 });
+  assert.deepEqual({ ...(await a.sendDueReviewRequests(a.env, new Date(Date.parse(pedido.sendAt) + 1000))) }, { sent: 1, failed: 0 });
+  assert.equal((await a.sendDueReviewRequests(a.env, new Date(Date.parse(pedido.sendAt) + 7200000))).sent, 0);
+  assert.match(emails[1].subject, /Como foram suas fotos\? — Race/);
+  assert.match(emails[1].html, /g\.page\/r\/teste\/review/);
+  const token = decodeURIComponent(/avaliar\/\?t=([^"&<]+)/.exec(emails[1].html)[1]);
+
+  const pagina = (path, body) => a.context.worker.fetch(new Request('https://example.test' + path, body
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}), a.env, { waitUntil() {} });
+  assert.equal((await pagina('/review?t=nao-existe-nao-existe')).status, 404);
+  const info = await (await pagina('/review?t=' + encodeURIComponent(token))).json();
+  assert.deepEqual([info.name, info.photos.map((p) => p.public_id), info.googleReviewUrl], ['Client', ['f1'], 'https://g.page/r/teste/review']);
+  assert.equal((await pagina('/review', { t: token, rating: 6, text: 'Ótimo' })).status, 400);
+  assert.equal((await pagina('/review', { t: token, rating: 5, text: 'Amei', publish: true, photoPublicId: 's1' })).status, 400, 'só fotos da entrega final');
+  assert.equal((await pagina('/review', { t: token, rating: 5, text: 'Amei as fotos!', name: 'Ana <b>S.</b>', publish: true, photoPublicId: 'f1' })).status, 200);
+
+  const site = async () => Array.from((await (await pagina('/reviews')).json()).reviews);
+  assert.deepEqual(await site(), [], 'pendente até o admin publicar');
+  assert.equal((await a.request('/private/review/status', { galleryId: 'g', status: 'published' }, 'wrong')).status, 401);
+  assert.equal((await a.request('/private/review/status', { galleryId: 'g', status: 'published' })).status, 200);
+  const [publicada] = await site();
+  assert.deepEqual([publicada.name, publicada.rating, publicada.text], ['Ana bS./b', 5, 'Amei as fotos!']);
+  assert.equal(publicada.photo, 'https://res.cloudinary.com/x/image/upload/f_auto,q_auto,w_720/v1/f1.jpg');
+
+  // editar volta para conferência; sem autorização o admin não consegue publicar
+  await pagina('/review', { t: token, rating: 4, text: 'Mudei o texto', publish: true });
+  assert.deepEqual(await site(), []);
+  await pagina('/review', { t: token, rating: 4, text: 'Só para você', publish: false });
+  assert.equal((await a.request('/private/review/status', { galleryId: 'g', status: 'published' })).status, 409);
+  const painel = await (await a.request('/private/reviews')).json();
+  assert.deepEqual([painel.reviews.length, painel.requests.length, painel.requests[0].token], [1, 1, undefined]);
+});
+
+test('the admin can ask an earlier client for a review right away', async () => {
+  const a = app();
+  a.env.RESEND_API_KEY = 'resend-test';
+  const emails = [];
+  a.context.fetch = async (url, options = {}) => { emails.push(JSON.parse(options.body)); return new Response(JSON.stringify({ id: 'x' })); };
+  a.seed('private_galleries_index', ['g', 'h']);
+  a.seed('private_gallery:g', { id: 'g', slug: 'race', clientId: 'c', title: 'Race', status: 'final' });
+  a.seed('private_gallery:h', { id: 'h', slug: 'other', clientId: 'c', title: 'Other', status: 'selection' });
+  const painel = await (await a.request('/private/reviews')).json();
+  assert.deepEqual(Array.from(painel.delivered, (item) => item.galleryId), ['g'], 'só galerias já entregues');
+  assert.equal((await a.request('/private/review/request', { galleryId: 'h' })).status, 409);
+  const pedir = await a.request('/private/review/request', { galleryId: 'g' });
+  assert.equal(pedir.status, 200, await pedir.clone().text());
+  assert.equal(emails.length, 1);
+  assert.match(emails[0].html, /avaliar\/\?t=/);
+  assert.deepEqual(Array.from((await (await a.request('/private/reviews')).json()).delivered), []);
 });
 
 test('a client can retrieve an in-progress gallery charge without creating another one', async () => {
