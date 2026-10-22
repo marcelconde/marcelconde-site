@@ -3,7 +3,7 @@
 Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou deixar para depois.
 
 - **Asaas — conta nova só do site** (cadastro aprovado em 2026-10-22: dados comerciais, documentos e aprovação geral). Não voltar ao Mercado Pago. Falta:
-  1. Cadastrar uma chave Pix na conta (Pix → Minhas chaves está vazio em 2026-10-22); sem ela a cobrança não gera QR Code e as fotos extras caem no cartão.
+  1. Chave Pix `pix@marcelconde.com.br` (e-mail, alias do Cloudflare Email Routing para o Gmail de Marcel) cadastrada em 2026-10-22. Pix dinâmico: R$ 0,99 por cobrança recebida até 03/01/2027 (depois R$ 1,99), recebe na hora.
   2. Depois da chave, conferir no uso real o modal de fotos extras: QR Code Pix aparece, copia e cola funciona e a troca Pix↔cartão mantém uma cobrança só.
   3. Conferir o e-mail de confirmação do pagamento real de R$ 5 (2026-10-05); o valor aparece como confirmado (líquido R$ 4,42) e cai em 32 dias por ser cartão. Testar o Sandbox conforme `docs/asaas-payments.md`.
   4. Na conta antiga: excluir as chaves criadas/expostas em 2026-10-01/02 (não a da Fotop) e o webhook "marcelconde.com.br - site".
