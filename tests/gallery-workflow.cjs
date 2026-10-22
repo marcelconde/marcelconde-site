@@ -683,3 +683,29 @@ test('attempt lock e-mails a reset link; an admin block survives resets, ends se
   assert.equal((await post('/auth/login', { email: 'editor@example.test', password: 'editor-password' })).status, 200);
   assert.equal((await post('/auth/user-lock', { email: 'nobody@example.test', locked: true }, 'local-test-key')).status, 404);
 });
+
+test('deleting a gallery removes its photos in batches, then empty folders, then its records', async () => {
+  const a = app();
+  Object.assign(a.env, { CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' });
+  const ids = Array.from({ length: 120 }, (_, i) => 'clientes/race/selecao/p' + i);
+  await a.writeKvJson(a.env, 'private_gallery_images:g', ids.map(public_id => ({ public_id, phase: 'selection', url: 'https://example.test/' + public_id })));
+  const calls = [];
+  a.context.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.includes('/resources/image/upload')) {
+      const batch = new URL(url).searchParams.getAll('public_ids[]');
+      calls.push('photos:' + batch.length);
+      return new Response(JSON.stringify({ deleted: Object.fromEntries(batch.map(id => [id, 'deleted'])) }));
+    }
+    calls.push('folder:' + decodeURIComponent(path.split('/folders/')[1]));
+    return new Response('{}');
+  };
+  const response = await a.request('/private/gallery/delete', { galleryId: 'g' });
+  assert.equal(response.status, 200, await response.clone().text());
+  assert.equal((await response.json()).deletedImages, 120);
+  assert.deepEqual(calls.slice(0, 2), ['photos:100', 'photos:20']);
+  assert.equal(calls.at(-1), 'folder:clientes/race');
+  assert.equal(calls.filter(call => call.startsWith('folder:')).length, 3);
+  assert.equal(await a.readKvJson(a.env, 'private_gallery:g', null), null);
+  assert.deepEqual(Array.from(await a.readKvJson(a.env, 'private_gallery_images:g', [])), []);
+});

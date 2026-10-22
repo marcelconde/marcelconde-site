@@ -1449,8 +1449,6 @@ async function deletePrivateGallery(env, galleryId) {
   }
 
   const images = await readKvJson(env, privateGalleryImagesKey(id), []);
-  const deletedIds = new Set();
-  const failed = [];
 
   const cloudName = env.CLOUDINARY_CLOUD_NAME;
   const apiKey = env.CLOUDINARY_API_KEY;
@@ -1460,21 +1458,22 @@ async function deletePrivateGallery(env, galleryId) {
     throw Object.assign(new Error("Missing Cloudinary env vars"), { status: 500 });
   }
 
-  for (const image of images) {
-    const publicId = sanitizePublicId(image.public_id || "");
-    if (!publicId) continue;
-    try {
-      await destroyCloudinaryImage(cloudName, apiKey, apiSecret, publicId);
-      deletedIds.add(publicId);
-    } catch (err) {
-      failed.push({
-        public_id: publicId,
-        error: String(err?.message || err || "unknown"),
-      });
-    }
-  }
+  // Batched like the photo removals: one request per 100 photos instead of one per photo.
+  const publicIds = [...new Set(images.map((image) => sanitizePublicId(image.public_id || "")).filter(Boolean))];
+  const { removed: deletedIds, failed } = publicIds.length
+    ? await destroyCloudinaryImages(cloudName, apiKey, apiSecret, publicIds)
+    : { removed: new Set(), failed: [] };
 
-  const index = await readKvJson(env, privateGalleriesIndexKey(), []);
+  const auth = cloudName && apiKey && apiSecret && gallery.slug ? btoa(`${apiKey}:${apiSecret}`) : "";
+  // Cloudinary only removes empty folders, so the gallery folder goes after its subfolders.
+  const removeFolders = async () => {
+    if (!auth) return;
+    await Promise.allSettled([
+      deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}/selecao`),
+      deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}/finais`),
+    ]);
+    await deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}`);
+  };
   const deleteOps = [
     deleteGalleryRecord(env, privateGalleryKey(id)),
     deleteGalleryRecord(env, privateGalleryImagesKey(id)),
@@ -1483,18 +1482,10 @@ async function deletePrivateGallery(env, galleryId) {
     deleteGalleryRecord(env, privateGalleryLatestPaymentKey(id)),
     deleteGalleryRecord(env, privateGalleryBySlugKey(gallery.slug || "")),
     changeStoredIds(env, privateGalleriesIndexKey(), [{ publicId: id, selected: false }]),
+    removeFolders(),
   ];
 
   await Promise.allSettled(deleteOps);
-
-  if (cloudName && apiKey && apiSecret && gallery.slug) {
-    const auth = btoa(`${apiKey}:${apiSecret}`);
-    await Promise.allSettled([
-      deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}/selecao`),
-      deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}/finais`),
-      deleteCloudinaryFolder(cloudName, auth, `clientes/${gallery.slug}`),
-    ]);
-  }
 
   return {
     gallery,
@@ -1757,9 +1748,10 @@ async function deleteAlbumRecursive(env, request, path, stats = { folders: 0, im
   }
 
   const images = await searchCloudinaryImages(cloudName, auth, path);
-  for (const image of images) {
-    await destroyCloudinaryImage(cloudName, apiKey, apiSecret, image.public_id);
-    stats.images += 1;
+  if (images.length) {
+    const { removed, failed } = await destroyCloudinaryImages(cloudName, apiKey, apiSecret, images.map((image) => image.public_id));
+    stats.images += removed.size;
+    if (failed.length) throw new Error(`${failed.length} foto(s) de ${path} não puderam ser apagadas no Cloudinary.`);
   }
 
   await deleteCloudinaryFolder(cloudName, auth, path);
