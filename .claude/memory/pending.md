@@ -2,20 +2,14 @@
 
 Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou deixar para depois.
 
-- **Asaas — conta nova só do site** (a antiga fica com a Fotop; o chamado do `403 not_allowed_ip` deixou de bloquear o site). Não voltar ao Mercado Pago. Falta:
-  1. Aguardar o Asaas aprovar o cadastro (documentação e geral em análise; dados bancários pendentes — Marcel confere em Minha conta se falta enviar algo).
-  2. Depois da aprovação, conferir no uso real o modal de fotos extras: QR Code Pix aparece, copia e cola funciona e a troca Pix↔cartão mantém uma cobrança só (testado apenas com simulação e prévia visual).
-  3. Pagamento real por cartão de crédito concluído em 2026-10-05. Falta Marcel conferir o recebimento no Asaas (crédito não cai na hora) e o e-mail de confirmação; e testar o Sandbox conforme `docs/asaas-payments.md`.
-  4. Na conta antiga: excluir as chaves criadas/expostas em 2026-10-01/02 (não a da Fotop) e o webhook "marcelconde.com.br - site". Remover secrets e webhook do Mercado Pago.
+- **Asaas — conta nova só do site** (cadastro aprovado em 2026-10-22: dados comerciais, documentos e aprovação geral). Não voltar ao Mercado Pago. Falta:
+  1. Cadastrar uma chave Pix na conta (Pix → Minhas chaves está vazio em 2026-10-22); sem ela a cobrança não gera QR Code e as fotos extras caem no cartão.
+  2. Depois da chave, conferir no uso real o modal de fotos extras: QR Code Pix aparece, copia e cola funciona e a troca Pix↔cartão mantém uma cobrança só.
+  3. Conferir o e-mail de confirmação do pagamento real de R$ 5 (2026-10-05); o valor aparece como confirmado (líquido R$ 4,42) e cai em 32 dias por ser cartão. Testar o Sandbox conforme `docs/asaas-payments.md`.
+  4. Na conta antiga: excluir as chaves criadas/expostas em 2026-10-01/02 (não a da Fotop) e o webhook "marcelconde.com.br - site".
   5. Sandbox: a conta nova não tem Sandbox; conferir se `ASAAS_SANDBOX_API_KEY` e o webhook Sandbox atuais continuam válidos ou criar o Sandbox da conta nova.
-  6. Marcel confere no painel, em Chaves de API, que a chave do site não tem "Permitir que esta chave execute operações de saque via API" ligado; o site só cria e consulta cobranças.
-  8. Decidir com Marcel: divergência que exige conferência manual (pago com valor ou referência diferente, cobrança cancelada que reaparece) responde 503 ao Asaas a cada tentativa e pode pausar a fila após 15 falhas. Avaliar responder 200 e avisar o admin por e-mail.
-  9. Débito na fatura do Asaas falhou em 2026-10-05 com erro 500 do servidor 3DS do Santander (`emv3dsweb.santander.com.br`), fora do site. Repetir o teste com crédito ou outro banco.
-- **Portfólio (2026-10-20):** Marcel escolher as capas dos álbuns novos no admin (hoje automáticas) e decidir se Retratos, com 1 foto, fica no ar. As fotos de "Para editar (RAW)" e de Produtos ainda precisam ser editadas antes de entrar.
-- **Google (pedido de Marcel, 2026-10-20):** (1) Marcel enviar o link de avaliação do Perfil da Empresa ("Solicitar avaliações" → copiar link) para gravar em `GOOGLE_REVIEW_URL` (variável pública no `wrangler.jsonc`) e publicar o Worker; (2) ele ajustar no Perfil: logotipo e foto de capa, categorias, áreas atendidas só Olinda e Recife (escolha de Marcel em 2026-10-21), serviços, posts; sem estúdio com placa, a área atendida não pode ser removida (exigiria endereço de loja), só reduzida; (3) Search Console: verificar o domínio e enviar os dois sitemaps.
-- **Pedidos de Marcel em 2026-10-21, não iniciados:** (1) ao curtir foto no portfólio (`categoria.html`, botão `.photo-heart`) hoje nada aparece; fazer aviso na hora e o moodboard "Quero algo assim" (curtidas viram pedido de orçamento no admin). (2) Ele não aparece no mapa do Google para "fotógrafo em Olinda"; já orientado em 2026-10-21 a reduzir a área e pôr fotos no perfil. Falta conferir se o perfil está verificado.
-- **Depoimentos fixos da página inicial** (Ana Paula S., Carla e Rafael M., Ricardo T.): confirmar com Marcel se são reais; somem sozinhos quando houver avaliação publicada.
-- **Ideias da análise de 2026-10-20 ainda não feitas** (Marcel pediu, falta definir a ordem): galeria ao vivo no evento (QR Code e TV), moodboard que vira pré-orçamento, agenda com sinal pelo Asaas, antes/depois da edição e páginas de história por evento, galeria com votos da família e comentários por foto, contato do site gravado como lead no admin, painel do negócio (funil, faturamento, uso do Cloudinary), alerta por e-mail de falha e backup do D1.
+  6. Decidir com Marcel: divergência que exige conferência manual (pago com valor ou referência diferente, cobrança cancelada que reaparece) responde 503 ao Asaas a cada tentativa e pode pausar a fila após 15 falhas. Avaliar responder 200 e avisar o admin por e-mail.
+  7. Débito na fatura do Asaas falhou em 2026-10-05 com erro 500 do servidor 3DS do Santander, fora do site. Repetir com outro banco.
 - **Proteção real das fotos (proposta, aguarda Marcel):** a marca d'água da galeria é só CSS e a API entrega a URL do arquivo no Cloudinary (até 25 MP), então o bloqueio de inspeção não impede a cópia. Proposta: entregar ao cliente versão reduzida com a marca aplicada pelo Cloudinary e URL assinada, sem acesso público ao original.
 - **Bloqueio de inspeção só na galeria do cliente:** perguntar a Marcel se quer `content-guard.js` também no portfólio público.
 - **Marca d'água sumiu após o pagamento (relato de Marcel, 2026-10-05):** não reproduzido; em "em edição" não há mais fotos. Conferir a marca numa galeria reaberta.
