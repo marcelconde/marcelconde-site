@@ -94,6 +94,121 @@ function deletedAssetsKey(path = "") {
   return `album_deleted_assets:${path}`;
 }
 
+// ── CURTIDAS DO PORTFÓLIO ─────────────────────────────────────
+// One like per visitor (hashed IP) per photo, a per-hour cap per visitor, atomic
+// counts in D1 and one daily e-mail instead of one e-mail per like.
+const LIKES_PER_VISITOR_PER_HOUR = 60;
+const LIKE_DIGEST_UTC_HOUR = 23; // 20h em Recife
+
+function photoLikePrefix(album) {
+  return `photo_like:${album}:`;
+}
+
+async function visitorHash(env, request) {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${authPepper(env)}:${ip}`));
+  return [...new Uint8Array(digest)].slice(0, 16).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function likeRateKey(hour, visitor) {
+  return `like_rate:${String(hour).padStart(10, "0")}:${visitor}`;
+}
+
+async function readPhotoLikes(env, album) {
+  const prefix = photoLikePrefix(album);
+  const { results = [] } = await env.GALLERY_DB.prepare(
+    "SELECT key, value FROM gallery_records WHERE substr(key, 1, ?) = ?"
+  ).bind(prefix.length, prefix).all();
+  return Object.fromEntries(results.map((row) => [row.key.slice(prefix.length), Number(JSON.parse(row.value)) || 0]));
+}
+
+async function deletePhotoLikes(env, album, publicId = "") {
+  if (!env.GALLERY_DB) return;
+  const prefix = publicId ? `${photoLikePrefix(album)}${publicId}` : photoLikePrefix(album);
+  await env.GALLERY_DB.prepare(
+    publicId ? "DELETE FROM gallery_records WHERE key = ?" : "DELETE FROM gallery_records WHERE substr(key, 1, ?) = ?"
+  ).bind(...(publicId ? [prefix] : [prefix.length, prefix])).run();
+}
+
+async function recordPhotoLike(env, request, { album, albumName, publicId }) {
+  const db = env.GALLERY_DB;
+  const visitor = await visitorHash(env, request);
+  const hour = Math.floor(Date.now() / 3600000);
+  const rateKey = likeRateKey(hour, visitor);
+  await db.prepare(`INSERT INTO gallery_records (key, value) VALUES (?, '1')
+    ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1`).bind(rateKey).run();
+  const rate = await db.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(rateKey).first();
+  if (Number(rate?.value) > LIKES_PER_VISITOR_PER_HOUR) return { limited: true };
+
+  const likeKey = `${photoLikePrefix(album)}${publicId}`;
+  const seen = await db.prepare("INSERT OR IGNORE INTO gallery_records (key, value) VALUES (?, ?)")
+    .bind(`like_seen:${album}:${publicId}:${visitor}`, JSON.stringify(new Date().toISOString())).run();
+  if ((seen.meta?.changes ?? seen.changes) === 1) {
+    await db.prepare(`INSERT INTO gallery_records (key, value) VALUES (?, '1')
+      ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1`).bind(likeKey).run();
+    await db.prepare("INSERT INTO gallery_records (key, value) VALUES (?, ?)")
+      .bind(`like_event:${new Date().toISOString()}:${randomToken(6)}`, JSON.stringify({ album, albumName, publicId })).run();
+  }
+  const count = await db.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(likeKey).first();
+  return { likes: Number(count ? JSON.parse(count.value) : 0) };
+}
+
+// Once a day: one e-mail with the day's likes per album, then old rate counters are dropped.
+async function sendLikeDigest(env, now = new Date()) {
+  if (!env.GALLERY_DB) return { sent: false };
+  const hour = Math.floor(now.getTime() / 3600000);
+  await env.GALLERY_DB.prepare("DELETE FROM gallery_records WHERE key >= 'like_rate:' AND key < ?")
+    .bind(likeRateKey(hour - 1, "")).run();
+  if (now.getUTCHours() !== LIKE_DIGEST_UTC_HOUR) return { sent: false };
+
+  const { results = [] } = await env.GALLERY_DB.prepare(
+    "SELECT key, value FROM gallery_records WHERE key >= 'like_event:' AND key < 'like_event;' ORDER BY key LIMIT 1000"
+  ).all();
+  if (!results.length) return { sent: false };
+  const albums = new Map();
+  for (const row of results) {
+    const event = JSON.parse(row.value);
+    const entry = albums.get(event.album) || { name: event.albumName || event.album, likes: 0, photos: new Set() };
+    entry.likes += 1;
+    entry.photos.add(event.publicId);
+    albums.set(event.album, entry);
+  }
+  const total = results.length;
+  const rows = [...albums.entries()].sort((a, b) => b[1].likes - a[1].likes).map(([album, entry]) => {
+    const url = `https://marcelconde.com.br/categoria.html?slug=${encodeURIComponent(album)}`;
+    return `<p style="margin:0 0 8px;"><a href="${emailHtml(url)}">${emailHtml(entry.name)}</a>: ${entry.likes} curtida${entry.likes === 1 ? "" : "s"} em ${entry.photos.size} foto${entry.photos.size === 1 ? "" : "s"}</p>`;
+  }).join("");
+  const html = emailLayout(env, {
+    preheader: `${total} curtida${total === 1 ? "" : "s"} no portfólio hoje.`,
+    eyebrow: "Curtidas do dia",
+    title: `${total} curtida${total === 1 ? "" : "s"} no portfólio`,
+    intro: "Resumo das fotos curtidas pelos visitantes nas últimas 24 horas.",
+    body: rows,
+    ctaLabel: "Ver curtidas no admin",
+    ctaUrl: "https://marcelconde.com.br/admin/",
+    reason: "Você recebeu este e-mail porque este endereço recebe notificações administrativas da plataforma.",
+  });
+  await sendResendMessage(env, {
+    to: ["contato@marcelconde.com.br"],
+    subject: `❤️ ${total} curtida${total === 1 ? "" : "s"} no portfólio hoje`,
+    html,
+  });
+  const last = results[results.length - 1].key;
+  await env.GALLERY_DB.prepare("DELETE FROM gallery_records WHERE key >= 'like_event:' AND key <= ?").bind(last).run();
+  return { sent: true, total };
+}
+
+// ── ORDEM DAS FOTOS DO PORTFÓLIO ──────────────────────────────
+function albumOrderKey(path = "") {
+  return `album_order:${path}`;
+}
+
+async function getAlbumOrder(env, path = "") {
+  if (!env.LIKES_KV || !path) return [];
+  const order = await env.LIKES_KV.get(albumOrderKey(path), "json");
+  return Array.isArray(order) ? order.filter((id) => typeof id === "string") : [];
+}
+
 async function getStoredCover(env, path = "") {
   if (!env.LIKES_KV || !path) return null;
   return env.LIKES_KV.get(albumCoverKey(path), "json");
@@ -498,7 +613,14 @@ async function loadAlbumData(env, cloudName, auth, path) {
     const na = getAssetName(a), nb = getAssetName(b);
     return na < nb ? -1 : na > nb ? 1 : 0;
   });
-  const storedCover = await getStoredCover(env, path);
+  // An order saved in the admin wins; photos added later follow, by name.
+  const [storedCover, order] = await Promise.all([getStoredCover(env, path), getAlbumOrder(env, path)]);
+  if (order.length) {
+    const position = new Map(order.map((id, index) => [id, index]));
+    images = images.map((image, index) => ({ image, index }))
+      .sort((a, b) => (position.get(a.image.public_id) ?? order.length + a.index) - (position.get(b.image.public_id) ?? order.length + b.index))
+      .map(({ image }) => image);
+  }
   let cover = null;
   let coverSource = "display_name";
   if (storedCover?.public_id) {
@@ -506,7 +628,8 @@ async function loadAlbumData(env, cloudName, auth, path) {
     if (cover) coverSource = "kv";
   }
   if (!cover) cover = pickCover(images);
-  if (cover?.public_id) {
+  // Without a saved order the cover opens the album; with one, the admin chose the first photo.
+  if (cover?.public_id && !order.length) {
     images = [cover, ...images.filter((image) => image.public_id !== cover.public_id)];
   }
   return {
@@ -517,6 +640,7 @@ async function loadAlbumData(env, cloudName, auth, path) {
       cover_public_id: cover?.public_id ?? null,
       cover_source: coverSource,
       cover_debug: cover ? { public_id: cover.public_id, display_name: cover.display_name, filename: cover.filename } : null,
+      custom_order: order.length > 0,
     },
   };
 }
@@ -1761,9 +1885,11 @@ async function deleteAlbumRecursive(env, request, path, stats = { folders: 0, im
     const slug = getAlbumSlugFromPath(path);
     await Promise.allSettled([
       env.LIKES_KV.delete(albumCoverKey(path)),
+      env.LIKES_KV.delete(albumOrderKey(path)),
       env.LIKES_KV.delete(deletedAssetsKey(path)),
       env.LIKES_KV.delete(`likes:${slug}`),
       env.LIKES_KV.delete(`asset_likes:${slug}`),
+      deletePhotoLikes(env, slug),
     ]);
   }
 
@@ -3993,6 +4119,7 @@ export default {
   // De hora em hora (wrangler.jsonc → triggers.crons): envia os pedidos de avaliação que venceram.
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(sendDueReviewRequests(env).catch((err) => console.error("Review requests failed:", err)));
+    ctx.waitUntil(sendLikeDigest(env, new Date(controller.scheduledTime || Date.now())).catch((err) => console.error("Like digest failed:", err)));
   },
 
   async fetch(request, env, ctx) {
@@ -6284,10 +6411,7 @@ export default {
       if (albumPath) {
         const albumSlug = getAlbumSlugFromPath(albumPath);
         if (env.LIKES_KV && albumSlug) {
-          const assetLikesKey = `asset_likes:${albumSlug}`;
-          const assetLikes = (await env.LIKES_KV.get(assetLikesKey, "json")) || {};
-          delete assetLikes[publicId];
-          await env.LIKES_KV.put(assetLikesKey, JSON.stringify(assetLikes));
+          await deletePhotoLikes(env, albumSlug, publicId);
           await rememberDeletedAsset(env, albumPath, publicId);
 
           const storedCover = await getStoredCover(env, albumPath);
@@ -6366,6 +6490,25 @@ export default {
           "Content-Type": res.headers.get("Content-Type") || "application/json",
         },
       });
+    }
+
+    if (url.pathname === "/admin/album-order" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const body = await readJson(request);
+      const albumPath = String(body.albumPath || body.path || "").trim();
+      if (!albumPath || !albumPath.startsWith("portfolio/")) return errorJson("Álbum inválido.", 400);
+      const order = [...new Set((Array.isArray(body.order) ? body.order : [])
+        .map((id) => sanitizePublicId(id)).filter(Boolean))].slice(0, 2000);
+
+      // An empty order goes back to the automatic one (cover first, then by name).
+      if (order.length) await env.LIKES_KV.put(albumOrderKey(albumPath), JSON.stringify(order));
+      else await env.LIKES_KV.delete(albumOrderKey(albumPath));
+      await clearWorkerCache(caches.default, request, albumPath);
+      await appendAuditLog(env, request, user, order.length ? "ordenar_album" : "restaurar_ordem_album", "album", { albumPath, photos: order.length });
+      return json({ ok: true, path: albumPath, custom_order: order.length > 0 });
     }
 
     if (url.pathname === "/admin/set-cover" && request.method === "POST") {
@@ -6626,72 +6769,26 @@ export default {
     // ── CURTIDAS ─────────────────────────────────────────────────
 
     if (url.pathname === "/likes" && request.method === "GET") {
-      const album   = url.searchParams.get("album") || "";
-      const isAdmin = await checkAdmin(request, env);
-
-      // Token inválido ou ausente → retorna apenas {_authorized: false}
-      // O front-end não recebe nenhuma contagem
-      if (!isAdmin) {
-        return json({ _authorized: false });
-      }
-
-      const data = (await env.LIKES_KV?.get(`likes:${album}`, "json")) || {};
-      const byAsset = (await env.LIKES_KV?.get(`asset_likes:${album}`, "json")) || {};
-      return json({ _authorized: true, _byAsset: byAsset, ...data });
+      const album = url.searchParams.get("album") || "";
+      // Counts are only for the admin; visitors never see them.
+      if (!await checkAdmin(request, env)) return json({ _authorized: false });
+      if (!env.GALLERY_DB) return json({ _authorized: true, _byAsset: {} });
+      return json({ _authorized: true, _byAsset: await readPhotoLikes(env, album) }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/like" && request.method === "POST") {
-      const { album = "", albumName = "álbum", index = 0, publicId = "" } = await request.json();
+      const body = await readJson(request);
+      const album = String(body.album || "").trim().slice(0, 160);
+      const albumName = cleanDisplayName(body.albumName || album || "álbum").slice(0, 160);
+      const publicId = sanitizePublicId(body.publicId || "").slice(0, 300);
+      if (!album || !publicId) return errorJson("Foto inválida.", 400);
+      if (!env.GALLERY_DB) return errorJson("Curtidas indisponíveis no momento.", 503);
+
+      const result = await recordPhotoLike(env, request, { album, albumName, publicId });
+      if (result.limited) return errorJson("Muitas curtidas em pouco tempo. Tente mais tarde.", 429);
+      // Only the admin gets the count back, to show it on the page.
       const isAdmin = await checkAdmin(request, env);
-
-      const key  = `likes:${album}`;
-      const data = (await env.LIKES_KV?.get(key, "json")) || {};
-      data[String(index)] = (data[String(index)] || 0) + 1;
-      await env.LIKES_KV?.put(key, JSON.stringify(data));
-
-      let assetLikes = null;
-      const cleanPublicId = sanitizePublicId(publicId);
-      if (cleanPublicId && env.LIKES_KV) {
-        const assetKey = `asset_likes:${album}`;
-        assetLikes = (await env.LIKES_KV.get(assetKey, "json")) || {};
-        assetLikes[cleanPublicId] = (assetLikes[cleanPublicId] || 0) + 1;
-        await env.LIKES_KV.put(assetKey, JSON.stringify(assetLikes));
-      }
-
-      if (env.RESEND_API_KEY) {
-        try {
-          const albumTitle = emailHtml(albumName);
-          const albumUrl = `https://marcelconde.com.br/categoria.html?slug=${encodeURIComponent(album)}`;
-          const likeHtml = emailLayout(env, {
-            preheader: `Uma foto do álbum ${albumName} recebeu uma nova curtida.`,
-            eyebrow: "Nova curtida",
-            title: "Uma foto recebeu curtida",
-            intro: `Uma foto do álbum <strong>${albumTitle}</strong> foi curtida.`,
-            body: `<p style="margin:0;"><strong>Total nessa foto:</strong> ${Number(data[String(index)] || 0)}</p>`,
-            ctaLabel: "Ver álbum",
-            ctaUrl: albumUrl,
-            reason: "Você recebeu este e-mail porque este endereço recebe notificações administrativas da plataforma.",
-          });
-          await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${env.RESEND_API_KEY}`,
-            },
-            body: JSON.stringify({
-              from: resendFrom(env),
-              to: ["contato@marcelconde.com.br"],
-              subject: `❤️ Nova curtida — álbum "${albumName}"`,
-              html: likeHtml,
-            }),
-          });
-        } catch (e) {
-          console.error("Resend error:", e);
-        }
-      }
-
-      // isAdmin informa ao front-end se pode exibir a contagem
-      return json({ likes: cleanPublicId && assetLikes ? assetLikes[cleanPublicId] : data[String(index)], isAdmin });
+      return json({ ok: true, isAdmin, ...(isAdmin ? { likes: result.likes } : {}) }, 200, { "Cache-Control": "no-store" });
     }
 
     // ─────────────────────────────────────────────────────────────

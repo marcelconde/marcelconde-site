@@ -521,6 +521,40 @@
     }
     .quote-fab svg { width: 18px; height: 18px; flex-shrink: 0; color: #25d366; }
 
+    /* ─── CONVITE APÓS CURTIR ─── */
+    .like-prompt {
+      position: fixed;
+      right: 28px;
+      bottom: 92px;
+      z-index: 550;
+      width: 300px;
+      padding: 16px 18px;
+      background: #161616;
+      color: #f5f5f5;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 3px;
+      box-shadow: 0 8px 36px rgba(0,0,0,0.55);
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity .25s ease, transform .25s ease;
+    }
+    .like-prompt.open { opacity: 1; transform: none; pointer-events: auto; }
+    .like-prompt p { margin: 0 0 12px; font-size: .86rem; line-height: 1.45; }
+    .like-prompt-actions { display: flex; gap: 8px; }
+    .like-prompt-actions button {
+      flex: 1;
+      padding: 9px 10px;
+      border-radius: 3px;
+      font-size: .74rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .like-prompt-go { background: #25d366; color: #0b0b0b; border: 1px solid #25d366; }
+    .like-prompt-dismiss { background: transparent; color: #cfcfcf; border: 1px solid rgba(255,255,255,0.2); }
+
     /* ─── POPUP DE ORÇAMENTO ─── */
     .quote-overlay {
       position: fixed;
@@ -636,6 +670,7 @@
       body { padding: 16px; }
       .social-bar { margin: -14px -16px 24px; }
       .quote-fab { bottom: 18px; right: 18px; padding: 11px 16px; font-size: .76rem; }
+      .like-prompt { right: 18px; left: 18px; bottom: 74px; width: auto; }
       .quote-overlay { padding: 0 18px 80px; }
       .quote-popup { width: 290px; }
       .grid { columns: 2; column-gap: 10px; }
@@ -695,6 +730,14 @@
   </button>
 
   <!-- Popup de orçamento -->
+  <div class="like-prompt" id="like-prompt" role="status" aria-live="polite">
+    <p>Gostou desta foto? Posso fotografar algo assim para você.</p>
+    <div class="like-prompt-actions">
+      <button class="like-prompt-go" id="like-prompt-go" type="button">Pedir orçamento</button>
+      <button class="like-prompt-dismiss" id="like-prompt-dismiss" type="button">Agora não</button>
+    </div>
+  </div>
+
   <div class="quote-overlay" id="quote-overlay">
     <div class="quote-popup">
       <div class="quote-popup-header">
@@ -786,6 +829,29 @@
 
       window.open(`https://wa.me/5581984094212?text=${encodeURIComponent(texto)}`, "_blank", "noopener,noreferrer");
       quoteOverlay.classList.remove("open");
+    });
+
+    // ─── Convite para orçamento depois da primeira curtida (uma vez por visita) ───
+    const likePrompt = document.getElementById("like-prompt");
+    let likePromptTimer = null;
+    const closeLikePrompt = () => { likePrompt.classList.remove("open"); clearTimeout(likePromptTimer); };
+    function offerQuoteAfterLike(photoName) {
+      if (adminToken) return;
+      try {
+        if (sessionStorage.getItem("like-quote-offered") === "1") return;
+        sessionStorage.setItem("like-quote-offered", "1");
+      } catch {}
+      likePrompt.dataset.photo = photoName || "";
+      likePrompt.classList.add("open");
+      likePromptTimer = setTimeout(closeLikePrompt, 12000);
+    }
+    document.getElementById("like-prompt-dismiss").addEventListener("click", closeLikePrompt);
+    document.getElementById("like-prompt-go").addEventListener("click", () => {
+      closeLikePrompt();
+      const msgField = document.getElementById("q-msg");
+      const photo = likePrompt.dataset.photo;
+      if (msgField && !msgField.value.trim()) msgField.value = photo ? `Curti a foto ${photo}.` : "Curti uma foto deste álbum.";
+      quoteOverlay.classList.add("open");
     });
 
     if (!slug) {
@@ -1143,6 +1209,7 @@
           // Primeira curtida: salva localmente e manda pro servidor
           heartBtn.classList.add("liked");
           localStorage.setItem(likedKey, '1');
+          offerQuoteAfterLike(item.display_name || item.filename || "");
           try {
             const headers = { 'content-type': 'application/json' };
             if (adminToken) headers['X-Admin-Token'] = adminToken;

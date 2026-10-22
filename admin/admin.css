@@ -1222,3 +1222,75 @@ label {
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* Ordem das fotos do álbum (modo "Organizar fotos") */
+.order-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+}
+
+.order-bar[hidden] {
+  display: none;
+}
+
+.order-bar p {
+  margin: 0;
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.order-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.photo-card.ordering {
+  cursor: grab;
+}
+
+.photo-card.ordering.dragging {
+  opacity: 0.4;
+}
+
+.photo-card.ordering.drop-target {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.order-position {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(184, 149, 106, 0.94);
+  color: #111;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.order-moves {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.order-moves .btn {
+  min-height: 34px;
+  padding: 4px 0;
+  font-size: 0.95rem;
+}

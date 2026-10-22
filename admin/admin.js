@@ -9,9 +9,11 @@ const state = {
   selectedPath: "",
   selectedSlug: "",
   images: [],
-  likesByIndex: {},
   likesByAsset: {},
   coverPublicId: "",
+  customOrder: false,
+  ordering: false,
+  orderDraft: [],
   hiddenAlbums: [],
   deletedPublicIds: new Set(),
   currentUser: null,
@@ -66,6 +68,11 @@ const createAlbumBtn = $("#createAlbumBtn");
 const viewAlbumBtn = $("#viewAlbumBtn");
 const clearCacheBtn = $("#clearCacheBtn");
 const toggleHiddenBtn = $("#toggleHiddenBtn");
+const organizeBtn = $("#organizeBtn");
+const orderBar = $("#orderBar");
+const orderResetBtn = $("#orderResetBtn");
+const orderCancelBtn = $("#orderCancelBtn");
+const orderSaveBtn = $("#orderSaveBtn");
 const deleteAlbumBtn = $("#deleteAlbumBtn");
 const toastEl = $("#toast");
 const likedGrid = $("#likedGrid");
@@ -573,9 +580,10 @@ async function selectAlbum(path) {
   state.selectedPath = path;
   state.selectedSlug = albumSlug(path);
   state.images = [];
-  state.likesByIndex = {};
   state.likesByAsset = {};
   state.coverPublicId = "";
+  state.customOrder = false;
+  setOrdering(false);
 
   renderAlbumList();
   albumTitle.textContent = albumName(path);
@@ -601,12 +609,8 @@ async function selectAlbum(path) {
       .filter(Boolean)
       .filter((image) => !state.deletedPublicIds.has(image.public_id));
     state.coverPublicId = album.cover_public_id || album.cover_debug?.public_id || "";
-
-    if (likes._authorized) {
-      const { _authorized, _byAsset = {}, ...byIndex } = likes;
-      state.likesByIndex = byIndex;
-      state.likesByAsset = _byAsset || {};
-    }
+    state.customOrder = album.custom_order === true;
+    if (likes._authorized) state.likesByAsset = likes._byAsset || {};
 
     renderPhotos();
     updateStats();
@@ -616,21 +620,21 @@ async function selectAlbum(path) {
   }
 }
 
-function totalLikesForImage(image, index) {
-  const byAsset = image.public_id ? Number(state.likesByAsset[image.public_id] || 0) : 0;
-  const byIndex = Number(state.likesByIndex[String(index)] || 0);
-  return Math.max(byAsset, byIndex);
+function totalLikesForImage(image) {
+  return image.public_id ? Number(state.likesByAsset[image.public_id] || 0) : 0;
 }
 
 function renderPhotos() {
-  const totalLikes = state.images.reduce((sum, img, index) => sum + totalLikesForImage(img, index), 0);
+  const totalLikes = state.images.reduce((sum, img) => sum + totalLikesForImage(img), 0);
   const coverPublicId = effectiveCoverPublicId();
-  albumMeta.textContent = `${state.images.length} foto${state.images.length === 1 ? "" : "s"} · ${totalLikes} curtida${totalLikes === 1 ? "" : "s"}`;
+  albumMeta.textContent = `${state.images.length} foto${state.images.length === 1 ? "" : "s"} · ${totalLikes} curtida${totalLikes === 1 ? "" : "s"}${state.customOrder ? " · ordem personalizada" : ""}`;
+  organizeBtn.disabled = state.ordering || !state.selectedPath || state.selectedPath === "portfolio" || state.images.length < 2;
 
   emptyState.classList.toggle("hidden", state.images.length > 0);
+  if (state.ordering) return renderOrdering();
 
   photoGrid.innerHTML = state.images.map((image, index) => {
-    const likes = totalLikesForImage(image, index);
+    const likes = totalLikesForImage(image);
     const displayName = image.display_name || image.filename || `foto-${index + 1}`;
     const isCover = image.public_id && image.public_id === coverPublicId;
     const src = cloudUrl(image.url, "f_auto,q_auto,w_520,h_390,c_fill");
@@ -673,6 +677,121 @@ function renderPhotos() {
     });
   });
 }
+
+// ─── Ordem das fotos no site ───
+// Modo de organização: arrastar (computador) ou setas (qualquer tela). Só vale depois de salvar.
+function setOrdering(active) {
+  state.ordering = active;
+  state.orderDraft = active ? [...state.images] : [];
+  orderBar.hidden = !active;
+  organizeBtn.textContent = active ? "Organizando..." : "Organizar fotos";
+  organizeBtn.disabled = active || !state.selectedPath || state.images.length < 2;
+}
+
+function moveDraft(from, to) {
+  const draft = state.orderDraft;
+  if (from === to || from < 0 || to < 0 || from >= draft.length || to >= draft.length) return;
+  const [item] = draft.splice(from, 1);
+  draft.splice(to, 0, item);
+  renderOrdering();
+}
+
+function renderOrdering() {
+  const draft = state.orderDraft;
+  photoGrid.innerHTML = draft.map((image, index) => {
+    const name = escapeHtml(image.display_name || image.filename || `foto-${index + 1}`);
+    const src = cloudUrl(image.url, "f_auto,q_auto,w_520,h_390,c_fill");
+    return `
+      <article class="photo-card ordering" draggable="true" data-index="${index}">
+        <div class="photo-thumb">
+          <span class="order-position">${index + 1}</span>
+          <img src="${escapeHtml(src)}" alt="${name}" loading="lazy" decoding="async" draggable="false">
+        </div>
+        <div class="photo-info"><strong title="${name}">${name}</strong></div>
+        <div class="order-moves">
+          <button class="btn btn-ghost" data-move="first" type="button" title="Mover para o início" ${index === 0 ? "disabled" : ""}>⇤</button>
+          <button class="btn btn-ghost" data-move="back" type="button" title="Uma posição antes" ${index === 0 ? "disabled" : ""}>←</button>
+          <button class="btn btn-ghost" data-move="forward" type="button" title="Uma posição depois" ${index === draft.length - 1 ? "disabled" : ""}>→</button>
+          <button class="btn btn-ghost" data-move="last" type="button" title="Mover para o fim" ${index === draft.length - 1 ? "disabled" : ""}>⇥</button>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+photoGrid.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-move]");
+  if (!state.ordering || !button) return;
+  const from = Number(button.closest(".photo-card").dataset.index);
+  const last = state.orderDraft.length - 1;
+  const to = { first: 0, back: from - 1, forward: from + 1, last }[button.dataset.move];
+  moveDraft(from, to);
+});
+
+let dragFrom = -1;
+photoGrid.addEventListener("dragstart", (event) => {
+  const card = event.target.closest(".photo-card.ordering");
+  if (!card) return;
+  dragFrom = Number(card.dataset.index);
+  card.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", String(dragFrom));
+});
+photoGrid.addEventListener("dragover", (event) => {
+  const card = event.target.closest(".photo-card.ordering");
+  if (!card || dragFrom < 0) return;
+  event.preventDefault();
+  photoGrid.querySelectorAll(".drop-target").forEach((item) => item !== card && item.classList.remove("drop-target"));
+  card.classList.add("drop-target");
+});
+photoGrid.addEventListener("drop", (event) => {
+  const card = event.target.closest(".photo-card.ordering");
+  if (!card || dragFrom < 0) return;
+  event.preventDefault();
+  const from = dragFrom;
+  dragFrom = -1;
+  moveDraft(from, Number(card.dataset.index));
+});
+photoGrid.addEventListener("dragend", () => {
+  dragFrom = -1;
+  photoGrid.querySelectorAll(".dragging, .drop-target").forEach((item) => item.classList.remove("dragging", "drop-target"));
+});
+
+organizeBtn.addEventListener("click", () => {
+  if (!state.selectedPath || state.images.length < 2) return;
+  setOrdering(true);
+  renderPhotos();
+});
+
+orderCancelBtn.addEventListener("click", () => {
+  setOrdering(false);
+  renderPhotos();
+});
+
+async function saveAlbumOrder(order) {
+  orderSaveBtn.disabled = orderResetBtn.disabled = true;
+  try {
+    const res = await workerFetch("/admin/album-order", {
+      method: "POST",
+      body: JSON.stringify({ albumPath: state.selectedPath, order }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Falha ao salvar a ordem.");
+    showToast(order.length ? "Ordem salva. O site já mostra as fotos nessa ordem." : "Ordem automática restaurada.");
+    await selectAlbum(state.selectedPath);
+  } catch (err) {
+    showToast(err.message || "Erro ao salvar a ordem.");
+  } finally {
+    orderSaveBtn.disabled = orderResetBtn.disabled = false;
+  }
+}
+
+orderSaveBtn.addEventListener("click", () => saveAlbumOrder(state.orderDraft.map((image) => image.public_id).filter(Boolean)));
+
+orderResetBtn.addEventListener("click", () => {
+  if (!confirm("Voltar à ordem automática? A capa aparece primeiro e as demais fotos seguem pelo nome.")) return;
+  saveAlbumOrder([]);
+});
 
 function updateStats() {
   const allPhotos = state.images.length;
@@ -1007,20 +1126,15 @@ async function loadLikesOverview() {
   await mapLimit(state.albums, 4, async (album) => {
     try {
       const slug = albumSlug(album.path);
-      const [albumData, likesData] = await Promise.all([
-        workerFetch(`/album?path=${encodeURIComponent(album.path)}&refresh=1`, { cache: "no-store" }).then((r) => r.ok ? r.json() : { images: [] }),
-        getJson(`/likes?album=${encodeURIComponent(slug)}`),
-      ]);
-
-      if (!likesData._authorized) return;
-      const byAsset = likesData._byAsset || {};
-      const { _authorized, _byAsset, ...byIndex } = likesData;
+      // Only albums with likes need their photo list (each list is a Cloudinary query).
+      const likesData = await getJson(`/likes?album=${encodeURIComponent(slug)}`);
+      const byAsset = likesData._authorized ? likesData._byAsset || {} : {};
+      if (!Object.keys(byAsset).length) return;
+      const albumData = await workerFetch(`/album?path=${encodeURIComponent(album.path)}`, { cache: "no-store" })
+        .then((r) => r.ok ? r.json() : { images: [] });
 
       (albumData.images || []).forEach((image, index) => {
-        const count = Math.max(
-          Number(image.public_id ? byAsset[image.public_id] || 0 : 0),
-          Number(byIndex[String(index)] || 0)
-        );
+        const count = Number(image.public_id ? byAsset[image.public_id] || 0 : 0);
         if (count > 0) rows.push({ album, image, index, count });
       });
     } catch {

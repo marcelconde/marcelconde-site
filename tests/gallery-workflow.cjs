@@ -24,7 +24,7 @@ function app() {
   const tasks = [];
   const context = vm.createContext({ crypto: webcrypto, Request, Response, Headers, URL, URLSearchParams, AbortController, TextEncoder, TextDecoder, btoa, atob, console, setTimeout, clearTimeout, fetch: () => { throw Error('Unexpected external request'); } });
   const source = fs.readFileSync(require.resolve('../worker.js'), 'utf8').replace('export default {', 'globalThis.worker = {');
-  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, claimAsaasIntent, saveClientPassword, saveUserPassword, sendDueReviewRequests};', context);
+  vm.runInContext(source + '\nglobalThis.helpers = {readKvJson, writeKvJson, deleteGalleryRecord, savePrivateGallery, changeGalleryFavorites, calculateSelectionPricing, claimAsaasIntent, saveClientPassword, saveUserPassword, sendDueReviewRequests, sendLikeDigest, loadAlbumData};', context);
   const env = { LIKES_KV: kv, GALLERY_DB: database, ADMIN_KEY: 'local-test-key' };
   const seed = (key, value) => data.set(key, JSON.stringify(value));
   const request = (path, body, token = 'local-test-key') => context.worker.fetch(new Request('https://example.test' + path, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : {body: JSON.stringify(body)}) }), env, {waitUntil(p) { tasks.push(p); }});
@@ -708,4 +708,70 @@ test('deleting a gallery removes its photos in batches, then empty folders, then
   assert.equal(calls.filter(call => call.startsWith('folder:')).length, 3);
   assert.equal(await a.readKvJson(a.env, 'private_gallery:g', null), null);
   assert.deepEqual(Array.from(await a.readKvJson(a.env, 'private_gallery_images:g', [])), []);
+});
+
+test('likes count once per visitor and photo, are capped per hour, visible only to the admin and mailed once a day', async () => {
+  const a = app();
+  a.env.RESEND_API_KEY = 'resend-test';
+  const emails = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(url, 'https://api.resend.com/emails');
+    emails.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ id: 'email_1' }));
+  };
+  const like = async (publicId, ip, admin = false) => {
+    const response = await a.context.worker.fetch(new Request('https://example.test/like', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip, ...(admin ? { Authorization: 'Bearer local-test-key' } : {}) },
+      body: JSON.stringify({ album: 'Animais', albumName: 'Animais', publicId }),
+    }), a.env, {});
+    return { status: response.status, ...(await response.json()) };
+  };
+
+  const first = await like('gato', '1.1.1.1');
+  assert.equal(first.status, 200);
+  assert.equal(first.likes, undefined);
+  await like('gato', '1.1.1.1');
+  assert.equal((await like('gato', '2.2.2.2', true)).likes, 2);
+  assert.equal((await like('', '3.3.3.3')).status, 400);
+
+  // 60 requests in the hour are fine (duplicates count too); the 61st is refused.
+  for (let photo = 0; photo < 58; photo += 1) await like('foto' + photo, '1.1.1.1');
+  assert.equal((await like('extra', '1.1.1.1')).status, 429);
+
+  assert.equal((await (await a.request('/likes?album=Animais', undefined, '')).json())._authorized, false);
+  const counts = (await (await a.request('/likes?album=Animais')).json())._byAsset;
+  assert.equal(counts.gato, 2);
+  assert.equal(counts.foto0, 1);
+  assert.equal(counts.extra, undefined);
+  assert.equal(emails.length, 0);
+
+  assert.equal((await a.sendLikeDigest(a.env, new Date('2026-10-22T15:00:00Z'))).sent, false);
+  const digest = await a.sendLikeDigest(a.env, new Date('2026-10-22T23:00:00Z'));
+  assert.equal(digest.total, 60);
+  assert.equal(emails.length, 1);
+  assert.match(emails[0].subject, /60 curtidas/);
+  assert.equal((await a.sendLikeDigest(a.env, new Date('2026-10-22T23:00:00Z'))).sent, false);
+});
+
+test('a saved photo order rules the album; new photos follow by name; an empty order restores the automatic one', async () => {
+  const a = app();
+  Object.assign(a.env, { CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' });
+  a.context.caches = { default: { delete: async () => true } };
+  const names = ['a', 'b', 'c', 'd'];
+  a.context.fetch = async () => new Response(JSON.stringify({
+    resources: names.map(name => ({ public_id: name, display_name: name, secure_url: 'https://example.test/' + name })),
+  }));
+  const ids = async () => Array.from((await a.loadAlbumData(a.env, 'cloud', 'auth', 'portfolio/Festas')).data.images, image => image.public_id);
+  await a.env.LIKES_KV.put('album_cover:portfolio/Festas', JSON.stringify({ public_id: 'c' }));
+  assert.deepEqual(await ids(), ['c', 'a', 'b', 'd']);
+
+  const save = order => a.request('/admin/album-order', { albumPath: 'portfolio/Festas', order });
+  assert.equal((await save(['d', 'b'])).status, 200);
+  assert.deepEqual(await ids(), ['d', 'b', 'a', 'c']);
+  assert.equal((await a.loadAlbumData(a.env, 'cloud', 'auth', 'portfolio/Festas')).data.cover_public_id, 'c');
+  assert.equal((await a.request('/admin/album-order', { albumPath: 'portfolio/Festas', order: ['a'] }, 'wrong')).status, 401);
+  assert.equal((await a.request('/admin/album-order', { albumPath: 'site/about', order: ['a'] })).status, 400);
+  await save([]);
+  assert.deepEqual(await ids(), ['c', 'a', 'b', 'd']);
 });
