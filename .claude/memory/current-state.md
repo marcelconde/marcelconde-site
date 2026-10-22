@@ -1,17 +1,17 @@
 # Estado atual
 
-Verificado em 2026-10-20: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (versão `8a22f7b9`, commit `baa3da8`; site em `8713d6c`). Reconfirme após novos commits ou trabalho feito no Windows.
+Verificado em 2026-10-20: `main` = `origin/main`. Worker `cloudinary` publicado a partir da `main` (versão `5325298f`, 2026-10-22). Reconfirme após novos commits ou trabalho feito no Windows.
 
 ## Funcionando
 
 - Site/admin via GitHub Pages; API Worker `cloudinary` com `LIKES_KV`, `GALLERY_DB` (D1) e 11 secrets. Worker roda em `aws:us-east-1` (placement; header `cf-placement: remote-IAD`): D1 ~15 ms por consulta, contra ~140 ms a partir do Brasil.
 - Clientes reais/de teste, orçamentos e PDFs, galerias privadas, seleção persistente, histórico, filtros, busca, "Ver como cliente", CSV da seleção, máscara CPF/CNPJ (`document-mask.js`).
-- Galerias: exclusão em lotes pela Admin API do Cloudinary; seção "Fotos editadas" com conferência por nome de arquivo e "Concluir entrega" (`/private/gallery/complete-delivery`), que apaga os originais da seleção e guarda os nomes em `gallery.deliveredSelection`.
+- Galerias: exclusão em lotes pela Admin API do Cloudinary (fotos avulsas, não selecionadas, galeria inteira e álbum do portfólio, desde 2026-10-22); seção "Fotos editadas" com conferência por nome de arquivo e "Concluir entrega" (`/private/gallery/complete-delivery`), que apaga os originais da seleção e guarda os nomes em `gallery.deliveredSelection`.
 - Upload de galeria: mantém resolução até 25 MP e busca a maior qualidade JPEG em ~9,9 MB (plano Free: 10 MB e 25 MP); 3 envios simultâneos. Portfólio também envia 3 por vez.
 - Fotos extras (2026-10-05): a cobrança nasce como Pix e o QR Code aparece no modal da galeria; "Pagar com cartão" troca o tipo da mesma cobrança e abre a página do Asaas, sem boleto; se o Asaas recusar Pix, a cobrança sai como cartão. Rota `/client-gallery/payment/method`. Detalhes em `docs/asaas-payments.md`.
 - Galeria "em edição" (2026-10-05): o cliente não recebe fotos nem capa e não altera a seleção; vê só o aviso de edição até o admin reabrir a seleção ou liberar o download. `content-guard.js` na galeria do cliente bloqueia menu de contexto, arrastar, salvar e imprimir e limpa a página ao abrir as ferramentas de desenvolvedor (só dissuasão).
 - Proteção de login (admin e cliente, 2026-10-05): após 1 senha errada exige Cloudflare Turnstile (site key em `login-guard.js`, `TURNSTILE_SECRET_KEY` no Worker); após 5 erros em 24 h a conta bloqueia, envia e-mail com botão de redefinição e só libera com nova senha. O admin vê contas bloqueadas e pode bloquear/desbloquear em Clientes ("Acesso e senha") e em Usuários; bloqueio do admin derruba sessões e resiste a redefinição. Estado em D1: `login_guard:<escopo>:<email>` (`lockedBy`: `attempts` ou `admin`).
-- Testes: `node --test tests/*.cjs` — 59/59 em 2026-10-20; o GitHub Actions (`.github/workflows/testes.yml`) roda a cada push na `main`, mas não bloqueia o GitHub Pages.
+- Testes: `node --test tests/*.cjs` — 60/60 em 2026-10-22; o GitHub Actions (`.github/workflows/testes.yml`) roda a cada push na `main`, mas não bloqueia o GitHub Pages.
 - Portfólio (2026-10-20): 1.205 fotos de `L:CâmeraPortfolio 2026` (seleção feita no chat do claude.ai) enviadas direto ao Cloudinary em 19 álbuns; contagens conferidas pela API. Pets → Animais, Esportes → Eventos Esportivos (Corridas → Corrida). Álbuns novos: Corporativo, Eventos, Formatura, Viagem, Retratos (1 foto) e Eventos Esportivos/Beach Tênis; capas automáticas (primeira foto por nome). 68 fotos que já estavam no site ficaram de fora; as pastas "Para editar (RAW)" e Produtos (só RAW) não foram enviadas.
 - Ocultar álbum do portfólio (2026-10-20): botão "Ocultar do site / Mostrar no site" no álbum aberto do admin; lista em KV `portfolio_hidden_albums`. O site público deixa de listar o álbum (e os de dentro) e `/album` responde 404; o admin pede as listas identificado e vê todos, marcados "Oculto". Validado só nos testes; falta Marcel usar.
 
