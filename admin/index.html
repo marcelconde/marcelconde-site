@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/admin/admin.css?v=20261022-01">
+  <link rel="stylesheet" href="/admin/admin.css?v=20261111-01">
   <link rel="stylesheet" href="/admin/workspace.css?v=20260915-01">
 </head>
 <body class="workspace-page">
@@ -127,6 +127,8 @@
             </div>
           </details>
 
+          <button class="btn btn-ghost album-order-open" id="albumOrderOpenBtn" type="button">Ordem dos álbuns no site</button>
+
           <label class="sr-only" for="albumSearch">Buscar álbuns</label>
           <input id="albumSearch" type="search" placeholder="Buscar álbum…" autocomplete="off">
           <div class="album-list" id="albumList"></div>
@@ -138,7 +140,28 @@
           </div>
         </aside>
 
-        <section class="content">
+        <section class="content" id="albumsContent">
+          <section class="album-order-panel" id="albumOrderPanel" aria-labelledby="albumOrderTitle" hidden>
+            <div class="content-head">
+              <div>
+                <span class="eyebrow">Portfólio</span>
+                <h1 id="albumOrderTitle">Ordem dos álbuns</h1>
+                <p>Arraste os álbuns ou use as setas. O primeiro da lista é o primeiro card do site; álbuns criados depois entram no fim.</p>
+              </div>
+            </div>
+            <label class="album-order-group" for="albumOrderGroup">Mostrar a ordem de</label>
+            <select id="albumOrderGroup"></select>
+            <div class="order-bar">
+              <p id="albumOrderStatus" role="status">Carregando álbuns...</p>
+              <div class="order-bar-actions">
+                <button class="btn btn-ghost" id="albumOrderResetBtn" type="button">Ordem alfabética</button>
+                <button class="btn btn-ghost" id="albumOrderCloseBtn" type="button">Fechar</button>
+                <button class="btn btn-primary" id="albumOrderSaveBtn" type="button" disabled>Salvar ordem</button>
+              </div>
+            </div>
+            <ol class="album-order-list" id="albumOrderList"></ol>
+          </section>
+
           <div class="content-head">
             <div>
               <span class="eyebrow" id="albumPathLabel">portfolio</span>
@@ -298,6 +321,6 @@
 
   <script src="/theme.js?v=20260915-03"></script>
   <script src="/login-guard.js?v=20261005-02"></script>
-  <script src="/admin/admin.js?v=20261022-01"></script>
+  <script src="/admin/admin.js?v=20261111-01"></script>
 </body>
 </html>

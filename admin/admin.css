@@ -1294,3 +1294,123 @@ label {
   padding: 4px 0;
   font-size: 0.95rem;
 }
+
+/* Ordem dos álbuns no site ("Ordem dos álbuns no site") */
+.album-order-open {
+  width: 100%;
+  margin: -8px 0 16px;
+}
+
+.content.album-ordering > :not(.album-order-panel) {
+  display: none !important;
+}
+
+.album-order-panel[hidden] {
+  display: none;
+}
+
+.album-order-group {
+  display: block;
+  margin: 22px 0 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+#albumOrderGroup {
+  max-width: 420px;
+  margin: 0 0 16px;
+}
+
+.album-order-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.album-order-item {
+  display: grid;
+  grid-template-columns: auto 80px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.025);
+  cursor: grab;
+}
+
+.album-order-item.dragging {
+  opacity: 0.4;
+}
+
+.album-order-item.drop-target {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+
+.album-order-position {
+  min-width: 28px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(184, 149, 106, 0.94);
+  color: #111;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.album-order-item img,
+.album-order-thumb {
+  display: block;
+  width: 80px;
+  height: 60px;
+  object-fit: cover;
+  background: var(--panel-2);
+}
+
+.album-order-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.album-order-name strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.album-order-name small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.album-order-moves {
+  display: grid;
+  grid-template-columns: repeat(4, 38px);
+  gap: 6px;
+}
+
+.album-order-moves .btn {
+  min-height: 34px;
+  padding: 4px 0;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 620px) {
+  .album-order-item {
+    grid-template-columns: auto 64px minmax(0, 1fr);
+  }
+
+  .album-order-item img,
+  .album-order-thumb {
+    width: 64px;
+    height: 48px;
+  }
+
+  .album-order-moves {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, 1fr);
+  }
+}

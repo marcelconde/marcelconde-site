@@ -73,6 +73,15 @@ const orderBar = $("#orderBar");
 const orderResetBtn = $("#orderResetBtn");
 const orderCancelBtn = $("#orderCancelBtn");
 const orderSaveBtn = $("#orderSaveBtn");
+const albumsContent = $("#albumsContent");
+const albumOrderOpenBtn = $("#albumOrderOpenBtn");
+const albumOrderPanel = $("#albumOrderPanel");
+const albumOrderGroup = $("#albumOrderGroup");
+const albumOrderStatus = $("#albumOrderStatus");
+const albumOrderList = $("#albumOrderList");
+const albumOrderResetBtn = $("#albumOrderResetBtn");
+const albumOrderCloseBtn = $("#albumOrderCloseBtn");
+const albumOrderSaveBtn = $("#albumOrderSaveBtn");
 const deleteAlbumBtn = $("#deleteAlbumBtn");
 const toastEl = $("#toast");
 const likedGrid = $("#likedGrid");
@@ -577,6 +586,7 @@ function filterAlbumList() {
 $("#albumSearch").addEventListener("input", filterAlbumList);
 
 async function selectAlbum(path) {
+  if (!closeAlbumOrder()) return;
   state.selectedPath = path;
   state.selectedSlug = albumSlug(path);
   state.images = [];
@@ -791,6 +801,200 @@ orderSaveBtn.addEventListener("click", () => saveAlbumOrder(state.orderDraft.map
 orderResetBtn.addEventListener("click", () => {
   if (!confirm("Voltar à ordem automática? A capa aparece primeiro e as demais fotos seguem pelo nome.")) return;
   saveAlbumOrder([]);
+});
+
+// ─── Ordem dos álbuns no site ───
+// A lista vem do Worker já na ordem do site; a nova ordem só vale depois de salvar.
+const albumOrder = { parent: "portfolio", draft: [], saved: "", info: new Map(), request: 0 };
+
+function parentPath(path = "") {
+  return path.slice(0, path.lastIndexOf("/"));
+}
+
+function albumOrderDirty() {
+  return JSON.stringify(albumOrder.draft.map((album) => album.path)) !== albumOrder.saved;
+}
+
+// Capas e quantidades vêm do portfólio guardado pelo Worker: uma consulta só, sem gastar o Cloudinary.
+async function loadAlbumOrderInfo() {
+  const portfolio = await getJson("/portfolio").catch(() => null);
+  for (const album of portfolio?.albums || []) {
+    const children = album.children || [];
+    const cover = album.cover?.url || children.map((child) => child.cover?.url).find(Boolean) || "";
+    albumOrder.info.set(album.path, { cover, count: album.count || 0, children: children.length });
+    for (const child of children) albumOrder.info.set(child.path, { cover: child.cover?.url || "", count: child.count || 0, children: 0 });
+  }
+}
+
+async function openAlbumOrder() {
+  if (state.ordering) {
+    setOrdering(false);
+    renderPhotos();
+  }
+  albumsContent.classList.add("album-ordering");
+  albumOrderPanel.hidden = false;
+  albumOrderOpenBtn.disabled = true;
+  // No celular a lista fica abaixo da barra de álbuns.
+  if (albumOrderPanel.getBoundingClientRect().top > window.innerHeight * 0.6) {
+    albumOrderPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  // Além da página inicial, pastas com mais de um álbum dentro (ex.: Eventos Esportivos).
+  const groups = ["portfolio", ...state.albums
+    .map((album) => album.path)
+    .filter((path) => state.albums.filter((album) => parentPath(album.path) === path).length > 1)];
+  albumOrderGroup.innerHTML = groups.map((path) => `
+    <option value="${escapeHtml(path)}">${path === "portfolio" ? "Página inicial (álbuns principais)" : `Dentro de ${escapeHtml(albumName(path))}`}</option>
+  `).join("");
+  albumOrderGroup.value = groups.includes(albumOrder.parent) ? albumOrder.parent : "portfolio";
+  albumOrderGroup.hidden = albumOrderGroup.labels[0].hidden = groups.length < 2;
+  const info = albumOrder.info.size ? null : loadAlbumOrderInfo();
+  await loadAlbumOrderGroup(albumOrderGroup.value);
+  if (info) {
+    await info;
+    renderAlbumOrder();
+  }
+}
+
+function closeAlbumOrder(force = false) {
+  if (albumOrderPanel.hidden) return true;
+  if (!force && albumOrderDirty() && !confirm("Sair sem salvar a nova ordem dos álbuns?")) return false;
+  albumOrderPanel.hidden = true;
+  albumsContent.classList.remove("album-ordering");
+  albumOrderOpenBtn.disabled = false;
+  return true;
+}
+
+async function loadAlbumOrderGroup(parent) {
+  albumOrder.parent = parent;
+  albumOrder.draft = [];
+  albumOrder.saved = "[]";
+  renderAlbumOrder("Carregando álbuns...");
+  const request = ++albumOrder.request;
+  const res = await workerFetch(`/albums?path=${encodeURIComponent(parent)}&refresh=1`, { cache: "no-store" }).catch(() => null);
+  const albums = res?.ok ? await res.json().catch(() => null) : null;
+  if (request !== albumOrder.request) return;
+  if (!Array.isArray(albums)) return renderAlbumOrder("Não foi possível carregar os álbuns. Tente de novo.");
+  albumOrder.draft = albums;
+  albumOrder.saved = JSON.stringify(albums.map((album) => album.path));
+  renderAlbumOrder();
+}
+
+function renderAlbumOrder(message = "") {
+  const draft = albumOrder.draft;
+  const dirty = albumOrderDirty();
+  albumOrderStatus.textContent = message
+    || (!draft.length ? "Nenhum álbum aqui." : draft.length < 2 ? "Só há um álbum aqui." : dirty ? "Ordem alterada. Salve para valer no site." : "Esta é a ordem atual do site.");
+  albumOrderSaveBtn.disabled = !dirty;
+  albumOrderResetBtn.disabled = draft.length < 2;
+  albumOrderList.innerHTML = draft.map((album, index) => {
+    const info = albumOrder.info.get(album.path);
+    const name = escapeHtml(album.slug || albumName(album.path));
+    const details = [
+      info ? (info.children ? `${info.children} sub-álbu${info.children === 1 ? "m" : "ns"}` : `${info.count} foto${info.count === 1 ? "" : "s"}`) : "",
+      hiddenBy(album.path) ? "oculto do site" : "",
+    ].filter(Boolean).join(" · ");
+    const last = draft.length - 1;
+    return `
+      <li class="album-order-item" draggable="true" data-index="${index}">
+        <span class="album-order-position">${index + 1}</span>
+        ${info?.cover
+          ? `<img src="${escapeHtml(cloudUrl(info.cover, "f_auto,q_auto,w_160,h_120,c_fill"))}" alt="" loading="lazy" decoding="async" draggable="false">`
+          : `<span class="album-order-thumb" aria-hidden="true"></span>`}
+        <span class="album-order-name"><strong>${name}</strong>${details ? `<small>${details}</small>` : ""}</span>
+        <span class="album-order-moves">
+          <button class="btn btn-ghost" data-move="first" type="button" title="Mover para o início" aria-label="Mover ${name} para o início" ${index === 0 ? "disabled" : ""}>⤒</button>
+          <button class="btn btn-ghost" data-move="back" type="button" title="Uma posição antes" aria-label="Mover ${name} uma posição antes" ${index === 0 ? "disabled" : ""}>↑</button>
+          <button class="btn btn-ghost" data-move="forward" type="button" title="Uma posição depois" aria-label="Mover ${name} uma posição depois" ${index === last ? "disabled" : ""}>↓</button>
+          <button class="btn btn-ghost" data-move="last" type="button" title="Mover para o fim" aria-label="Mover ${name} para o fim" ${index === last ? "disabled" : ""}>⤓</button>
+        </span>
+      </li>
+    `;
+  }).join("");
+}
+
+function moveAlbumDraft(from, to, focusMove = "") {
+  const draft = albumOrder.draft;
+  if (from === to || from < 0 || to < 0 || from >= draft.length || to >= draft.length) return;
+  const [item] = draft.splice(from, 1);
+  draft.splice(to, 0, item);
+  renderAlbumOrder();
+  // Quem usa o teclado continua no álbum que acabou de mover.
+  if (focusMove) {
+    const buttons = albumOrderList.children[to]?.querySelectorAll("[data-move]:not(:disabled)") || [];
+    ([...buttons].find((button) => button.dataset.move === focusMove) || buttons[0])?.focus();
+  }
+}
+
+albumOrderList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-move]");
+  if (!button) return;
+  const from = Number(button.closest(".album-order-item").dataset.index);
+  const to = { first: 0, back: from - 1, forward: from + 1, last: albumOrder.draft.length - 1 }[button.dataset.move];
+  moveAlbumDraft(from, to, button.dataset.move);
+});
+
+let albumDragFrom = -1;
+albumOrderList.addEventListener("dragstart", (event) => {
+  const item = event.target.closest(".album-order-item");
+  if (!item) return;
+  albumDragFrom = Number(item.dataset.index);
+  item.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", String(albumDragFrom));
+});
+albumOrderList.addEventListener("dragover", (event) => {
+  const item = event.target.closest(".album-order-item");
+  if (!item || albumDragFrom < 0) return;
+  event.preventDefault();
+  albumOrderList.querySelectorAll(".drop-target").forEach((other) => other !== item && other.classList.remove("drop-target"));
+  item.classList.add("drop-target");
+});
+albumOrderList.addEventListener("drop", (event) => {
+  const item = event.target.closest(".album-order-item");
+  if (!item || albumDragFrom < 0) return;
+  event.preventDefault();
+  const from = albumDragFrom;
+  albumDragFrom = -1;
+  moveAlbumDraft(from, Number(item.dataset.index));
+});
+albumOrderList.addEventListener("dragend", () => {
+  albumDragFrom = -1;
+  albumOrderList.querySelectorAll(".dragging, .drop-target").forEach((item) => item.classList.remove("dragging", "drop-target"));
+});
+
+albumOrderOpenBtn.addEventListener("click", openAlbumOrder);
+albumOrderCloseBtn.addEventListener("click", () => closeAlbumOrder());
+
+albumOrderGroup.addEventListener("change", () => {
+  if (albumOrderDirty() && !confirm("Trocar de lista sem salvar a nova ordem?")) {
+    albumOrderGroup.value = albumOrder.parent;
+    return;
+  }
+  loadAlbumOrderGroup(albumOrderGroup.value);
+});
+
+async function saveAlbumsOrder(order) {
+  albumOrderSaveBtn.disabled = albumOrderResetBtn.disabled = true;
+  try {
+    const res = await workerFetch("/admin/portfolio-order", {
+      method: "POST",
+      body: JSON.stringify({ parent: albumOrder.parent, order }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Falha ao salvar a ordem dos álbuns.");
+    showToast(order.length ? "Ordem salva. O site mostra os álbuns nessa ordem em até 1 minuto." : "Ordem alfabética restaurada.");
+    await loadAlbumOrderGroup(albumOrder.parent);
+  } catch (err) {
+    showToast(err.message || "Erro ao salvar a ordem dos álbuns.");
+    renderAlbumOrder();
+  }
+}
+
+albumOrderSaveBtn.addEventListener("click", () => saveAlbumsOrder(albumOrder.draft.map((album) => album.path)));
+
+albumOrderResetBtn.addEventListener("click", () => {
+  if (!confirm("Voltar à ordem alfabética? Os álbuns desta lista deixam de seguir a ordem escolhida.")) return;
+  saveAlbumsOrder([]);
 });
 
 function updateStats() {

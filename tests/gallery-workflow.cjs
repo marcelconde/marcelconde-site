@@ -201,6 +201,58 @@ test('the whole portfolio comes in one cached answer; only the admin forces a re
   assert.doesNotMatch(sitemap, /Batizado/);
 });
 
+test('the admin chooses the order of the portfolio albums; the site follows it at once and new albums go last', async () => {
+  const a = app();
+  Object.assign(a.env, { CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' });
+  const guardado = new Map();
+  a.context.caches = { default: {
+    match: async (req) => guardado.get(req.url)?.clone(),
+    put: async (req, res) => { guardado.set(req.url, res.clone()); },
+    delete: async (req) => guardado.delete(req.url),
+  } };
+  const pastas = { portfolio: ['Animais', 'Casamento', 'Esportes'], 'portfolio/Esportes': ['Corrida', 'Vôlei'] };
+  let consultas = 0;
+  a.context.fetch = async (url) => {
+    consultas++;
+    if (url.includes('/folders/')) {
+      const path = decodeURIComponent(url.split('/folders/')[1]);
+      return new Response(JSON.stringify({ folders: (pastas[path] || []).map((name) => ({ name, path: `${path}/${name}` })) }));
+    }
+    return new Response(JSON.stringify({ resources: [{ public_id: 'p1', secure_url: 'https://example.test/p1.jpg', width: 10, height: 20 }] }));
+  };
+  const publico = (path) => a.context.worker.fetch(new Request('https://example.test' + path), a.env, { waitUntil() {} });
+  const titulos = async () => (await (await publico('/portfolio')).json()).albums.map((album) => [album.title, album.children.map((child) => child.title)]);
+  const ordenar = (parent, order, token) => a.request('/admin/portfolio-order', { parent, order }, token);
+
+  assert.deepEqual(await titulos(), [['Animais', []], ['Casamento', []], ['Esportes', ['Corrida', 'Vôlei']]]);
+  const montagem = consultas;
+
+  assert.equal((await ordenar('portfolio', ['portfolio/Casamento'], 'wrong')).status, 401);
+  assert.equal((await ordenar('site', ['site/about'])).status, 400);
+  assert.equal((await ordenar('portfolio/../site', [])).status, 400);
+  // Só entram álbuns diretamente dentro da pasta escolhida.
+  const salvo = await (await ordenar('portfolio', ['portfolio/Casamento', 'portfolio/Esportes', 'portfolio/Esportes/Vôlei', 'site/about', 'portfolio/Casamento'])).json();
+  assert.deepEqual(salvo.order, { portfolio: ['portfolio/Casamento', 'portfolio/Esportes'] });
+  await ordenar('portfolio/Esportes', ['portfolio/Esportes/Vôlei']);
+
+  assert.deepEqual(await titulos(), [['Casamento', []], ['Esportes', ['Vôlei', 'Corrida']], ['Animais', []]]);
+  assert.equal(consultas, montagem, 'a nova ordem não refaz o portfólio no Cloudinary');
+  const nomes = async (path) => (await (await publico(path)).json()).map((album) => album.slug);
+  assert.deepEqual(await nomes('/albums?path=portfolio'), ['Casamento', 'Esportes', 'Animais']);
+  assert.deepEqual(await nomes('/albums?path=' + encodeURIComponent('portfolio/Esportes')), ['Vôlei', 'Corrida']);
+
+  // Álbum novo entra no fim; ocultar continua valendo junto com a ordem.
+  pastas.portfolio.push('Batizado');
+  await a.request('/portfolio?refresh=1');
+  await a.request('/admin/album-visibility', { path: 'portfolio/Esportes', hidden: true });
+  assert.deepEqual(await titulos(), [['Casamento', []], ['Animais', []], ['Batizado', []]]);
+  assert.deepEqual((await (await a.request('/admin/portfolio-order')).json()).order.portfolio, ['portfolio/Casamento', 'portfolio/Esportes']);
+
+  // Sem ordem salva, volta à ordem em que o Cloudinary lista as pastas.
+  await ordenar('portfolio', []);
+  assert.deepEqual((await titulos()).map(([title]) => title), ['Animais', 'Casamento', 'Batizado']);
+});
+
 test('after the final delivery the client is asked for a review the next day; only reviews the admin publishes reach the site', async () => {
   const a = app();
   a.env.RESEND_API_KEY = 'resend-test';

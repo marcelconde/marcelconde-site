@@ -90,6 +90,24 @@ function isAlbumHidden(hidden = [], path = "") {
   return hidden.some((item) => path === item || path.startsWith(`${item}/`));
 }
 
+const PORTFOLIO_ORDER_KEY = "portfolio_album_order";
+
+// Ordem dos álbuns no site, escolhida no admin: { pasta-mãe: [caminhos dos álbuns de dentro] }.
+async function getPortfolioOrder(env) {
+  if (!env.LIKES_KV) return {};
+  const order = await env.LIKES_KV.get(PORTFOLIO_ORDER_KEY, "json");
+  return order && typeof order === "object" && !Array.isArray(order) ? order : {};
+}
+
+// Álbuns fora da ordem salva (os criados depois) vêm no fim, na ordem do Cloudinary.
+function sortAlbums(albums = [], order = []) {
+  if (!Array.isArray(order) || !order.length) return albums;
+  const position = new Map(order.map((path, index) => [path, index]));
+  return albums.map((album, index) => ({ album, index }))
+    .sort((a, b) => (position.get(a.album.path) ?? order.length + a.index) - (position.get(b.album.path) ?? order.length + b.index))
+    .map(({ album }) => album);
+}
+
 function deletedAssetsKey(path = "") {
   return `album_deleted_assets:${path}`;
 }
@@ -681,13 +699,13 @@ async function buildPortfolio(env, cloudName, auth) {
   };
 }
 
-function visiblePortfolio(portfolio, hidden = []) {
-  if (!hidden.length) return portfolio;
+function visiblePortfolio(portfolio, hidden = [], order = {}) {
+  if (!hidden.length && !Object.keys(order).length) return portfolio;
+  const shown = (album) => !isAlbumHidden(hidden, album.path);
   return {
     ...portfolio,
-    albums: portfolio.albums
-      .filter((album) => !isAlbumHidden(hidden, album.path))
-      .map((album) => ({ ...album, children: (album.children || []).filter((child) => !isAlbumHidden(hidden, child.path)) })),
+    albums: sortAlbums(portfolio.albums.filter(shown), order.portfolio)
+      .map((album) => ({ ...album, children: sortAlbums((album.children || []).filter(shown), order[album.path]) })),
   };
 }
 
@@ -6610,6 +6628,38 @@ export default {
       return json({ ok: true, path, hidden, hiddenAlbums: next }, 200, { "Cache-Control": "no-store" });
     }
 
+    if (url.pathname === "/admin/portfolio-order" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      return json({ order: await getPortfolioOrder(env) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/admin/portfolio-order" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      if (!env.LIKES_KV) return errorJson("LIKES_KV not configured", 500);
+
+      const body = await readJson(request);
+      const parent = String(body.parent || "portfolio").replace(/\/+/g, "/").trim();
+      if ((parent !== "portfolio" && !parent.startsWith("portfolio/")) || parent.split("/").some((part) => !part || part === "." || part === "..")) {
+        return errorJson("Álbum inválido.", 400);
+      }
+      // Só álbuns diretamente dentro da pasta escolhida; uma lista vazia volta à ordem alfabética.
+      const order = [...new Set((Array.isArray(body.order) ? body.order : []).map((path) => String(path || "").trim()))]
+        .filter((path) => {
+          const name = path.slice(parent.length + 1);
+          return path.startsWith(`${parent}/`) && name && !name.includes("/") && name !== "." && name !== "..";
+        })
+        .slice(0, 200);
+
+      const current = await getPortfolioOrder(env);
+      if (order.length) current[parent] = order;
+      else delete current[parent];
+      await env.LIKES_KV.put(PORTFOLIO_ORDER_KEY, JSON.stringify(current));
+      await appendAuditLog(env, request, user, order.length ? "ordenar_albuns" : "restaurar_ordem_albuns", "album", { parent, albums: order.length });
+      return json({ ok: true, parent, order: current }, 200, { "Cache-Control": "no-store" });
+    }
+
     if (url.pathname === "/admin/delete-album" && request.method === "POST") {
       const { error, user } = await requireAdminUser(request, env);
       if (error) return error;
@@ -6821,7 +6871,11 @@ export default {
     const assetPath = url.pathname === "/albums" ? (url.searchParams.get("path") || "portfolio")
       : url.pathname === "/album" ? (url.searchParams.get("path") || "")
         : ["/portfolio", "/sitemap-portfolio.xml"].includes(url.pathname) ? "portfolio" : "";
-    const hiddenAlbums = assetPath.startsWith("portfolio") ? await getHiddenAlbums(env) : [];
+    // A ordem dos álbuns também vale a cada pedido, para o site mudar assim que o admin salva.
+    const [hiddenAlbums, portfolioOrder] = await Promise.all([
+      assetPath.startsWith("portfolio") ? getHiddenAlbums(env) : [],
+      ["/albums", "/portfolio", "/sitemap-portfolio.xml"].includes(url.pathname) ? getPortfolioOrder(env) : {},
+    ]);
     const showHidden = hiddenAlbums.length > 0 && await checkAdmin(request, env);
     if (hiddenAlbums.length && !showHidden && isAlbumHidden(hiddenAlbums, assetPath)) {
       return url.pathname === "/albums"
@@ -6829,13 +6883,17 @@ export default {
         : errorJson("Álbum não encontrado.", 404);
     }
     const visible = async (response) => {
-      if (!hiddenAlbums.length) return response;
+      const groupOrder = url.pathname === "/albums" ? portfolioOrder[assetPath] : null;
+      if (!hiddenAlbums.length && !groupOrder?.length) return response;
       const headers = new Headers(response.headers);
-      headers.append("Vary", "Authorization, X-Admin-Token");
+      if (hiddenAlbums.length) headers.append("Vary", "Authorization, X-Admin-Token");
       let body = response.body;
-      if (url.pathname === "/albums" && !showHidden && response.ok) {
+      if (url.pathname === "/albums" && response.ok) {
         const albums = await response.clone().json().catch(() => null);
-        if (Array.isArray(albums)) body = JSON.stringify(albums.filter((album) => !isAlbumHidden(hiddenAlbums, album.path)));
+        if (Array.isArray(albums)) {
+          body = JSON.stringify(sortAlbums(showHidden ? albums : albums.filter((album) => !isAlbumHidden(hiddenAlbums, album.path)), groupOrder));
+          headers.delete("Content-Length");
+        }
       }
       return new Response(body, { status: response.status, headers });
     };
@@ -6862,7 +6920,7 @@ export default {
       } else if (Date.now() - Date.parse(portfolio.generatedAt || 0) > PORTFOLIO_MAX_AGE_MS) {
         ctx.waitUntil(rebuild().catch((err) => console.error("Portfolio refresh failed:", err)));
       }
-      const view = showHidden ? portfolio : visiblePortfolio(portfolio, hiddenAlbums);
+      const view = visiblePortfolio(portfolio, showHidden ? [] : hiddenAlbums, portfolioOrder);
       if (url.pathname === "/sitemap-portfolio.xml") {
         return new Response(portfolioSitemap(view), {
           headers: { ...corsHeaders(), "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" },

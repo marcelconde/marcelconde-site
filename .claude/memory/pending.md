@@ -2,6 +2,8 @@
 
 Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou deixar para depois.
 
+- **Publicar o Worker com a ordem dos álbuns (2026-11-11):** commit já na `main`; falta `wrangler deploy` (Marcel criando token "Edit Cloudflare Workers" para o ambiente `marcelconde-site`). Depois, conferir `/admin/portfolio-order` e Marcel tirar "Animais" do primeiro card.
+- **Webhook Asaas com 503 (e-mail de 2026-11-06, `/payments/asaas/webhook`):** não diagnosticado; precisa da chave Asaas de produção para ver o evento e se a fila foi pausada. Relacionado ao item 6 abaixo.
 - **Asaas — conta nova só do site** (cadastro aprovado em 2026-10-22: dados comerciais, documentos e aprovação geral). Não voltar ao Mercado Pago. Falta:
   1. Chave Pix `pix@marcelconde.com.br` (e-mail, alias do Cloudflare Email Routing para o Gmail de Marcel) cadastrada em 2026-10-22. Pix dinâmico: R$ 0,99 por cobrança recebida até 03/01/2027 (depois R$ 1,99), recebe na hora.
   2. Depois da chave, conferir no uso real o modal de fotos extras: QR Code Pix aparece, copia e cola funciona e a troca Pix↔cartão mantém uma cobrança só.
