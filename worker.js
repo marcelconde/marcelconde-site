@@ -3554,6 +3554,24 @@ async function asaasRequest(env, environment, path, options = {}) {
   return data;
 }
 
+// Check digits of a CPF (11) or numeric CNPJ (14). Asaas refuses any other,
+// so a typo must be caught before the quote is accepted and locked for payment.
+function isValidCpfCnpj(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (![11, 14].includes(digits.length) || /^(\d)\1+$/.test(digits)) return false;
+  const nums = [...digits].map(Number);
+  const checkDigit = (weights) => {
+    const rest = weights.reduce((total, weight, index) => total + nums[index] * weight, 0) % 11;
+    return digits.length === 11 ? (rest * 10) % 11 % 10 : rest < 2 ? 0 : 11 - rest;
+  };
+  if (digits.length === 11) {
+    return checkDigit([10, 9, 8, 7, 6, 5, 4, 3, 2]) === nums[9]
+      && checkDigit([11, 10, 9, 8, 7, 6, 5, 4, 3, 2]) === nums[10];
+  }
+  return checkDigit([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === nums[12]
+    && checkDigit([6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === nums[13];
+}
+
 async function ensureAsaasCustomer(env, environment, client = {}, document = "") {
   const clientId = String(client.id || "").trim();
   const cpfCnpj = String(document || client.document || "").replace(/\D/g, "");
@@ -4645,8 +4663,8 @@ export default {
       const environment = asaasEnvironmentForClient(linkedClient);
       // Asaas is the only payment provider: test clients use Sandbox, real clients production.
       const paymentRequired = snapshot.totalCents > 0;
-      if (paymentRequired && ![11, 14].includes(signerDocument.replace(/\D/g, "").length)) {
-        return errorJson("Informe um CPF ou CNPJ válido para pagar o orçamento.", 400);
+      if (paymentRequired && !isValidCpfCnpj(signerDocument)) {
+        return errorJson("CPF ou CNPJ inválido. Confira os números antes de aceitar.", 400);
       }
       if (paymentRequired) {
         try { asaasApiConfig(env, environment); }

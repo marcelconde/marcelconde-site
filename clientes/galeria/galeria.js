@@ -924,7 +924,7 @@ function askPaymentDocument() {
     const submit = (event) => {
       event.preventDefault();
       const value = paymentDocument.value.replace(/\D/g, "");
-      if (![11, 14].includes(value.length)) {
+      if (window.isValidDocument ? !window.isValidDocument(value) : ![11, 14].includes(value.length)) {
         documentError.classList.remove("hidden");
         paymentDocument.focus();
         return;

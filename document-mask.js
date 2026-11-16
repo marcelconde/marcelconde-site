@@ -32,9 +32,34 @@
     input.setSelectionRange(position, position);
   }
 
+  // Same check digits the Worker and Asaas apply (CPF 11, CNPJ 14 digits).
+  function isValidDocument(value) {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (![11, 14].includes(digits.length) || /^(\d)\1+$/.test(digits)) return false;
+    const nums = [...digits].map(Number);
+    const checkDigit = (weights) => {
+      const rest = weights.reduce((total, weight, index) => total + nums[index] * weight, 0) % 11;
+      return digits.length === 11 ? (rest * 10) % 11 % 10 : rest < 2 ? 0 : 11 - rest;
+    };
+    if (digits.length === 11) {
+      return checkDigit([10, 9, 8, 7, 6, 5, 4, 3, 2]) === nums[9]
+        && checkDigit([11, 10, 9, 8, 7, 6, 5, 4, 3, 2]) === nums[10];
+    }
+    return checkDigit([5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === nums[12]
+      && checkDigit([6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]) === nums[13];
+  }
+
+  function checkValidity(input) {
+    const filled = input.value.trim() !== "";
+    input.setCustomValidity(filled && !isValidDocument(input.value) ? "CPF ou CNPJ inválido. Confira os números." : "");
+  }
+
   document.addEventListener("input", (event) => {
-    if (event.target.matches?.("[data-document-mask]")) applyMask(event.target);
+    if (!event.target.matches?.("[data-document-mask]")) return;
+    applyMask(event.target);
+    checkValidity(event.target);
   });
 
   window.formatDocument = formatDocument;
+  window.isValidDocument = isValidDocument;
 })();

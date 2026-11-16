@@ -109,13 +109,49 @@ test('quote acceptance always requires Asaas payment and fails closed without th
     const response = await app.worker.fetch(new Request('https://example.test/client-quote/accept', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id: 'quote_1', name: 'Cliente Teste', document: '12345678901',
+        id: 'quote_1', name: 'Cliente Teste', document: '123.456.789-09',
         confirmContract: true, confirmElectronicSignature: true,
       }),
     }), app.env, {});
     assert.equal(response.status, expectedStatus === 'published' ? 503 : 200);
     assert.equal(app.read('private_quote:quote_1').status, expectedStatus);
     if (expectedStatus === 'pending_payment') assert.equal((await response.json()).paymentRequired, true);
+  }
+});
+
+test('quote acceptance refuses a CPF with wrong check digits, so the client is never locked out of paying', async () => {
+  const app = setup({});
+  app.stubQuoteAccess();
+  app.seed('private_client:client_1', { id: 'client_1', name: 'Cliente Teste', email: 'client@example.test', isTest: true });
+  app.seed('private_quote:quote_1', {
+    id: 'quote_1', clientId: 'client_1', isTest: true, status: 'published', version: 1,
+    publishedSnapshot: { totalCents: 30000, version: 1 },
+  });
+  const response = await app.worker.fetch(new Request('https://example.test/client-quote/accept', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'quote_1', name: 'Cliente Teste', document: '123.456.789-01',
+      confirmContract: true, confirmElectronicSignature: true,
+    }),
+  }), app.env, {});
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /inválido/);
+  assert.equal(app.read('private_quote:quote_1').status, 'published');
+});
+
+test('CPF and CNPJ check digits match in the Worker and the site mask', () => {
+  const page = vm.createContext({ window: {}, document: { addEventListener() {} } });
+  vm.runInContext(fs.readFileSync(require.resolve('../document-mask.js'), 'utf8'), page);
+  const worker = vm.createContext({ URL, Request, Response, Headers });
+  vm.runInContext(fs.readFileSync(require.resolve('../worker.js'), 'utf8').replace('export default {', 'globalThis.worker = {'), worker);
+  const cases = [
+    ['529.982.247-25', true], ['123.456.789-09', true], ['11.222.333/0001-81', true],
+    ['123.456.789-01', false], ['111.111.111-11', false], ['11.222.333/0001-80', false],
+    ['1234567890', false], ['', false],
+  ];
+  for (const [value, expected] of cases) {
+    assert.equal(page.window.isValidDocument(value), expected, `site: ${value}`);
+    assert.equal(worker.isValidCpfCnpj(value), expected, `worker: ${value}`);
   }
 });
 
