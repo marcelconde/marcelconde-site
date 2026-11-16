@@ -1,6 +1,6 @@
 # Estado atual
 
-Verificado em 2026-11-16: Worker `cloudinary` publicado a partir da `main` (versão `3faf4328`, commit `cc9a6a1`). Reconfirme após novos commits ou trabalho feito no Windows.
+Verificado em 2026-11-16: Worker `cloudinary` publicado a partir da `main` (2026-11-16, após o commit de mensagem da galeria entregue e limpeza do pedido de avaliação). Reconfirme após novos commits ou trabalho feito no Windows.
 
 ## Funcionando
 
