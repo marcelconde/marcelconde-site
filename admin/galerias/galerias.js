@@ -73,6 +73,7 @@ const saveGalleryBtn = $("#saveGalleryBtn");
 const publishGalleryBtn = $("#publishGalleryBtn");
 const openGalleryBtn = $("#openGalleryBtn");
 const exportCsvBtn = $("#exportCsvBtn");
+const reviewRequestBtn = $("#reviewRequestBtn");
 const pruneUnselectedBtn = $("#pruneUnselectedBtn");
 const deleteGalleryBtn = $("#deleteGalleryBtn");
 const selectionLogPanel = $("#selectionLogPanel");
@@ -632,6 +633,7 @@ function renderSelectedGallery() {
     publishGalleryBtn.classList.add("disabled");
     publishGalleryBtn.disabled = true;
     exportCsvBtn.classList.add("disabled");
+    reviewRequestBtn.classList.add("hidden");
     pruneUnselectedBtn.classList.add("disabled");
     pruneUnselectedBtn.disabled = true;
     deleteGalleryBtn.classList.add("disabled");
@@ -679,7 +681,10 @@ function renderSelectedGallery() {
   publishGalleryBtn.classList.remove("disabled");
   publishGalleryBtn.disabled = false;
   exportCsvBtn.href = "#";
-  exportCsvBtn.classList.toggle("disabled", !state.selection.length);
+  // After the delivery the selection is replaced by the edited photos; the Worker
+  // still exports the chosen names it kept, so the CSV stays available.
+  exportCsvBtn.classList.toggle("disabled", !canExportSelection(gallery));
+  reviewRequestBtn.classList.toggle("hidden", gallery.status !== "final");
   const removableCount = state.images.filter((image) => !state.selection.includes(image.public_id) && image.phase !== "final").length;
   pruneUnselectedBtn.classList.toggle("disabled", !state.selection.length || !removableCount);
   pruneUnselectedBtn.disabled = !state.selection.length || !removableCount;
@@ -1483,9 +1488,13 @@ deleteGalleryBtn.addEventListener("click", async () => {
 
 refreshBtn?.addEventListener("click", loadData);
 
+function canExportSelection(gallery = state.selectedGallery) {
+  return Boolean(state.selection.length || gallery?.status === "final" || gallery?.deliveredSelection?.length);
+}
+
 exportCsvBtn.addEventListener("click", async (event) => {
   event.preventDefault();
-  if (!state.selectedGallery || !state.selection.length) return;
+  if (!state.selectedGallery || !canExportSelection()) return;
   try {
     const res = await workerFetch(`/private/gallery/export-selected?id=${encodeURIComponent(state.selectedGallery.id)}`);
     if (!res.ok) throw new Error("Erro ao exportar CSV.");
@@ -1500,6 +1509,25 @@ exportCsvBtn.addEventListener("click", async (event) => {
     URL.revokeObjectURL(url);
   } catch (err) {
     showToast(err.message || "Erro ao exportar CSV.");
+  }
+});
+
+reviewRequestBtn.addEventListener("click", async () => {
+  if (!state.selectedGallery) return;
+  if (!confirm("Enviar agora ao cliente o e-mail pedindo a avaliação desta entrega?")) return;
+  reviewRequestBtn.disabled = true;
+  reviewRequestBtn.textContent = "Enviando...";
+  try {
+    await getJson("/private/review/request", {
+      method: "POST",
+      body: JSON.stringify({ galleryId: state.selectedGallery.id }),
+    });
+    showToast("Pedido de avaliação enviado ao cliente.");
+  } catch (err) {
+    showToast(err.message || "Não foi possível enviar o pedido.");
+  } finally {
+    reviewRequestBtn.disabled = false;
+    reviewRequestBtn.textContent = "Pedir avaliação";
   }
 });
 
