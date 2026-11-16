@@ -25,6 +25,8 @@
     }
   ],
   "vars": {
-    "CLOUDINARY_CLOUD_NAME": "djv98mqfz"
+    "CLOUDINARY_CLOUD_NAME": "djv98mqfz",
+    // "Solicitar avaliações" link of the Google Business Profile; offered after a client reviews.
+    "GOOGLE_REVIEW_URL": "https://g.page/r/Ccj-A9dBgcwnEBM/review"
   }
 }
