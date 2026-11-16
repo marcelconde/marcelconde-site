@@ -350,12 +350,22 @@ function renderPricingSummary() {
   `;
 }
 
+const SELECTION_HINT = "Selecione suas fotos favoritas usando o coração exibido sobre cada imagem.";
+
+// The default gallery text asks the client to choose photos; once the edited
+// photos are delivered that sentence no longer applies, so it becomes a download hint.
+function galleryMessageText(gallery = {}) {
+  const message = String(gallery.message || "");
+  if (!gallery.allowDownload) return message;
+  return message.replace(SELECTION_HINT, "Suas fotos editadas estão prontas: baixe uma a uma ou todas de uma vez.").trim();
+}
+
 function renderHeader() {
   const gallery = state.gallery;
   document.title = `${gallery.title} | Marcel Conde Fotografia`;
   galleryTitle.textContent = gallery.title || "Galeria privada";
   gallerySubtitle.textContent = gallery.subtitle || "";
-  galleryMessage.textContent = gallery.message || "";
+  galleryMessage.textContent = galleryMessageText(gallery);
   restoreGalleryView();
   renderHeroCarousel();
   completeBtn.classList.toggle("hidden", Boolean(gallery.allowDownload || previewToken));

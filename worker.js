@@ -1630,6 +1630,9 @@ async function deletePrivateGallery(env, galleryId) {
     deleteGalleryRecord(env, privateGalleryEventsKey(id)),
     deleteGalleryRecord(env, privateGalleryLatestPaymentKey(id)),
     deleteGalleryRecord(env, privateGalleryBySlugKey(gallery.slug || "")),
+    // A pending review e-mail would point the client to a gallery that no longer exists.
+    // A review the client already sent stays, since it may be published on the site.
+    deleteGalleryRecord(env, `review_request:${id}`),
     changeStoredIds(env, privateGalleriesIndexKey(), [{ publicId: id, selected: false }]),
     removeFolders(),
   ];

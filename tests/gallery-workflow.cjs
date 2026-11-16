@@ -743,6 +743,7 @@ test('deleting a gallery removes its photos in batches, then empty folders, then
   Object.assign(a.env, { CLOUDINARY_CLOUD_NAME: 'cloud', CLOUDINARY_API_KEY: 'key', CLOUDINARY_API_SECRET: 'secret' });
   const ids = Array.from({ length: 120 }, (_, i) => 'clientes/race/selecao/p' + i);
   await a.writeKvJson(a.env, 'private_gallery_images:g', ids.map(public_id => ({ public_id, phase: 'selection', url: 'https://example.test/' + public_id })));
+  await a.writeKvJson(a.env, 'review_request:g', { galleryId: 'g', sendAt: new Date().toISOString() });
   const calls = [];
   a.context.fetch = async (url, options = {}) => {
     const path = new URL(url).pathname;
@@ -762,6 +763,7 @@ test('deleting a gallery removes its photos in batches, then empty folders, then
   assert.equal(calls.filter(call => call.startsWith('folder:')).length, 3);
   assert.equal(await a.readKvJson(a.env, 'private_gallery:g', null), null);
   assert.deepEqual(Array.from(await a.readKvJson(a.env, 'private_gallery_images:g', [])), []);
+  assert.equal(await a.readKvJson(a.env, 'review_request:g', null), null);
 });
 
 test('likes count once per visitor and photo, are capped per hour, visible only to the admin and mailed once a day', async () => {
