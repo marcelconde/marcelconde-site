@@ -3898,6 +3898,79 @@ function paymentConflict(message) {
   throw Object.assign(new Error(message), { status: 409 });
 }
 
+// ── WEBHOOK ASAAS: FALHAS ─────────────────────────────────────
+// Asaas pauses the whole webhook queue after 15 failed deliveries in a row, so one
+// event the site can never process would block every later payment confirmation.
+
+const ASAAS_WEBHOOK_MAX_RETRIES = 3;
+
+const ASAAS_WEBHOOK_REASONS = {
+  site_charge_not_saved: "a cobrança é do site, mas o registro dela não foi encontrado depois de várias tentativas",
+  processing_error: "o site não conseguiu processar o evento depois de várias tentativas",
+  payment_record_not_found: "o registro da cobrança não existe mais no site",
+  payment_client_changed: "o cliente, a galeria ou o orçamento desta cobrança foi apagado ou mudou de ambiente",
+  cancelled_payment_changed: "uma cobrança cancelada no site mudou no Asaas",
+  approved_payment_changed: "uma cobrança já aprovada mudou no Asaas (estorno ou alteração)",
+  paid_charge_mismatch: "o pagamento chegou com valor ou referência diferente da cobrança do site",
+  quote_changed_after_payment: "o orçamento mudou depois do pagamento",
+  gallery_not_found: "a galeria desta cobrança não existe mais",
+  gallery_selection_changed: "a seleção de fotos mudou depois da cobrança",
+  gallery_price_changed: "o preço da seleção mudou depois da cobrança",
+};
+
+// Retries a passing failure a few times, then acknowledges it so the queue keeps flowing.
+async function retryAsaasWebhook(env, issue) {
+  const key = `asaas_webhook_retry:${issue.environment}:${issue.providerPaymentId}:${issue.reason}`;
+  let attempts = 1;
+  try {
+    attempts = Number(await env.LIKES_KV.get(key) || 0) + 1;
+    await env.LIKES_KV.put(key, String(attempts), { expirationTtl: 3 * 86400 });
+  } catch (err) {
+    console.error("Asaas webhook retry counter error:", err);
+  }
+  if (attempts <= ASAAS_WEBHOOK_MAX_RETRIES) return errorJson("Asaas payment pending reconciliation", 503);
+  await alertAsaasWebhookIssue(env, { ...issue, attempts });
+  return json({ ok: true, ignored: true, reason: issue.reason }, 200, { "Cache-Control": "no-store" });
+}
+
+async function alertAsaasWebhookIssue(env, issue) {
+  console.error("Asaas webhook needs manual review:", JSON.stringify(issue));
+  const key = `asaas_webhook_alert:${issue.environment}:${issue.providerPaymentId}:${issue.reason}`;
+  try {
+    if (!env.RESEND_API_KEY || !env.LIKES_KV || await env.LIKES_KV.get(key)) return;
+    await env.LIKES_KV.put(key, new Date().toISOString(), { expirationTtl: 7 * 86400 });
+    const sandbox = issue.environment === "sandbox";
+    const reason = ASAAS_WEBHOOK_REASONS[issue.reason] || issue.reason;
+    const html = emailLayout(env, {
+      preheader: `Um aviso do Asaas precisa de conferência: ${reason}.`,
+      eyebrow: sandbox ? "Ambiente de teste" : "Pagamentos",
+      title: "Aviso do Asaas para conferir",
+      intro: `O site recebeu um aviso do Asaas que não pôde aplicar sozinho: <strong>${emailHtml(reason)}</strong>. O aviso foi aceito para não travar a fila de confirmações; confira a cobrança no painel do Asaas.`,
+      body: `<p style="margin:0;"><strong>Evento:</strong> ${emailHtml(issue.event || "não informado")}</p>
+             <p style="margin:8px 0 0;"><strong>ID Asaas:</strong> ${emailHtml(issue.providerPaymentId)}</p>
+             <p style="margin:8px 0 0;"><strong>ID interno:</strong> ${emailHtml(issue.paymentId || "não encontrado")}</p>
+             ${issue.attempts ? `<p style="margin:8px 0 0;"><strong>Tentativas:</strong> ${Number(issue.attempts)}</p>` : ""}
+             ${issue.detail ? `<p style="margin:8px 0 0;"><strong>Detalhe:</strong> ${emailHtml(issue.detail)}</p>` : ""}`,
+      ctaLabel: "Abrir admin",
+      ctaUrl: `${siteOrigin(env)}/admin/`,
+      reason: "Você recebeu este e-mail porque este endereço recebe notificações administrativas da plataforma.",
+    });
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.RESEND_API_KEY}` },
+      body: JSON.stringify({
+        from: resendFrom(env),
+        to: ["contato@marcelconde.com.br"],
+        subject: `${sandbox ? "[TESTE] " : ""}Aviso do Asaas para conferir — ${issue.providerPaymentId}`,
+        html,
+      }),
+    });
+    if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
+  } catch (err) {
+    console.error("Asaas webhook alert error:", err);
+  }
+}
+
 async function cancelGalleryPayment(env, request, gallery, paymentId, actor) {
   if (!env.GALLERY_DB) throw Object.assign(new Error("Cancelamento temporariamente indisponível."), { status: 503 });
   const key = privateGalleryPaymentKey(paymentId);
@@ -4155,7 +4228,10 @@ export default {
       }
       const body = await readJson(request);
       const providerPaymentId = String(body?.payment?.id || "").trim();
-      if (!providerPaymentId) return errorJson("Missing Asaas payment id", 400);
+      // Any non-200 answer counts as a failure, and Asaas pauses the whole queue
+      // after 15 of them. Only answer an error when retrying can still help.
+      if (!providerPaymentId) return json({ ok: true, ignored: true }, 200, { "Cache-Control": "no-store" });
+      const issue = { environment, providerPaymentId, event: String(body?.event || "") };
       try {
         const result = await reconcileAsaasPayment(env, request, providerPaymentId, environment);
         if (result.reason === "payment_not_found") {
@@ -4170,12 +4246,17 @@ export default {
           if (!await hasAsaasIntentForPayment(env, localPaymentId)) {
             return json({ ok: true, ignored: true }, 200, { "Cache-Control": "no-store" });
           }
+          return retryAsaasWebhook(env, { ...issue, reason: "site_charge_not_saved" });
         }
-        if (!result.ok) return errorJson("Asaas payment pending reconciliation", 503);
+        if (!result.ok) {
+          // Deleted or changed site records never fix themselves: acknowledge and tell the admin.
+          await alertAsaasWebhookIssue(env, { ...issue, reason: result.reason, paymentId: result.payment?.id || "" });
+          return json({ ok: true, ignored: true, reason: result.reason }, 200, { "Cache-Control": "no-store" });
+        }
         return json({ ok: true }, 200, { "Cache-Control": "no-store" });
       } catch (err) {
         console.error("Asaas webhook error:", err);
-        return errorJson("Erro ao processar webhook do Asaas.", 503);
+        return retryAsaasWebhook(env, { ...issue, reason: "processing_error", detail: String(err?.message || err).slice(0, 300) });
       }
     }
 

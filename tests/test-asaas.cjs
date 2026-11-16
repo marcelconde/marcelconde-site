@@ -248,6 +248,59 @@ test('Sandbox webhook ignores other integrations but retries a site charge befor
   assert.equal((await webhook('qpay_site')).status, 503);
 });
 
+function webhookApp(fetchImpl) {
+  const emails = [];
+  const app = setup({}, async (url, options = {}) => {
+    if (String(url).startsWith('https://api.resend.com/')) {
+      emails.push(JSON.parse(options.body));
+      return new Response('{"id":"email_1"}', { status: 200 });
+    }
+    return fetchImpl(url, options);
+  });
+  app.env.ASAAS_SANDBOX_WEBHOOK_TOKEN = 'sandbox-token';
+  app.env.RESEND_API_KEY = 'test-only';
+  app.emails = emails;
+  app.webhook = () => app.worker.fetch(new Request('https://example.test/payments/asaas/sandbox/webhook', {
+    method: 'POST', headers: { 'asaas-access-token': 'sandbox-token', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event: 'PAYMENT_RECEIVED', payment: { id: 'pay_123', externalReference: 'local_1' } }),
+  }), app.env, {});
+  return app;
+}
+
+test('webhook for a charge whose site records were deleted is acknowledged and reported once', async () => {
+  const app = webhookApp(async () => { throw new Error('Provider must not be called'); });
+  // Approved payment whose quote and client were deleted afterwards (e.g. a cleaned-up test).
+  seedTestPayment(app, { status: 'approved' });
+  for (let i = 0; i < 2; i++) {
+    const response = await app.webhook();
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).reason, 'payment_client_changed');
+  }
+  assert.equal(app.emails.length, 1);
+  assert.deepEqual(app.emails[0].to, ['contato@marcelconde.com.br']);
+  assert.match(app.emails[0].subject, /pay_123/);
+});
+
+test('webhook processing errors are retried a few times, then acknowledged so the queue keeps flowing', async () => {
+  const app = webhookApp(async () => { throw new Error('Asaas unavailable'); });
+  seedTestPayment(app);
+  seedTestQuote(app, { status: 'pending_payment' });
+  const statuses = [];
+  for (let i = 0; i < 5; i++) statuses.push((await app.webhook()).status);
+  assert.deepEqual(statuses, [503, 503, 503, 200, 200]);
+  assert.equal(app.emails.length, 1);
+  assert.equal(app.read('private_quote:quote_1').status, 'pending_payment');
+});
+
+test('webhook without a payment id is acknowledged instead of failing', async () => {
+  const app = webhookApp(async () => { throw new Error('Provider must not be called'); });
+  const response = await app.worker.fetch(new Request('https://example.test/payments/asaas/sandbox/webhook', {
+    method: 'POST', headers: { 'asaas-access-token': 'sandbox-token', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event: 'ACCOUNT_STATUS_UPDATED' }),
+  }), app.env, {});
+  assert.equal(response.status, 200);
+});
+
 test('paid Asaas charge with wrong amount or reference never approves the quote', async () => {
   for (const mismatch of [{ value: 99 }, { externalReference: 'other' }]) {
     const app = setup({ id: 'pay_123', status: 'CONFIRMED', value: 100, externalReference: 'local_1', ...mismatch });
