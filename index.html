@@ -1186,6 +1186,31 @@
       margin: 0 0 1rem;
     }
 
+    .slide-avatar {
+      display: block;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: 0 0 0.8rem;
+    }
+
+    .slide-name a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .reviews-google {
+      margin-top: 1.4rem;
+      font-size: 0.8rem;
+      color: var(--ink-dim);
+      letter-spacing: .04em;
+    }
+
+    .reviews-google a {
+      color: var(--gold);
+    }
+
     .slide-name {
       font-family: var(--serif);
       font-size: 1.5rem;
@@ -2063,7 +2088,7 @@
     </div>
 
     <div class="footer-meta">
-      <span class="footer-location">Recife, PE — Brasil</span>
+      <span class="footer-location">Olinda e Recife, PE — Brasil</span>
       <span class="footer-cnpj">Marcel Conde | Photography · CNPJ 67.096.533/0001-90</span>
     </div>
   </footer>
@@ -2255,7 +2280,7 @@
     // Avaliações reais de clientes, publicadas no admin, substituem os depoimentos fixos da página.
     async function loadReviews() {
       try {
-        const { reviews = [] } = await fetch('https://api.marcelconde.com.br/reviews').then((r) => r.json());
+        const { reviews = [], source, rating, total, googleUrl } = await fetch('https://api.marcelconde.com.br/reviews').then((r) => r.json());
         const wrapper = document.querySelector('.testimonials .slider-wrapper');
         const controls = wrapper?.querySelector('.slider-controls');
         const dotsBox = wrapper?.querySelector('.slider-dots');
@@ -2267,11 +2292,18 @@
             <div class="slide-meta">
               <span class="slide-quote-mark" aria-hidden="true">"</span>
               ${review.photo ? `<img class="slide-photo" src="${esc(review.photo)}" alt="Foto de ${esc(review.name)} por Marcel Conde" loading="lazy" decoding="async">` : ''}
-              <span class="slide-name">${esc(review.name)}</span>
+              ${review.avatar ? `<img class="slide-avatar" src="${esc(review.avatar)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ''}
+              <span class="slide-name">${review.authorUrl ? `<a href="${esc(review.authorUrl)}" target="_blank" rel="noopener noreferrer">${esc(review.name)}</a>` : esc(review.name)}</span>
+              ${review.source === 'google' ? `<span class="slide-event">Avaliação no Google${review.when ? ` · ${esc(review.when)}` : ''}</span>` : ''}
               <div class="slide-stars" aria-label="${Number(review.rating)} estrelas">${'★'.repeat(review.rating)}${'☆'.repeat(5 - review.rating)}</div>
             </div>
             <p class="slide-text">"${esc(review.text)}"</p>
           </div>`).join(''));
+        // Google reviews keep their attribution and a way to read all of them there.
+        if (source === 'google' && googleUrl && !wrapper.parentElement.querySelector('.reviews-google')) {
+          const score = Number(rating || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+          wrapper.insertAdjacentHTML('afterend', `<p class="reviews-google">Nota ${esc(score)} no Google · ${Number(total || 0)} ${Number(total) === 1 ? 'avaliação' : 'avaliações'} · <a href="${esc(googleUrl)}" target="_blank" rel="noopener noreferrer">Ver todas no Google</a></p>`);
+        }
         dotsBox.innerHTML = reviews.map((_, i) => `<button class="slider-dot${i === 0 ? ' active' : ''}" role="tab" aria-label="Depoimento ${i + 1}" aria-selected="${i === 0}"></button>`).join('');
         slides = wrapper.querySelectorAll('.testimonial-slide');
         dots = dotsBox.querySelectorAll('.slider-dot');

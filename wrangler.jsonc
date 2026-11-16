@@ -27,6 +27,9 @@
   "vars": {
     "CLOUDINARY_CLOUD_NAME": "djv98mqfz",
     // "Solicitar avaliações" link of the Google Business Profile; offered after a client reviews.
-    "GOOGLE_REVIEW_URL": "https://g.page/r/Ccj-A9dBgcwnEBM/review"
+    "GOOGLE_REVIEW_URL": "https://g.page/r/Ccj-A9dBgcwnEBM/review",
+    // Business Profile place; its Google reviews are shown on the site when the
+    // GOOGLE_PLACES_API_KEY secret exists.
+    "GOOGLE_PLACE_ID": "ChIJN9Qx_289qwcRyP4D10GBzCc"
   }
 }

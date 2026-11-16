@@ -44,7 +44,7 @@
         <div>
           <span class="eyebrow">Clientes</span>
           <h1>Avaliações</h1>
-          <p>Todas as galerias entregues. O pedido sai sozinho no dia seguinte à entrega final, às 10h; só aparece no site o que você publicar e o cliente autorizou.</p>
+          <p>As avaliações ficam num lugar só: o Google. O pedido sai sozinho no dia seguinte à entrega final, às 10h, e leva o cliente direto à página de avaliação do Google; o site mostra essas avaliações.</p>
         </div>
         <div class="content-actions">
           <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar" aria-label="Atualizar">↻</button>
@@ -52,8 +52,14 @@
       </section>
 
       <div class="admin-card-panel">
-        <h2>Recebidas</h2>
-        <p>Publique as que devem aparecer nos depoimentos da página inicial.</p>
+        <h2>No Google</h2>
+        <p id="googleSummary">Carregando...</p>
+        <div class="admin-list" id="googleReviewsList"></div>
+      </div>
+
+      <div class="admin-card-panel hidden" id="siteReviewsPanel">
+        <h2>Recebidas pelo site (antes do Google)</h2>
+        <p>Avaliações feitas no formulário antigo do site.</p>
         <div class="admin-list" id="reviewsList"></div>
       </div>
 
@@ -67,6 +73,6 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/admin/avaliacoes/avaliacoes.js?v=20261116-01"></script>
+  <script src="/admin/avaliacoes/avaliacoes.js?v=20261116-02"></script>
 </body>
 </html>

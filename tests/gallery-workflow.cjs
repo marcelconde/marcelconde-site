@@ -282,7 +282,9 @@ test('after the final delivery the client is asked for a review the next day; on
   assert.equal((await a.sendDueReviewRequests(a.env, new Date(Date.parse(pedido.sendAt) + 7200000))).sent, 0);
   assert.match(emails[1].subject, /Como foram suas fotos\? — Race/);
   assert.match(emails[1].html, /g\.page\/r\/teste\/review/);
-  const token = decodeURIComponent(/avaliar\/\?t=([^"&<]+)/.exec(emails[1].html)[1]);
+  // Reviews live in one place only: the e-mail sends the client to Google, not to a form on the site.
+  assert.doesNotMatch(emails[1].html, /avaliar\/\?t=/);
+  const token = pedido.token;
 
   const pagina = (path, body) => a.context.worker.fetch(new Request('https://example.test' + path, body
     ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}), a.env, { waitUntil() {} });
@@ -846,4 +848,29 @@ test('the client sees photos and the CSV lists them in camera order, whatever or
   assert.deepEqual(Array.from(page.images, (image) => image.filename), ['IMG_9001.jpg', 'IMG_9003.jpg']);
   const csv = await (await a.request('/private/gallery/export-selected?id=g')).text();
   assert.deepEqual(csv.split('\n').slice(1).map((line) => line.split(';')[0]), ['IMG_9001.jpg', 'IMG_9003.jpg', 'IMG_9006.jpg']);
+});
+
+test('the site shows the Google reviews, cached so Google is asked at most twice a day', async () => {
+  const a = app();
+  Object.assign(a.env, { GOOGLE_PLACES_API_KEY: 'places-test', GOOGLE_PLACE_ID: 'place-1', GOOGLE_REVIEW_URL: 'https://g.page/r/teste/review' });
+  const calls = [];
+  a.context.fetch = async (url, options = {}) => {
+    calls.push(String(url));
+    assert.equal(new Headers(options.headers).get('X-Goog-Api-Key'), 'places-test');
+    return new Response(JSON.stringify({
+      rating: 4.9, userRatingCount: 12, googleMapsUri: 'https://maps.google.com/?cid=1',
+      reviews: [
+        { rating: 5, text: { text: 'Fotos lindas!' }, authorAttribution: { displayName: 'Ana', uri: 'https://maps.google.com/contrib/1', photoUri: 'https://lh3.example/a.png' }, relativePublishTimeDescription: 'há uma semana' },
+        { rating: 4, authorAttribution: { displayName: 'Sem texto' } },
+      ],
+    }));
+  };
+  const reviews = async () => (await a.context.worker.fetch(new Request('https://example.test/reviews'), a.env, { waitUntil() {} })).json();
+  const first = await reviews();
+  const second = await reviews();
+  assert.equal(calls.length, 1);
+  assert.match(calls[0], /places\.googleapis\.com\/v1\/places\/place-1/);
+  assert.deepEqual([first.source, first.rating, first.total, first.reviewUrl], ['google', 4.9, 12, 'https://g.page/r/teste/review']);
+  assert.deepEqual(Array.from(first.reviews, (review) => [review.name, review.rating, review.text]), [['Ana', 5, 'Fotos lindas!']]);
+  assert.deepEqual(second, first);
 });

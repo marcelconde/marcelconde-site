@@ -11,6 +11,9 @@ const statPublished = $("#statPublished");
 const statRequests = $("#statRequests");
 const reviewsList = $("#reviewsList");
 const reviewRequestsList = $("#reviewRequestsList");
+const googleSummary = $("#googleSummary");
+const googleReviewsList = $("#googleReviewsList");
+const siteReviewsPanel = $("#siteReviewsPanel");
 const refreshBtn = $("#refreshBtn");
 const toastEl = $("#toast");
 
@@ -76,9 +79,30 @@ function reviewStars(rating = 0) {
   return "★".repeat(value) + "☆".repeat(5 - value);
 }
 
+// Reviews written on Google, as the site shows them (GET /reviews).
+function renderGoogle(google = {}) {
+  const fromGoogle = google.source === "google";
+  const total = Number(google.total || 0);
+  statReceived.textContent = total;
+  statPublished.textContent = fromGoogle ? google.reviews.length : 0;
+  if (google.rating === undefined) {
+    googleSummary.textContent = "As avaliações do Google aparecem aqui e no site depois que a chave da API do Google Places for configurada no Worker.";
+  } else {
+    const score = Number(google.rating || 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    googleSummary.innerHTML = `Nota ${escapeHtml(score)} · ${total} ${total === 1 ? "avaliação" : "avaliações"}${google.googleUrl ? ` · <a href="${escapeHtml(google.googleUrl)}" target="_blank" rel="noopener noreferrer">Abrir no Google</a>` : ""}. O site mostra as mais relevantes (até 5).`;
+  }
+  googleReviewsList.innerHTML = fromGoogle ? google.reviews.map((review) => `
+    <div class="admin-row review-row">
+      <div>
+        <strong>${reviewStars(review.rating)} ${escapeHtml(review.name || "Cliente")}</strong>
+        <small>${escapeHtml(review.when || "")}</small>
+      </div>
+      <div><p>${escapeHtml(review.text || "")}</p></div>
+    </div>`).join("") : messageRow("Nenhuma avaliação no Google ainda.", "Peça pela página de cada galeria entregue ou pela lista de pedidos abaixo.");
+}
+
 function render({ reviews = [], requests = [], delivered = [] } = {}) {
-  statReceived.textContent = reviews.length;
-  statPublished.textContent = reviews.filter((review) => review.status === "published").length;
+  siteReviewsPanel.classList.toggle("hidden", !reviews.length);
 
   reviewsList.innerHTML = reviews.length ? reviews.map((review) => {
     const id = escapeHtml(review.galleryId);
@@ -130,9 +154,14 @@ async function loadData() {
   reviewsList.innerHTML = messageRow("Carregando avaliações...");
   reviewRequestsList.innerHTML = "";
   try {
-    const [me, data] = await Promise.all([getJson("/auth/me"), getJson("/private/reviews")]);
+    const [me, data, google] = await Promise.all([
+      getJson("/auth/me"),
+      getJson("/private/reviews"),
+      fetch(`${CONFIG.workerUrl}/reviews`).then((res) => res.json()).catch(() => ({})),
+    ]);
     currentUserLabel.textContent = me.user?.email || "";
     render(data);
+    renderGoogle(google);
   } catch (err) {
     reviewsList.innerHTML = messageRow("Erro ao carregar avaliações.", err.message || "");
   } finally {

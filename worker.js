@@ -1632,7 +1632,7 @@ async function deletePrivateGallery(env, galleryId) {
     deleteGalleryRecord(env, privateGalleryBySlugKey(gallery.slug || "")),
     // A pending review e-mail would point the client to a gallery that no longer exists.
     // A review the client already sent stays, since it may be published on the site.
-    deleteGalleryRecord(env, `review_request:${id}`),
+    deleteGalleryRecord(env, reviewRequestKey(id)),
     changeStoredIds(env, privateGalleriesIndexKey(), [{ publicId: id, selected: false }]),
     removeFolders(),
   ];
@@ -2382,6 +2382,59 @@ function clientGalleryUrl(env, slug) {
 }
 
 // ── AVALIAÇÕES ──────────────────────────────────────────────
+// ── AVALIAÇÕES DO GOOGLE ─────────────────────────────────────
+// Clients review only on Google; the site shows those reviews. Places API (New)
+// returns at most five; they are cached in KV and refreshed in the background
+// twice a day, so the site makes about 60 calls a month.
+const GOOGLE_REVIEWS_KEY = "google_reviews_cache";
+const GOOGLE_REVIEWS_MAX_AGE_MS = 12 * 3600000;
+
+async function fetchGoogleReviews(env) {
+  const placeId = String(env.GOOGLE_PLACE_ID || "").trim();
+  const res = await fetchWithTimeout(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=pt-BR`, {
+    headers: {
+      "X-Goog-Api-Key": env.GOOGLE_PLACES_API_KEY,
+      "X-Goog-FieldMask": "rating,userRatingCount,reviews,googleMapsUri",
+    },
+  }, 10000);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Places ${res.status}: ${data?.error?.message || "erro"}`);
+  return {
+    source: "google",
+    rating: Number(data.rating || 0),
+    total: Number(data.userRatingCount || 0),
+    googleUrl: data.googleMapsUri || env.GOOGLE_REVIEW_URL || "",
+    reviewUrl: env.GOOGLE_REVIEW_URL || "",
+    reviews: (data.reviews || [])
+      .map((review) => ({
+        source: "google",
+        name: review.authorAttribution?.displayName || "Cliente",
+        authorUrl: review.authorAttribution?.uri || "",
+        avatar: review.authorAttribution?.photoUri || "",
+        rating: Math.max(1, Math.min(5, Math.round(Number(review.rating) || 5))),
+        text: String(review.text?.text || review.originalText?.text || "").slice(0, REVIEW_MAX_TEXT),
+        when: review.relativePublishTimeDescription || "",
+      }))
+      .filter((review) => review.text),
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+async function getGoogleReviews(env, ctx) {
+  if (!env.GOOGLE_PLACES_API_KEY || !env.GOOGLE_PLACE_ID || !env.LIKES_KV) return null;
+  const cached = await env.LIKES_KV.get(GOOGLE_REVIEWS_KEY, "json").catch(() => null);
+  const refresh = async () => {
+    const fresh = await fetchGoogleReviews(env);
+    await env.LIKES_KV.put(GOOGLE_REVIEWS_KEY, JSON.stringify(fresh));
+    return fresh;
+  };
+  if (!cached) return refresh().catch((err) => { console.error("Google reviews failed:", err); return null; });
+  if (Date.now() - Date.parse(cached.fetchedAt || 0) > GOOGLE_REVIEWS_MAX_AGE_MS) {
+    ctx?.waitUntil?.(refresh().catch((err) => console.error("Google reviews refresh failed:", err)));
+  }
+  return cached;
+}
+
 // Depois da entrega final, o cliente recebe no dia seguinte, às 10h de Recife, um pedido de avaliação.
 // A avaliação fica pendente até o admin publicar; só as publicadas e autorizadas aparecem no site.
 const REVIEW_MAX_TEXT = 1000;
@@ -2440,10 +2493,10 @@ async function sendReviewRequestEmail(env, request) {
     eyebrow: "Sua opinião",
     title: "Como foi a sua experiência?",
     intro: `${name ? `Olá ${emailHtml(name)}, ` : "Olá, "}espero que você tenha gostado das fotos de <strong>${emailHtml(request.galleryTitle)}</strong>.`,
-    body: `<p style="margin:0;">Sua avaliação leva menos de um minuto e ajuda outras pessoas a conhecerem o meu trabalho. Se quiser, escolha também uma das suas fotos para aparecer junto.</p>`,
-    ctaLabel: "Avaliar minha experiência",
-    ctaUrl: reviewPageUrl(env, request.token),
-    ...(env.GOOGLE_REVIEW_URL ? { secondaryCtaLabel: "Avaliar no Google", secondaryCtaUrl: env.GOOGLE_REVIEW_URL } : {}),
+    body: `<p style="margin:0;">A avaliação é feita no Google, leva menos de um minuto e ajuda outras pessoas a encontrarem o meu trabalho. Ela também aparece no meu site.</p>`,
+    // One place only: the client reviews on Google and the site shows those reviews.
+    ctaLabel: "Avaliar no Google",
+    ctaUrl: env.GOOGLE_REVIEW_URL || reviewPageUrl(env, request.token),
   });
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -6853,8 +6906,14 @@ export default {
     }
 
     if (url.pathname === "/reviews" && request.method === "GET") {
+      // Google is the only place clients review; the site shows those reviews.
+      const google = await getGoogleReviews(env, ctx);
+      if (google?.reviews?.length) {
+        return json(google, 200, { "Cache-Control": "public, max-age=300" });
+      }
       const reviews = env.GALLERY_DB ? await listReviewRecords(env, "review:") : [];
       return json({
+        ...(google ? { rating: google.rating, total: google.total, googleUrl: google.googleUrl } : {}),
         reviews: reviews.filter((review) => review.status === "published" && review.publish && !review.isTest).slice(0, 30).map(publicReview),
       }, 200, { "Cache-Control": "public, max-age=300" });
     }
