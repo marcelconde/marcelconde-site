@@ -1,6 +1,6 @@
 # Decisões de arquitetura e produto
 
-Última revisão: 2026-10-05. Registre aqui decisões duradouras; mudanças de estado pertencem a `current-state.md`.
+Última revisão: 2026-11-16. Registre aqui decisões duradouras; mudanças de estado pertencem a `current-state.md`.
 
 1. **Frontend estático e Worker separado.** HTML/CSS/JS são servidos pelo GitHub Pages; a API e integrações ficam em `worker.js` na Cloudflare. Em mudanças nos dois lados, o frontend compatível é publicado primeiro.
 2. **D1 é a fonte oficial dos registros operacionais de galerias.** KV tinha consistência eventual e gravações concorrentes de arrays; a migração importa registros antigos uma vez e usa atualizações SQL atômicas. O fallback KV existe para desenvolvimento, não para rollback direto de produção.
@@ -15,3 +15,5 @@
 11. **Login protegido por conta, não por IP (2026-10-05).** Turnstile após o primeiro erro e bloqueio no quinto, liberado só por nova senha; e-mails inexistentes seguem o mesmo caminho para não revelar quais contas existem. Custo aceito: quem souber o e-mail pode forçar o bloqueio e obrigar uma redefinição.
 12. **Conta Asaas exclusiva do site (2026-10-05).** Marcel separou as contas: a antiga atende só a Fotop e a nova só o site, para não herdar restrições nem misturar cobranças das duas integrações.
 13. **Curtidas contadas no servidor, não no navegador (2026-10-22).** Uma por visitante por foto (hash do IP), limite por hora e resumo diário por e-mail, para que um script não infle contagens nem esgote a cota do Resend usada por pagamentos e senhas.
+14. **Webhook Asaas nunca trava a fila (2026-11-16).** O Asaas pausa a fila inteira após 15 respostas não-200. Evento que o site não consegue aplicar (registro apagado, valor ou referência divergente, estorno de cobrança aprovada) responde 200 e manda e-mail para `contato@`; erro passageiro responde 503 até 3 vezes por cobrança (contador em KV) e depois também vira aviso. A consulta de status pela página do cliente continua conciliando.
+15. **Chamadas autenticadas sem `cache: "no-store"` (2026-11-16).** No Chrome, `no-store` e `no-cache` ignoram o cache da checagem CORS e mandam um OPTIONS antes de cada chamada (~200-300 ms). As respostas privadas não têm validade nem `Last-Modified`, então o navegador não as reaproveita no modo padrão. Mantido `no-store` só nas listas de álbuns do admin, que têm cache público de 60 s.
