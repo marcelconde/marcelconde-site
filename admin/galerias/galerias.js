@@ -539,7 +539,7 @@ async function workerFetch(path, options = {}) {
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
+  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers });
   if (res.status === 401) window.location.href = "/admin/";
   return res;
 }
@@ -807,9 +807,12 @@ function renderSelectionLog() {
 
   const changedAfterConfirmation = entries.some((event) => {
     const details = event.details || {};
-    return Boolean(details.wasSelectionCompleted) ||
+    // Before the first confirmation every marked photo counts as "added since the
+    // last confirmation"; that is not a change after confirming. Older events lack the flag.
+    const confirmedBefore = details.wasConfirmedBefore !== false;
+    return Boolean(details.wasSelectionCompleted) || (confirmedBefore && (
       (details.addedSinceLastConfirmation || []).length > 0 ||
-      (details.removedSinceLastConfirmation || []).length > 0;
+      (details.removedSinceLastConfirmation || []).length > 0));
   });
   selectionLogSummary.textContent = entries.length
     ? `${entries.length} registro(s)${changedAfterConfirmation ? " · houve alteração após confirmação" : ""}`
@@ -980,8 +983,14 @@ function rememberDraft() {
   document.getElementById("galleryDraftStatus").textContent = "Rascunho guardado nesta aba. Salve para aplicar ao cliente.";
 }
 
-galleryForm.addEventListener("input", rememberDraft);
-galleryForm.addEventListener("change", rememberDraft);
+// Choosing files to upload or marking photos in the grid is not an unsaved gallery setting.
+function rememberDraftFromForm(event) {
+  const target = event.target;
+  if (target?.type === "file" || target === firstAsCover || photoGrid.contains(target)) return;
+  rememberDraft();
+}
+galleryForm.addEventListener("input", rememberDraftFromForm);
+galleryForm.addEventListener("change", rememberDraftFromForm);
 window.addEventListener("beforeunload", (event) => {
   if (state.uploading || state.uploads.some(item => item.status === "pending")) {
     event.preventDefault();

@@ -456,6 +456,8 @@ test('a gallery charge opens as Pix with its QR Code and switches to card and ba
   assert.equal(created.status, 200, created.error);
   const { id } = created.payment;
   assert.deepEqual([created.payment.billingType, created.payment.qrCode, created.payment.qrCodeBase64, created.payment.pixAvailable], ['PIX', '000201pix', 'QUJD', true]);
+  // The document Asaas accepted is kept, so the client is not asked for it again.
+  assert.equal((await a.readKvJson(a.env, 'private_client:c', null)).document, '12345678901');
   assert.equal(created.payment.ticketUrl, 'https://sandbox.asaas.com/i/remote');
   // The QR Code is never stored and page loads do not ask Asaas for it.
   assert.equal((await a.readKvJson(a.env, 'private_gallery_payment:' + id, null)).qrCode, undefined);
@@ -826,4 +828,20 @@ test('a saved photo order rules the album; new photos follow by name; an empty o
   assert.equal((await a.request('/admin/album-order', { albumPath: 'site/about', order: ['a'] })).status, 400);
   await save([]);
   assert.deepEqual(await ids(), ['c', 'a', 'b', 'd']);
+});
+
+test('the client sees photos and the CSV lists them in camera order, whatever order the uploads finished in', async () => {
+  const a = app();
+  const names = ['IMG_9006.jpg', 'IMG_10.jpg', 'IMG_9001.jpg', 'IMG_9.jpg', 'IMG_9003.jpg'];
+  a.seed('private_gallery_images:g', names.map((filename, index) => ({
+    public_id: 'p' + index, filename, display_name: filename.replace('.jpg', ''), phase: 'selection', url: 'https://example.test/p' + index,
+  })));
+  a.seed('private_gallery_selection:g', ['p0', 'p2', 'p4']);
+  const view = await (await a.request('/client-gallery?slug=race', undefined, 'client-token')).json();
+  assert.deepEqual(Array.from(view.images, (image) => image.filename),
+    ['IMG_9.jpg', 'IMG_10.jpg', 'IMG_9001.jpg', 'IMG_9003.jpg', 'IMG_9006.jpg']);
+  const page = await (await a.request('/client-gallery?slug=race&cursor=2&limit=2', undefined, 'client-token')).json();
+  assert.deepEqual(Array.from(page.images, (image) => image.filename), ['IMG_9001.jpg', 'IMG_9003.jpg']);
+  const csv = await (await a.request('/private/gallery/export-selected?id=g')).text();
+  assert.deepEqual(csv.split('\n').slice(1).map((line) => line.split(';')[0]), ['IMG_9001.jpg', 'IMG_9003.jpg', 'IMG_9006.jpg']);
 });

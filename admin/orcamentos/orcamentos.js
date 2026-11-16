@@ -80,7 +80,7 @@ async function workerFetch(path, options = {}) {
     headers.set("Authorization", `Bearer ${token}`);
     headers.set("X-Admin-Token", token);
   }
-  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
+  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers });
   if (res.status === 401) location.href = "/admin/";
   return res;
 }

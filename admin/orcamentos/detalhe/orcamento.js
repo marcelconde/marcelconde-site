@@ -134,7 +134,7 @@ async function workerFetch(path, options = {}) {
     headers.set("X-Admin-Token", token);
   }
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
+  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers });
   if (res.status === 401) location.href = "/admin/";
   return res;
 }

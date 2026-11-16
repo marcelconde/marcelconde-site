@@ -171,7 +171,7 @@ async function api(path, options = {}) {
   }
   headers.set("Authorization", `Bearer ${token}`);
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
+  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {
     if (previewToken) throw new Error("Prévia expirada. Abra novamente pelo admin.");
@@ -211,18 +211,31 @@ function renderHeroCarousel() {
 
   galleryHeroBg.style.backgroundImage = "";
   galleryHeroBg.innerHTML = sources.map((src, index) => `
-    <span class="gallery-hero-slide${index === 0 ? " active" : ""}" style="background-image:url('${escapeHtml(cloudUrl(src, "w_1800,q_auto,f_auto"))}')"></span>
+    <span class="gallery-hero-slide${index === 0 ? " active" : ""}" data-bg="${escapeHtml(cloudUrl(src, "w_1800,q_auto,f_auto"))}"></span>
   `).join("");
 
+  // Only the visible slide and the next one are downloaded: loading all twelve
+  // full-width photos at once competed with the thumbnails on the first paint.
+  const loadSlide = (slide) => {
+    if (!slide?.dataset.bg) return;
+    slide.style.backgroundImage = `url("${slide.dataset.bg.replace(/"/g, "%22")}")`;
+    delete slide.dataset.bg;
+  };
+  const slidesNow = () => galleryHeroBg.querySelectorAll(".gallery-hero-slide");
+  loadSlide(slidesNow()[0]);
   if (sources.length <= 1) return;
+  clearTimeout(renderHeroCarousel.preload);
+  renderHeroCarousel.preload = setTimeout(() => loadSlide(slidesNow()[1]), 2500);
 
   let current = 0;
   renderHeroCarousel.timer = setInterval(() => {
-    const slides = galleryHeroBg.querySelectorAll(".gallery-hero-slide");
+    const slides = slidesNow();
     if (slides.length <= 1) return;
     slides[current]?.classList.remove("active");
     current = (current + 1) % slides.length;
+    loadSlide(slides[current]);
     slides[current]?.classList.add("active");
+    loadSlide(slides[(current + 1) % slides.length]);
   }, 4200);
 }
 

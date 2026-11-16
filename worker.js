@@ -749,6 +749,13 @@ function slugify(value = "") {
     .slice(0, 80) || `galeria-${Date.now()}`;
 }
 
+// Clients see photos in camera order (file name), whatever order the uploads finished in.
+function sortImagesByFilename(images = []) {
+  const collator = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+  const name = (image) => String(image?.filename || image?.display_name || image?.public_id || "");
+  return [...images].sort((a, b) => collator.compare(name(a), name(b)));
+}
+
 function cleanGalleryText(value = "", max = 1000) {
   return String(value || "")
     .replace(/\r\n/g, "\n")
@@ -3898,6 +3905,20 @@ function paymentConflict(message) {
   throw Object.assign(new Error(message), { status: 409 });
 }
 
+// Saves the CPF/CNPJ the Asaas accepted on a client record that has none, so the
+// client is not asked again on the next payment. Never fails the payment itself.
+async function rememberClientDocument(env, clientId, document) {
+  const digits = String(document || "").replace(/\D/g, "");
+  if (!clientId || ![11, 14].includes(digits.length)) return;
+  try {
+    const client = await readKvJson(env, privateClientKey(clientId), null);
+    if (!client || String(client.document || "").replace(/\D/g, "")) return;
+    await writeKvJson(env, privateClientKey(clientId), { ...client, document: digits, updatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error("Client document save error:", err);
+  }
+}
+
 // ── WEBHOOK ASAAS: FALHAS ─────────────────────────────────────
 // Asaas pauses the whole webhook queue after 15 failed deliveries in a row, so one
 // event the site can never process would block every later payment confirmation.
@@ -4703,6 +4724,7 @@ export default {
       await writeKvJson(env, privateQuotePaymentKey(quote.id), payment);
       try {
         const charge = await createAsaasCharge(env, payment, access.linkedClient || access.client, quote.acceptance.document);
+        await rememberClientDocument(env, quote.clientId, quote.acceptance.document);
         const saved = { ...payment, ...charge, status: "pending", updatedAt: new Date().toISOString() };
         await writeKvJson(env, privateQuotePaymentKey(quote.id), saved);
         await writeKvJson(env, asaasPaymentKey(charge.providerPaymentId, environment), { kind: "quote", id: quote.id });
@@ -4770,7 +4792,7 @@ export default {
       const access = await requireClientGalleryAccess(request, env, gallery);
       if (access.error) return access.error;
 
-      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      const images = sortImagesByFilename(visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), [])));
       const selection = await readKvJson(env, privateGallerySelectionKey(gallery.id), []);
       const canDownload = gallery.status === "final" || gallery.allowDownload === true;
       const hidden = galleryHiddenFromClient(gallery);
@@ -5013,6 +5035,7 @@ export default {
       await writeKvJson(env, privateGalleryPaymentKey(payment.id), { ...payment, status: "creating" });
       try {
         const charge = await createAsaasCharge(env, payment, access.linkedClient, body.document, "PIX");
+        await rememberClientDocument(env, access.linkedClient?.id || gallery.clientId, body.document);
         const saved = { ...payment, ...charge, status: "pending" };
         await writeKvJson(env, privateGalleryPaymentKey(payment.id), saved);
         await writeKvJson(env, asaasPaymentKey(charge.providerPaymentId, environment), { kind: "gallery", id: payment.id });
@@ -5189,7 +5212,7 @@ export default {
         return errorJson("Download ainda não liberado.", 403);
       }
 
-      const images = visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), []));
+      const images = sortImagesByFilename(visibleGalleryImages(gallery, await readKvJson(env, privateGalleryImagesKey(gallery.id), [])));
       await appendPrivateGalleryEvent(env, request, gallery.id, "cliente_baixou_todas", {
         totalImages: images.length,
       }, access.client);
@@ -6244,7 +6267,7 @@ export default {
       const selected = new Set(await readKvJson(env, privateGallerySelectionKey(id), []));
       const selectedImages = images.filter((image) => selected.has(image.public_id));
       // After delivery the originals are deleted; their names live on the gallery.
-      const source = selectedImages.length ? selectedImages : (gallery.deliveredSelection || []);
+      const source = sortImagesByFilename(selectedImages.length ? selectedImages : (gallery.deliveredSelection || []));
       const rows = source.map((image) => [
         image.filename || image.display_name || image.public_id,
         image.display_name || "",

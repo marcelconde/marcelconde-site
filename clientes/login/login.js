@@ -102,7 +102,7 @@ async function api(path, options = {}) {
   const token = localStorage.getItem(CONFIG.tokenKey) || "";
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
+  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw Object.assign(new Error(data.error || `Erro ${res.status}`), { data, status: res.status });
   return data;

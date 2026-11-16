@@ -42,7 +42,7 @@ async function api(path, options = {}) {
   if (!token) throw new Error("Unauthorized");
   headers.set("Authorization", `Bearer ${token}`);
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
+  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {
     localStorage.removeItem(CONFIG.tokenKey);
@@ -120,12 +120,13 @@ function renderGalleries(galleries = []) {
 
 async function loadDashboard() {
   try {
+    // The three requests run together: waiting for the session first added a full round trip.
+    const quotesRequest = api("/client-quotes").then((data) => ({ ok: true, data })).catch(() => ({ ok: false, data: { quotes: [] } }));
+    const galleriesRequest = api("/client-galleries");
+    galleriesRequest.catch(() => {});
     const me = await api("/client-auth/me");
     clientLabel.textContent = me.user?.email || "";
-    const [quoteResult, galleryData] = await Promise.all([
-      api("/client-quotes").then((data) => ({ ok: true, data })).catch(() => ({ ok: false, data: { quotes: [] } })),
-      api("/client-galleries"),
-    ]);
+    const [quoteResult, galleryData] = await Promise.all([quotesRequest, galleriesRequest]);
     renderQuotes(quoteResult.data.quotes || []);
     renderGalleries(galleryData.galleries || []);
   } catch (err) {

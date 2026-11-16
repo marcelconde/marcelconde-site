@@ -79,7 +79,7 @@ async function api(path, options = {}) {
   if (!token) throw new Error("Unauthorized");
   headers.set("Authorization", `Bearer ${token}`);
   if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers, cache: "no-store" });
+  const res = await fetch(CONFIG.workerUrl + path, { ...options, headers });
   const contentType = res.headers.get("Content-Type") || "";
   const data = contentType.includes("application/json") ? await res.json().catch(() => ({})) : null;
   if (res.status === 401) {
@@ -159,8 +159,10 @@ function renderQuote() {
 
   quotePayments.innerHTML = (quote.paymentMethods || []).map((method) => `
     <div><strong>${escapeHtml(method.label || "Pagamento")}</strong><span>${escapeHtml(method.details || "")}</span></div>`).join("");
-  quoteReserveLine.hidden = !quote.reservePercent;
-  quoteReserveLine.textContent = quote.reservePercent
+  // A reserve under the Asaas minimum (R$ 5,00) cannot be charged, so it is not offered either.
+  const reserveOffered = Boolean(quote.reservePercent) && Number(quote.reserveAmountCents || 0) >= 500;
+  quoteReserveLine.hidden = !reserveOffered;
+  quoteReserveLine.textContent = reserveOffered
     ? `Entrada mínima para reserva: ${quote.reservePercent}% (${formatMoney(quote.reserveAmountCents)}).`
     : "";
   quotePaymentTerms.textContent = quote.paymentTerms || "";
