@@ -874,3 +874,28 @@ test('the site shows the Google reviews, cached so Google is asked at most twice
   assert.deepEqual(Array.from(first.reviews, (review) => [review.name, review.rating, review.text]), [['Ana', 5, 'Fotos lindas!']]);
   assert.deepEqual(second, first);
 });
+
+test('the first time a client opens a quote, contato@ gets one e-mail; later opens send nothing', async () => {
+  const a = app();
+  a.env.RESEND_API_KEY = 'resend-test';
+  const emails = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(url, 'https://api.resend.com/emails');
+    emails.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ id: 'email_1' }));
+  };
+  a.seed('private_quote:q', {
+    id: 'q', number: 'ORC-1', title: 'Aniversário', clientId: 'c', status: 'published', version: 1,
+    publishedSnapshot: { totalCents: 60000, version: 1, validUntil: '2099-12-01' },
+  });
+  for (let i = 0; i < 2; i += 1) {
+    const response = await a.request('/client-quote?id=q', undefined, 'client-token');
+    assert.equal(response.status, 200);
+    await Promise.all(a.tasks.splice(0));
+  }
+  assert.equal(emails.length, 1);
+  assert.deepEqual(emails[0].to, ['contato@marcelconde.com.br']);
+  assert.match(emails[0].subject, /Orçamento visualizado por Client — ORC-1/);
+  assert.match(emails[0].html, /R\$ 600,00/);
+  assert.equal((await a.readKvJson(a.env, 'private_quote:q', null)).status, 'viewed');
+});

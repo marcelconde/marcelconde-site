@@ -3290,6 +3290,30 @@ async function sendQuoteAcceptedEmails(env, quote = {}, client = {}, acceptance 
   };
 }
 
+// Business notice (contato@, as every site notice) sent the first time the
+// client opens a quote, so Marcel knows when to follow up.
+async function sendQuoteViewedEmail(env, quote = {}, client = {}) {
+  const snapshot = quote.publishedSnapshot || {};
+  const total = formatCurrencyFromCents(snapshot.totalCents ?? calculateQuoteTotals(quote).totalCents);
+  const who = client.name || client.email || "O cliente";
+  const validUntil = snapshot.validUntil || quote.validUntil;
+  const html = emailLayout(env, {
+    preheader: `${who} abriu o orçamento ${quote.number || ""}.`,
+    eyebrow: "Orçamento visualizado",
+    title: quote.isTest ? "Orçamento de teste visualizado" : "O cliente abriu o orçamento",
+    intro: `<strong>${emailHtml(who)}</strong> abriu o orçamento <strong>${emailHtml(quote.number || "")}</strong> pela primeira vez.`,
+    body: `<p style="margin:0;">Serviço: ${emailHtml(quote.title || "")}<br>Valor: <strong>${emailHtml(total)}</strong><br>Aberto em: ${emailHtml(formatQuoteDate(quote.viewedAt, true))}${validUntil ? `<br>Válido até: ${emailHtml(formatQuoteDate(validUntil))}` : ""}</p>`,
+    ctaLabel: "Abrir orçamento no admin",
+    ctaUrl: `${siteOrigin(env)}/admin/orcamentos/detalhe/?id=${encodeURIComponent(quote.id || "")}`,
+    reason: "Notificação administrativa da plataforma Marcel Conde.",
+  });
+  return sendResendMessage(env, {
+    to: ["contato@marcelconde.com.br"],
+    subject: `${quote.isTest ? "[TESTE] " : ""}Orçamento visualizado por ${who} — ${quote.number || quote.title || ""}`,
+    html,
+  });
+}
+
 function formatCurrencyFromCents(cents = 0) {
   return `R$ ${(Number(cents || 0) / 100).toFixed(2).replace(".", ",")}`;
 }
@@ -4605,6 +4629,8 @@ export default {
         quote.updatedAt = quote.viewedAt;
         await writeKvJson(env, privateQuoteKey(quote.id), quote);
         ctx.waitUntil(appendPrivateQuoteEvent(env, request, quote.id, "cliente_abriu_orcamento", {}, access.client));
+        ctx.waitUntil(sendQuoteViewedEmail(env, quote, access.linkedClient || access.client)
+          .catch((err) => console.error("Quote viewed email error:", err)));
       }
 
       return json({
