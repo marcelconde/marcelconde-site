@@ -4,7 +4,7 @@ Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou
 
 - **Ordem dos álbuns:** Worker publicado em 2026-11-16 (rota responde); falta Marcel salvar a ordem e tirar "Animais" do primeiro card.
 - **Fila do webhook Sandbox pausada desde 2026-09-24** ("marcelconde-site-sandbox", conta antiga do Asaas, 503): o código já aceita eventos órfãos (2026-11-16); falta Marcel entrar na conta antiga para reativar a fila em Integrações → Webhooks (editar → "Fila de sincronização ativada") e conferir se `ASAAS_SANDBOX_API_KEY` ainda vale.
-- **Cliente Benchmark (2026-11-16):** cliente real `pix@marcelconde.com.br` com o orçamento ORC-2026-BMJ9EG aceito e pago (R$ 5 Pix) e acesso bloqueado; a galeria foi apagada. O admin não apaga orçamento aceito (nem o cliente vinculado); perguntar a Marcel se mantém como registro dos R$ 10 reais ou remove direto do D1.
+- **ORC-2026-BCS6WW** (R$ 500, cliente "Marcel Sales Conde"/`contato@`, real): aceito em 2026-10-22 e parado em "aguardando pagamento" sem cobrança gerada; parece teste antigo de Marcel. Perguntar se apaga (o admin não apaga orçamento nesse estado).
 - **Asaas — conta nova só do site** (cadastro aprovado em 2026-10-22: dados comerciais, documentos e aprovação geral). Não voltar ao Mercado Pago. Falta:
   1. Chave Pix `pix@marcelconde.com.br` (e-mail, alias do Cloudflare Email Routing para o Gmail de Marcel) cadastrada em 2026-10-22. Pix dinâmico: R$ 0,99 por cobrança recebida até 03/01/2027 (depois R$ 1,99), recebe na hora.
   2. Pix real validado em 2026-11-16 (QR na galeria, pago e confirmado). Falta conferir no uso real a troca Pix↔cartão mantendo uma cobrança só.
