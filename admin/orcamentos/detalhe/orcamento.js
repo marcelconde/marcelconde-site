@@ -42,6 +42,8 @@ const quoteTotalStat = $("#quoteTotalStat");
 const quoteNumberLabel = $("#quoteNumberLabel");
 const quoteTitleLabel = $("#quoteTitleLabel");
 const quoteMeta = $("#quoteMeta");
+const quoteOfflineNotice = $("#quoteOfflineNotice");
+const reminderQuoteBtn = $("#reminderQuoteBtn");
 const quoteStatusBadge = $("#quoteStatusBadge");
 const quoteClient = $("#quoteClient");
 const quoteValidUntil = $("#quoteValidUntil");
@@ -325,6 +327,7 @@ function renderEvents() {
     admin_publicou_orcamento: "Orçamento publicado e enviado",
     cliente_criou_senha: "Cliente criou a senha de acesso",
     cliente_abriu_orcamento: "Cliente visualizou o orçamento",
+    lembrete_orcamento_enviado: "Lembrete enviado ao cliente",
     cliente_aceitou_orcamento: "Cliente aceitou o contrato",
     pagamento_aprovado: "Pagamento aprovado",
   };
@@ -362,7 +365,14 @@ function renderHeader() {
   const client = state.clients.find((item) => item.id === state.quote.clientId);
   quoteNumberLabel.textContent = state.quote.number || "Novo orçamento";
   quoteTitleLabel.textContent = state.quote.title || "Nova proposta";
-  quoteMeta.textContent = `${state.quote.isTest ? "TESTE · " : ""}${client?.name || "Cliente não selecionado"} · ${label}${state.quote.validUntil ? ` · validade ${formatDate(state.quote.validUntil)}` : ""}`;
+  quoteMeta.textContent = `${state.quote.isTest ? "TESTE · " : ""}${client?.name || "Cliente não selecionado"} · ${label}${state.quote.validUntil ? ` · validade ${formatDate(state.quote.validUntil)}` : ""}${state.quote.reminderSentAt ? ` · lembrete enviado em ${formatDate(state.quote.reminderSentAt, true)}` : ""}`;
+  // Saving an edit unpublishes a sent quote; say so instead of letting the client hit a closed page.
+  const offline = state.quote.status === "draft" && Boolean(state.quote.publishedAt);
+  quoteOfflineNotice.classList.toggle("hidden", !offline);
+  quoteOfflineNotice.textContent = offline
+    ? "Este orçamento já foi enviado, mas a última edição foi salva como rascunho e o tirou do ar: o cliente não consegue abri-lo. Clique em “Publicar e enviar” para publicar a versão atual."
+    : "";
+  reminderQuoteBtn.classList.toggle("hidden", !["published", "viewed"].includes(state.quote.status));
   quoteStatusStat.textContent = label;
   quoteVersionStat.textContent = state.quote.version || 0;
   quoteStatusBadge.textContent = label;
@@ -375,7 +385,8 @@ function renderHeader() {
   openQuoteBtn.href = published ? `/clientes/orcamento/?id=${encodeURIComponent(state.quote.id)}` : "#";
   downloadPdfBtn.disabled = !hasId;
   deleteQuoteBtn.disabled = !hasId || accepted;
-  createGalleryBtn.hidden = state.quote.status !== "accepted" || !state.quote.clientId;
+  // .btn sets display, so the hidden attribute alone does not hide it.
+  createGalleryBtn.classList.toggle("hidden", state.quote.status !== "accepted" || !state.quote.clientId);
   createGalleryBtn.href = state.quote.status === "accepted"
     ? `/admin/galerias/?client=${encodeURIComponent(state.quote.clientId)}&title=${encodeURIComponent(state.quote.title || "Galeria")}`
     : "/admin/galerias/";
@@ -466,6 +477,8 @@ async function saveQuote({ silent = false } = {}) {
 
 quoteForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (["published", "viewed"].includes(state.quote?.status)
+    && !confirm("Este orçamento já está com o cliente. Salvar a edição como rascunho tira o orçamento do ar até você clicar em “Reenviar versão”.\n\nSalvar mesmo assim?")) return;
   try {
     await saveQuote();
   } catch (err) {
@@ -493,6 +506,33 @@ publishQuoteBtn.addEventListener("click", async () => {
   } finally {
     publishQuoteBtn.disabled = isQuoteLocked();
     if (!isQuoteLocked()) publishQuoteBtn.textContent = "Reenviar versão";
+  }
+});
+
+reminderQuoteBtn.addEventListener("click", async () => {
+  if (!state.quote?.id) return;
+  const last = state.quote.reminderSentAt ? `\n\nO último lembrete saiu em ${formatDate(state.quote.reminderSentAt, true)}.` : "";
+  if (!confirm(`Enviar agora um e-mail lembrando o cliente deste orçamento?${last}`)) return;
+  reminderQuoteBtn.disabled = true;
+  reminderQuoteBtn.textContent = "Enviando...";
+  try {
+    const data = await getJson("/private/quote/reminder", {
+      method: "POST",
+      body: JSON.stringify({ quoteId: state.quote.id }),
+    });
+    state.quote = { ...state.quote, ...data.quote };
+    renderHeader();
+    showToast("Lembrete enviado ao cliente.");
+    const fresh = await getJson(`/private/quote?id=${encodeURIComponent(state.quote.id)}`).catch(() => null);
+    if (fresh) {
+      state.events = fresh.events || [];
+      renderEvents();
+    }
+  } catch (err) {
+    showToast(err.message || "Erro ao enviar o lembrete.", 6500);
+  } finally {
+    reminderQuoteBtn.disabled = false;
+    reminderQuoteBtn.textContent = "Enviar lembrete";
   }
 });
 

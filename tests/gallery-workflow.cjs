@@ -899,3 +899,94 @@ test('the first time a client opens a quote, contato@ gets one e-mail; later ope
   assert.match(emails[0].html, /R\$ 600,00/);
   assert.equal((await a.readKvJson(a.env, 'private_quote:q', null)).status, 'viewed');
 });
+
+function quoteReminderApp() {
+  const a = app();
+  a.env.RESEND_API_KEY = 'resend-test';
+  const emails = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(url, 'https://api.resend.com/emails');
+    emails.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ id: 'email_' + emails.length }));
+  };
+  const day = 86400000;
+  const quote = (id, extra = {}) => a.seed('private_quote:' + id, {
+    id, number: 'ORC-' + id, title: 'Aniversário', clientId: 'c', status: 'published', version: 1,
+    validUntil: '2099-12-01', publishedAt: new Date(Date.parse('2026-11-19T13:00:00Z') - 4 * day).toISOString(),
+    publishedSnapshot: { totalCents: 60000, version: 1, validUntil: '2099-12-01' },
+    items: [{ id: 'i', description: 'Cobertura', quantity: 1, unitCents: 60000 }], clauses: [{ id: 'x', title: 'Objeto', text: 'Texto' }],
+    ...extra,
+  });
+  a.seed('private_quotes_index', ['fresh', 'old', 'draft', 'answered']);
+  quote('old');
+  quote('fresh', { publishedAt: new Date(Date.parse('2026-11-19T13:00:00Z') - 1 * day).toISOString() });
+  quote('draft', { status: 'draft', publishedSnapshot: null });
+  quote('answered', { status: 'pending_payment' });
+  const run = (iso) => a.context.sendDueQuoteReminders(a.env, Date.parse(iso));
+  return { ...a, emails, run };
+}
+
+test('settings default to a 3-day quote reminder and only accept whole days from 1 to 60', async () => {
+  const a = app();
+  const get = async () => (await (await a.request('/private/settings')).json()).settings;
+  assert.deepEqual({ ...await get() }, { quoteReminderEnabled: true, quoteReminderDays: 3 });
+  for (const bad of [0, 61, 2.5, 'x']) {
+    assert.equal((await a.request('/private/settings', { quoteReminderDays: bad })).status, 400);
+  }
+  assert.equal((await a.request('/private/settings', { quoteReminderDays: 5, quoteReminderEnabled: false })).status, 200);
+  assert.deepEqual({ ...await get() }, { quoteReminderEnabled: false, quoteReminderDays: 5 });
+  assert.equal((await a.request('/private/settings', undefined, 'client-token')).status, 401);
+});
+
+test('the cron reminds once, only unanswered published quotes past the chosen days, only in business hours', async () => {
+  const a = quoteReminderApp();
+  vm.runInContext('globalThis.sendDueQuoteReminders = sendDueQuoteReminders;', a.context);
+  assert.equal(await a.run('2026-11-19T01:00:00Z'), 0); // 22h in Recife
+  assert.equal(a.emails.length, 0);
+  assert.equal(await a.run('2026-11-19T13:00:00Z'), 1); // 10h in Recife
+  assert.equal(a.emails.length, 1);
+  assert.deepEqual(a.emails[0].to, ['client@example.test']);
+  assert.match(a.emails[0].subject, /^Lembrete: orçamento ORC-old — Aniversário/);
+  assert.match(a.emails[0].html, /R\$ 600,00/);
+  assert.match(a.emails[0].html, /Criar senha e ver orçamento/);
+  assert.ok((await a.readKvJson(a.env, 'private_quote:old', null)).reminderSentAt);
+  assert.equal(await a.run('2026-11-19T14:00:00Z'), 0);
+  // A longer setting holds the reminder; switching it off stops it.
+  a.seed('site_settings', { quoteReminderEnabled: true, quoteReminderDays: 2 });
+  assert.equal(await a.run('2026-11-19T15:00:00Z'), 0);
+  assert.equal(await a.run('2026-11-20T15:00:00Z'), 1);
+  assert.match(a.emails[1].subject, /ORC-fresh/);
+});
+
+test('the reminder button refuses a quote that is off the air and works on a published one', async () => {
+  const a = quoteReminderApp();
+  const draft = await a.request('/private/quote/reminder', { quoteId: 'draft' });
+  assert.equal(draft.status, 409);
+  assert.match((await draft.json()).error, /fora do ar/);
+  assert.equal((await a.request('/private/quote/reminder', { quoteId: 'answered' })).status, 409);
+  const sent = await a.request('/private/quote/reminder', { quoteId: 'old' });
+  assert.equal(sent.status, 200);
+  const body = await sent.json();
+  assert.ok(body.quote.reminderSentAt);
+  assert.equal(body.quote.reminderCount, 1);
+  assert.equal(a.emails.length, 1);
+  assert.equal((await a.request('/private/quote/reminder', { quoteId: 'old' }, 'client-token')).status, 401);
+  const events = await a.readKvJson(a.env, 'private_quote_events:old', []);
+  assert.equal(events[0].action, 'lembrete_orcamento_enviado');
+});
+
+test('republishing restarts the reminder and can skip the announcement e-mail', async () => {
+  const a = quoteReminderApp();
+  await a.request('/private/quote/reminder', { quoteId: 'old' });
+  const response = await a.request('/private/quote/publish', { quoteId: 'draft', sendEmail: false });
+  assert.equal(response.status, 200);
+  assert.equal(a.emails.length, 1);
+  const republished = await a.readKvJson(a.env, 'private_quote:draft', null);
+  assert.equal(republished.status, 'published');
+  assert.equal(republished.reminderSentAt, null);
+  assert.ok(republished.publishedSnapshot);
+  await a.request('/private/quote/publish', { quoteId: 'old' });
+  assert.equal(a.emails.length, 2);
+  assert.match(a.emails[1].subject, /^Orçamento ORC-old/);
+  assert.equal((await a.readKvJson(a.env, 'private_quote:old', null)).reminderSentAt, null);
+});

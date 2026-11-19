@@ -1278,6 +1278,16 @@
   font-size: 0.84rem;
 }
 
+.detail-topbar p.quote-offline-notice {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--danger);
+  background: rgba(208, 91, 91, 0.1);
+  color: var(--ink);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .detail-actions {
   max-width: 640px;
   justify-content: flex-end;

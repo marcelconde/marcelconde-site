@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Configurações — Admin Marcel Conde</title>
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20261119-01">
+  <style>
+    .settings-form { display: grid; gap: 14px; max-width: 620px; }
+    .settings-days { display: grid; gap: 6px; max-width: 220px; }
+    .settings-days input { margin-top: 0; }
+    .settings-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body class="settings-page">
+  <div class="admin-shell" id="adminShell">
+    <header class="topbar">
+      <a class="brand" href="/admin/" aria-label="Voltar para o admin">
+        <span>MC</span>
+        <strong>Configurações</strong>
+      </a>
+      <div class="top-actions">
+        <span class="user-pill" id="currentUserLabel"></span>
+        <a class="btn btn-ghost" href="/admin/orcamentos/">Orçamentos</a>
+        <a class="btn btn-ghost" href="/admin/">Admin</a>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Seções do admin">
+      <a class="tab" href="/admin/">Portfólios</a>
+      <a class="tab" href="/admin/clientes/">Clientes</a>
+      <a class="tab" href="/admin/orcamentos/">Orçamentos</a>
+      <a class="tab" href="/admin/galerias/">Galerias</a>
+      <a class="tab" href="/admin/avaliacoes/">Avaliações</a>
+      <a class="tab active" href="/admin/configuracoes/" aria-current="page">Configurações</a>
+    </nav>
+
+    <main class="private-admin">
+      <section class="library-hero">
+        <div>
+          <span class="eyebrow">Admin</span>
+          <h1>Configurações</h1>
+          <p>Automações dos e-mails enviados aos clientes.</p>
+        </div>
+      </section>
+
+      <div class="admin-card-panel">
+        <h2>Lembrete de orçamento</h2>
+        <p>Se o cliente não aceitar o orçamento, ele recebe um e-mail lembrando, uma única vez, depois do número de dias escolhido, contado a partir do envio. O e-mail sai entre 9h e 20h. Você também pode lembrar na hora pelo botão “Enviar lembrete” dentro de cada orçamento.</p>
+        <form class="private-form settings-form" id="settingsForm">
+          <label class="check-field">
+            <input id="quoteReminderEnabled" type="checkbox" checked>
+            <span>Enviar o lembrete automaticamente</span>
+          </label>
+          <label class="settings-days">
+            Dias sem resposta
+            <input id="quoteReminderDays" type="number" inputmode="numeric" min="1" max="60" step="1" value="3" required>
+          </label>
+          <p class="field-status" id="quoteReminderSummary"></p>
+          <div class="settings-actions">
+            <button class="btn btn-primary" id="saveSettingsBtn" type="submit" disabled>Salvar</button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/theme.js?v=20260915-03"></script>
+  <script src="/admin/configuracoes/configuracoes.js?v=20261119-01"></script>
+</body>
+</html>

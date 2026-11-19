@@ -1240,6 +1240,8 @@ function publicQuote(quote = {}) {
     version: Number(quote.version || 0),
     publishedAt: quote.publishedAt || null,
     viewedAt: quote.viewedAt || null,
+    reminderSentAt: quote.reminderSentAt || null,
+    reminderCount: Number(quote.reminderCount || 0),
     acceptedAt: quote.acceptedAt || null,
     paymentRequired: quote.paymentRequired === true,
     paymentStatus: quote.paymentStatus || null,
@@ -3055,6 +3057,113 @@ async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, acce
   });
 }
 
+// Admin settings (aba Configurações). Stored as one record; missing fields
+// fall back to the defaults so new settings never need a migration.
+const SITE_SETTINGS_KEY = "site_settings";
+const DEFAULT_SITE_SETTINGS = { quoteReminderEnabled: true, quoteReminderDays: 3 };
+const QUOTE_REMINDER_MAX_DAYS = 60;
+const QUOTE_REMINDER_MAX_ATTEMPTS = 3;
+
+async function readSiteSettings(env) {
+  const stored = await readKvJson(env, SITE_SETTINGS_KEY, null) || {};
+  const days = Math.round(Number(stored.quoteReminderDays));
+  return {
+    quoteReminderEnabled: stored.quoteReminderEnabled !== false,
+    quoteReminderDays: days >= 1 && days <= QUOTE_REMINDER_MAX_DAYS ? days : DEFAULT_SITE_SETTINGS.quoteReminderDays,
+  };
+}
+
+async function sendQuoteReminderEmail(env, email, quote = {}, client = {}, accessUrl = "", firstAccess = false) {
+  const snapshot = quote.publishedSnapshot || {};
+  const total = formatCurrencyFromCents(snapshot.totalCents ?? calculateQuoteTotals(quote).totalCents);
+  const validUntil = snapshot.validUntil || quote.validUntil;
+  const html = emailLayout(env, {
+    preheader: `Seu orçamento ${quote.number || ""} continua disponível.`,
+    eyebrow: "Lembrete de orçamento",
+    title: quote.isTest ? "Lembrete de teste — sem validade contratual" : "Seu orçamento continua disponível",
+    intro: `Olá ${emailHtml(client.name || email)}, passando para lembrar do orçamento de <strong>${emailHtml(quote.title || "o serviço solicitado")}</strong> que preparei para você.`,
+    body: `<p style="margin:0 0 12px;">Valor total: <strong>${emailHtml(total)}</strong>${validUntil ? `<br>Válido até: <strong>${emailHtml(formatQuoteDate(validUntil))}</strong>` : ""}</p>
+      <p style="margin:0;">Se quiser ajustar algo ou tirar alguma dúvida, é só responder a este e-mail. Se estiver tudo certo, o aceite é feito na própria página do orçamento.</p>
+      ${firstAccess ? `<p style="margin:14px 0 0;">Como este é seu primeiro acesso, o botão abaixo abrirá a criação da sua senha antes de mostrar o orçamento.</p>` : ""}`,
+    ctaLabel: firstAccess ? "Criar senha e ver orçamento" : "Ver orçamento",
+    ctaUrl: accessUrl,
+    secondaryCtaLabel: "Área do cliente",
+    secondaryCtaUrl: clientLoginUrl(env),
+    footerNote: firstAccess ? "Este link de primeiro acesso expira em 7 dias e pode ser usado uma única vez." : "",
+    reason: "Você recebeu este e-mail porque existe um orçamento vinculado ao seu cadastro na área do cliente.",
+  });
+  return sendResendMessage(env, {
+    to: [email],
+    subject: `${quote.isTest ? "[TESTE] " : ""}Lembrete: orçamento ${quote.number || ""} — ${quote.title || "Marcel Conde Fotografia"}`,
+    html,
+  });
+}
+
+// Reminds the client of a published quote still waiting for an answer and
+// records it on the quote. Used by the hourly cron and by the admin button.
+async function sendQuoteReminder(env, request, quoteId, { manual = false, actor = {} } = {}) {
+  const quote = await readKvJson(env, privateQuoteKey(String(quoteId || "").trim()), null);
+  if (!quote) throw Object.assign(new Error("Orçamento não encontrado."), { status: 404 });
+  const status = effectiveQuoteStatus(quote);
+  if (!["published", "viewed"].includes(status)) {
+    const message = status === "draft"
+      ? "Este orçamento está fora do ar (rascunho) e o cliente não consegue abri-lo. Publique a versão atual antes de enviar o lembrete."
+      : status === "expired"
+        ? "A validade deste orçamento acabou. Atualize a validade e reenvie a versão antes de lembrar o cliente."
+        : "O cliente já respondeu a este orçamento.";
+    throw Object.assign(new Error(message), { status: 409 });
+  }
+  const client = quote.clientId ? await readKvJson(env, privateClientKey(quote.clientId), null) : null;
+  if (!client?.email) throw Object.assign(new Error("Vincule um cliente com e-mail ao orçamento."), { status: 400 });
+  const firstAccess = !hasPermanentClientAccess(await getClientUser(env, client.email));
+  const accessUrl = firstAccess
+    ? (await createClientContentInvite(env, "quote", client.id, quote.id)).url
+    : clientQuoteLoginUrl(env, quote.id);
+  const result = await sendQuoteReminderEmail(env, client.email, quote, client, accessUrl, firstAccess);
+  const fresh = await readKvJson(env, privateQuoteKey(quote.id), quote);
+  fresh.reminderSentAt = new Date().toISOString();
+  fresh.reminderCount = Number(fresh.reminderCount || 0) + 1;
+  fresh.reminderError = null;
+  await writeKvJson(env, privateQuoteKey(quote.id), fresh);
+  await appendPrivateQuoteEvent(env, request, quote.id, "lembrete_orcamento_enviado", {
+    manual, email: client.email, firstAccess, resendId: result?.id || null,
+  }, actor);
+  return fresh;
+}
+
+// One automatic reminder per publication, X days (Configurações) after it was
+// sent, only between 9h and 20h in Recife. A manual reminder counts as sent.
+async function sendDueQuoteReminders(env, now = Date.now()) {
+  if (!env.LIKES_KV || !env.RESEND_API_KEY) return 0;
+  const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Recife", hour: "numeric", hourCycle: "h23" }).format(now));
+  if (hour < 9 || hour >= 20) return 0;
+  const settings = await readSiteSettings(env);
+  if (!settings.quoteReminderEnabled) return 0;
+  const request = new Request(`${siteOrigin(env)}/cron/quote-reminders`);
+  let sent = 0;
+  for (const quote of await listPrivateQuotes(env)) {
+    if (!["published", "viewed"].includes(effectiveQuoteStatus(quote))) continue;
+    if (quote.reminderSentAt || Number(quote.reminderAttempts || 0) >= QUOTE_REMINDER_MAX_ATTEMPTS) continue;
+    const publishedAt = Date.parse(quote.publishedAt || "");
+    if (!publishedAt || now - publishedAt < settings.quoteReminderDays * 86400000) continue;
+    try {
+      await sendQuoteReminder(env, request, quote.id, { actor: { name: "Lembrete automático" } });
+      sent += 1;
+    } catch (err) {
+      console.error("Quote reminder failed:", quote.id, err);
+      const fresh = await readKvJson(env, privateQuoteKey(quote.id), null);
+      if (fresh) {
+        await writeKvJson(env, privateQuoteKey(quote.id), {
+          ...fresh,
+          reminderAttempts: Number(fresh.reminderAttempts || 0) + 1,
+          reminderError: String(err?.message || err || "Erro ao enviar").slice(0, 300),
+        });
+      }
+    }
+  }
+  return sent;
+}
+
 function pdfCleanText(value = "") {
   return String(value || "")
     .replace(/[–—]/g, "-")
@@ -4330,6 +4439,7 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(sendDueReviewRequests(env).catch((err) => console.error("Review requests failed:", err)));
     ctx.waitUntil(sendLikeDigest(env, new Date(controller.scheduledTime || Date.now())).catch((err) => console.error("Like digest failed:", err)));
+    ctx.waitUntil(sendDueQuoteReminders(env, controller.scheduledTime || Date.now()).catch((err) => console.error("Quote reminders failed:", err)));
   },
 
   async fetch(request, env, ctx) {
@@ -5707,8 +5817,16 @@ export default {
       quote.publishedSnapshot = quotePublishedSnapshot(env, quote, client);
       quote.publishedHash = await sha256Hex(JSON.stringify(quote.publishedSnapshot));
       quote.updatedAt = now;
+      // A new publication restarts the reminder countdown.
+      quote.reminderSentAt = null;
+      quote.reminderCount = 0;
+      quote.reminderAttempts = 0;
+      quote.reminderError = null;
       await writeKvJson(env, privateQuoteKey(quote.id), quote);
 
+      // sendEmail:false republishes without the "orçamento pronto" e-mail
+      // (e.g. to follow it with a reminder instead of a second announcement).
+      const sendEmail = body.sendEmail !== false;
       const existingClientUser = await getClientUser(env, client.email);
       const hasClientPassword = hasPermanentClientAccess(existingClientUser);
       const firstAccess = !hasClientPassword;
@@ -5716,7 +5834,7 @@ export default {
       let inviteUrl = "";
       let emailResult = null;
       let emailError = "";
-      try {
+      if (sendEmail) try {
         if (firstAccess) {
           const invite = await createClientContentInvite(env, "quote", client.id, quote.id);
           accessUrl = invite.url;
@@ -5735,10 +5853,12 @@ export default {
         console.error("Quote publish email error:", err);
       }
 
-      quote.lastEmailAt = new Date().toISOString();
-      quote.lastEmailQueued = Boolean(emailResult);
-      quote.lastEmailError = emailError;
-      await writeKvJson(env, privateQuoteKey(quote.id), quote);
+      if (sendEmail) {
+        quote.lastEmailAt = new Date().toISOString();
+        quote.lastEmailQueued = Boolean(emailResult);
+        quote.lastEmailError = emailError;
+        await writeKvJson(env, privateQuoteKey(quote.id), quote);
+      }
       await appendAuditLog(env, request, user, "publicar_orcamento", "private_quotes", {
         quoteId: quote.id,
         number: quote.number,
@@ -5753,6 +5873,7 @@ export default {
         publishedHash: quote.publishedHash,
         email: client.email,
         firstAccess,
+        emailSent: sendEmail,
         emailQueued: Boolean(emailResult),
         emailError,
       }, user);
@@ -5768,6 +5889,45 @@ export default {
         emailError,
         resendId: emailResult?.id || null,
       }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/quote/reminder" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      try {
+        const quote = await sendQuoteReminder(env, request, body.id || body.quoteId, { manual: true, actor: user });
+        await appendAuditLog(env, request, user, "lembrete_orcamento", "private_quotes", { quoteId: quote.id, number: quote.number });
+        return json({ ok: true, quote: { ...publicQuote(quote), internalNotes: quote.internalNotes || "" } }, 200, { "Cache-Control": "no-store" });
+      } catch (err) {
+        console.error("Quote reminder error:", err);
+        return errorJson(err.message || "Não foi possível enviar o lembrete.", err.status || 502);
+      }
+    }
+
+    if (url.pathname === "/private/settings" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      return json({ settings: await readSiteSettings(env), limits: { quoteReminderMaxDays: QUOTE_REMINDER_MAX_DAYS } }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/settings" && request.method === "POST") {
+      const { error, user } = await requireAdminUser(request, env);
+      if (error) return error;
+      const body = await readJson(request);
+      const current = await readSiteSettings(env);
+      const next = { ...current };
+      if ("quoteReminderEnabled" in body) next.quoteReminderEnabled = body.quoteReminderEnabled === true;
+      if ("quoteReminderDays" in body) {
+        const days = Number(body.quoteReminderDays);
+        if (!Number.isInteger(days) || days < 1 || days > QUOTE_REMINDER_MAX_DAYS) {
+          return errorJson(`Informe um número inteiro de dias entre 1 e ${QUOTE_REMINDER_MAX_DAYS}.`, 400);
+        }
+        next.quoteReminderDays = days;
+      }
+      await writeKvJson(env, SITE_SETTINGS_KEY, { ...next, updatedAt: new Date().toISOString() });
+      await appendAuditLog(env, request, user, "alterar_configuracoes", "site_settings", next);
+      return json({ ok: true, settings: next }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/private/quote/pdf" && request.method === "GET") {
