@@ -24,6 +24,10 @@ Este repositório contém o site de fotografia de Marcel Conde. Antes de alterar
 
 O site estático sai da `main` pelo GitHub Pages em `https://marcelconde.com.br`. A API é o Worker `cloudinary` em `https://api.marcelconde.com.br`. Em uma mudança que envolva ambos, publique e verifique os arquivos estáticos antes de atualizar o Worker; preserve bindings e secrets. Testes simulados não comprovam pagamento ou webhook real.
 
+## Acesso do Claude às APIs
+
+Não peça login a Marcel para tarefas do admin. O wrangler já está autenticado no Cloudflare: `tools/admin-session.sh open` cria uma sessão de admin de 1 hora no KV (aparece como "Claude (automação)") e imprime o token para `Authorization: Bearer`; `tools/admin-session.sh close <token>` a apaga. Guarde o token só em variável ou arquivo temporário e nunca o registre no Git. Secrets do Worker (Resend, Asaas, `ADMIN_KEY`) não são legíveis; não troque `ADMIN_KEY`, porque ele também é o pepper dos hashes de senha. Envios a clientes reais continuam exigindo pedido de Marcel.
+
 ## Sincronização Mac ↔ Windows
 
 Marcel trabalha neste repositório em um Mac e em um PC Windows. O GitHub (`main`) é a única fonte de verdade.
