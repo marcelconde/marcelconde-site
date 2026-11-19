@@ -2,6 +2,7 @@
 
 Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou deixar para depois.
 
+- **Orçamento da Sídia (ORC-2026-_HU78G, R$ 600, real):** ela abriu em 2026-11-17 10h37; às 12h20 a edição (Flávio → Flávia) foi salva como rascunho e tirou o orçamento do ar. Marcel pediu em 2026-11-19 para enviar o lembrete: falta republicar a versão atual (`sendEmail:false`) e enviar o lembrete, o que exige Marcel logado no admin do Chrome.
 - **Ordem dos álbuns:** Worker publicado em 2026-11-16 (rota responde); falta Marcel salvar a ordem e tirar "Animais" do primeiro card.
 - **Fila do webhook Sandbox pausada desde 2026-09-24** ("marcelconde-site-sandbox", conta antiga do Asaas, 503): o código já aceita eventos órfãos (2026-11-16); falta Marcel entrar na conta antiga para reativar a fila em Integrações → Webhooks (editar → "Fila de sincronização ativada") e conferir se `ASAAS_SANDBOX_API_KEY` ainda vale.
 - **ORC-2026-BCS6WW** (R$ 500, cliente "Marcel Sales Conde"/`contato@`, real): aceito em 2026-10-22 e parado em "aguardando pagamento" sem cobrança gerada; parece teste antigo de Marcel. Perguntar se apaga (o admin não apaga orçamento nesse estado).
