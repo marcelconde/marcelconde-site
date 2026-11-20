@@ -2181,6 +2181,293 @@ async function notifyAdminAccountLocked(env, request, email) {
   return sendResetEmail(env, request, email, token, { locked: true });
 }
 
+// ── Verificação de novo dispositivo ou local no login do admin ──────────
+// Senha certa num dispositivo desconhecido, noutro país ou longe do último acesso
+// não abre sessão: o dono da conta recebe um link por e-mail e autoriza aquele
+// dispositivo. Os registros ficam no D1 (leitura consistente logo após autorizar;
+// o KV pode levar até 60 s para propagar). Só o hash do ID do dispositivo e do
+// token do link é guardado.
+const ADMIN_DEVICE_APPROVAL_TTL_MS = 30 * 60 * 1000;
+const ADMIN_DEVICE_EMAIL_COOLDOWN_MS = 10 * 60 * 1000;
+const ADMIN_LOGIN_MAX_DISTANCE_KM = 500;
+const ADMIN_TRUSTED_DEVICES_MAX = 20;
+
+async function readSecurityRecord(env, key) {
+  if (env.GALLERY_DB) {
+    const row = await env.GALLERY_DB.prepare("SELECT value FROM gallery_records WHERE key = ?").bind(key).first();
+    return row ? JSON.parse(row.value) : null;
+  }
+  return env.LIKES_KV ? env.LIKES_KV.get(key, "json") : null;
+}
+
+async function writeSecurityRecord(env, key, value) {
+  if (env.GALLERY_DB) {
+    return env.GALLERY_DB.prepare("INSERT INTO gallery_records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(key, JSON.stringify(value)).run();
+  }
+  return env.LIKES_KV.put(key, JSON.stringify(value));
+}
+
+async function deleteSecurityRecord(env, key) {
+  if (env.GALLERY_DB) return env.GALLERY_DB.prepare("DELETE FROM gallery_records WHERE key = ?").bind(key).run();
+  return env.LIKES_KV?.delete(key);
+}
+
+const adminDevicesKey = (email) => `admin_devices:${normalizeEmail(email)}`;
+const adminLastLoginKey = (email) => `admin_last_login:${normalizeEmail(email)}`;
+const adminDevicePendingKey = (email, deviceHash) => `admin_device_pending:${normalizeEmail(email)}:${deviceHash}`;
+const adminDevicePassKey = (email, deviceHash) => `admin_device_pass:${normalizeEmail(email)}:${deviceHash}`;
+const adminDeviceApprovalKey = (tokenHash) => `admin_device_approval:${tokenHash}`;
+
+function cleanDeviceId(value) {
+  const id = String(value || "").trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(id) ? id : "";
+}
+
+function adminLoginContext(request) {
+  const cf = request.cf || {};
+  const latitude = Number.parseFloat(cf.latitude);
+  const longitude = Number.parseFloat(cf.longitude);
+  return {
+    country: String(cf.country || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2),
+    region: cleanDisplayName(cf.region || "").slice(0, 80),
+    city: cleanDisplayName(cf.city || "").slice(0, 80),
+    latitude: Number.isFinite(latitude) ? latitude : null,
+    longitude: Number.isFinite(longitude) ? longitude : null,
+    ip: String(request.headers.get("CF-Connecting-IP") || "").slice(0, 64),
+    userAgent: String(request.headers.get("User-Agent") || "").slice(0, 300),
+  };
+}
+
+function distanceKm(a, b) {
+  if (![a?.latitude, a?.longitude, b?.latitude, b?.longitude].every((value) => Number.isFinite(value))) return null;
+  const rad = (deg) => (deg * Math.PI) / 180;
+  const dLat = rad(b.latitude - a.latitude);
+  const dLon = rad(b.longitude - a.longitude);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Mesmo país e dentro do limite; sem localização conhecida, não acusa mudança.
+function isNearLocation(reference, ctx) {
+  if (!reference || !ctx.country) return true;
+  if (reference.country && reference.country !== ctx.country) return false;
+  const km = distanceKm(reference, ctx);
+  return km === null || km <= ADMIN_LOGIN_MAX_DISTANCE_KM;
+}
+
+function describeUserAgent(userAgent = "") {
+  const ua = String(userAgent);
+  const browser = /Edg\//.test(ua) ? "Edge"
+    : /OPR\/|Opera/.test(ua) ? "Opera"
+      : /Firefox\//.test(ua) ? "Firefox"
+        : /Chrome\/|CriOS\//.test(ua) ? "Chrome"
+          : /Safari\//.test(ua) ? "Safari" : "Navegador";
+  const os = /iPhone/.test(ua) ? "iPhone"
+    : /iPad/.test(ua) ? "iPad"
+      : /Android/.test(ua) ? "Android"
+        : /Windows/.test(ua) ? "Windows"
+          : /Mac OS X|Macintosh/.test(ua) ? "Mac"
+            : /Linux/.test(ua) ? "Linux" : "dispositivo desconhecido";
+  return `${browser} no ${os}`;
+}
+
+function describeLocation(place = {}) {
+  let country = place.country || "";
+  try {
+    if (country) country = new Intl.DisplayNames(["pt-BR"], { type: "region" }).of(country) || country;
+  } catch {}
+  const parts = [place.city, place.region, country].filter(Boolean);
+  return parts.length ? [...new Set(parts)].join(", ") : "Local não identificado";
+}
+
+function describeLoginTime(value = Date.now()) {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "long", timeStyle: "short", timeZone: "America/Recife",
+    }).format(new Date(value));
+  } catch {
+    return new Date(value).toISOString();
+  }
+}
+
+function adminLoginDetailsHtml(ctx, when = Date.now()) {
+  const row = (label, value) => `<tr><td style="padding:6px 16px 6px 0;color:#6e5940;font-size:13px;white-space:nowrap;">${emailHtml(label)}</td><td style="padding:6px 0;font-size:14px;"><strong>${emailHtml(value)}</strong></td></tr>`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0;border-collapse:collapse;">
+    ${row("Dispositivo", describeUserAgent(ctx.userAgent))}
+    ${row("Local aproximado", describeLocation(ctx))}
+    ${ctx.ip ? row("IP", ctx.ip) : ""}
+    ${row("Quando", `${describeLoginTime(when)} (horário de Recife)`)}
+  </table>`;
+}
+
+// "" = pode entrar; senão, o motivo da verificação.
+async function adminLoginRisk(env, email, deviceHash, ctx) {
+  const [devices, last] = await Promise.all([
+    readSecurityRecord(env, adminDevicesKey(email)),
+    readSecurityRecord(env, adminLastLoginKey(email)),
+  ]);
+  if (!(devices || []).some((device) => device.hash === deviceHash)) return "new_device";
+  if (last && ctx.country && last.country && last.country !== ctx.country) return "new_country";
+  if (!isNearLocation(last, ctx)) return "far_location";
+  return "";
+}
+
+async function sendAdminDeviceApprovalEmail(env, email, token, ctx, reason) {
+  const url = `${siteOrigin(env)}/admin/?autorizar=${encodeURIComponent(token)}`;
+  const why = reason === "new_device"
+    ? "num dispositivo que ainda não foi usado para acessar o painel"
+    : "a partir de um local muito diferente do último acesso";
+  return sendResendMessage(env, {
+    to: [email],
+    subject: `Autorize o acesso ao painel — ${brandName(env)}`,
+    html: emailLayout(env, {
+      preheader: "Alguém entrou com a sua senha num novo dispositivo ou local. Autorize se foi você.",
+      eyebrow: "Segurança",
+      title: "Autorizar novo acesso",
+      intro: `Sua senha do painel administrativo foi usada ${why}. Por segurança, o acesso ficou bloqueado até você autorizar.`,
+      body: `${adminLoginDetailsHtml(ctx)}<p style="margin:0;">Se foi você, clique no botão abaixo e depois entre de novo no dispositivo onde tentou o acesso.</p>
+        <p style="margin:14px 0 0;"><strong>Se não foi você, não autorize.</strong> Quem tentou entrar sabe a sua senha: troque-a agora pelo link "Esqueci minha senha" na tela de login.</p>`,
+      ctaLabel: "Revisar e autorizar",
+      ctaUrl: url,
+      footerNote: "Este link expira em 30 minutos e só pode ser usado uma vez.",
+      reason: "Você recebeu este e-mail porque houve uma tentativa de acesso ao painel administrativo com a sua senha.",
+    }),
+  });
+}
+
+async function sendAdminNewDeviceLoginEmail(env, email, ctx) {
+  return sendResendMessage(env, {
+    to: [email],
+    subject: `Novo acesso ao painel — ${brandName(env)}`,
+    html: emailLayout(env, {
+      preheader: "O painel administrativo foi acessado num novo dispositivo ou local.",
+      eyebrow: "Segurança",
+      title: "Novo acesso ao painel",
+      intro: "O dispositivo que você autorizou acabou de entrar no painel administrativo.",
+      body: `${adminLoginDetailsHtml(ctx)}<p style="margin:0;">Se foi você, não precisa fazer nada. Se não reconhece este acesso, troque sua senha pelo link "Esqueci minha senha" na tela de login.</p>`,
+      ctaLabel: "Abrir o painel",
+      ctaUrl: `${siteOrigin(env)}/admin/`,
+      reason: "Você recebeu este e-mail porque o painel administrativo foi acessado num novo dispositivo ou local.",
+    }),
+  });
+}
+
+// Senha já conferida. Devolve { response } quando o acesso precisa de autorização.
+async function verifyAdminLoginDevice(env, request, user, deviceId) {
+  const email = normalizeEmail(user.email);
+  const ctx = adminLoginContext(request);
+  if (!deviceId) {
+    return { response: errorJson("Recarregue a página (Ctrl+Shift+R) e tente entrar de novo.", 400) };
+  }
+  const deviceHash = await sha256Hex(`admin-device:${deviceId}`);
+
+  // Primeiro login depois de autorizar pelo link (vale uma vez, no local autorizado): entra e gera o aviso.
+  const pass = await readSecurityRecord(env, adminDevicePassKey(email, deviceHash));
+  if (pass && Number(pass.expiresAt || 0) > Date.now() && isNearLocation(pass, ctx)) {
+    await deleteSecurityRecord(env, adminDevicePassKey(email, deviceHash));
+    return { ctx, deviceHash, verified: true };
+  }
+
+  const reason = await adminLoginRisk(env, email, deviceHash, ctx);
+  if (!reason) return { ctx, deviceHash, verified: false };
+
+  const message = "Verifique o seu e-mail para autorizar o acesso.";
+  const pendingKey = adminDevicePendingKey(email, deviceHash);
+  const pending = await readSecurityRecord(env, pendingKey);
+  if (pending && Date.now() - Number(pending.sentAt || 0) < ADMIN_DEVICE_EMAIL_COOLDOWN_MS && isNearLocation(pending, ctx)) {
+    return { response: errorJson(`${message} O link foi enviado há poucos minutos.`, 403, { verificationRequired: true }) };
+  }
+
+  const token = randomToken(32);
+  const tokenHash = await sha256Hex(token);
+  const now = Date.now();
+  try {
+    await sendAdminDeviceApprovalEmail(env, email, token, ctx, reason);
+  } catch (err) {
+    console.error("Device approval email error:", err);
+    return { response: errorJson("Não consegui enviar o e-mail de autorização. Tente de novo em alguns minutos.", 503) };
+  }
+  if (pending?.tokenHash) await deleteSecurityRecord(env, adminDeviceApprovalKey(pending.tokenHash));
+  await writeSecurityRecord(env, adminDeviceApprovalKey(tokenHash), {
+    email, deviceHash, reason, createdAt: new Date(now).toISOString(), expiresAt: now + ADMIN_DEVICE_APPROVAL_TTL_MS,
+    country: ctx.country, region: ctx.region, city: ctx.city, latitude: ctx.latitude, longitude: ctx.longitude,
+    ip: ctx.ip, userAgent: ctx.userAgent,
+  });
+  await writeSecurityRecord(env, pendingKey, {
+    tokenHash, sentAt: now, country: ctx.country, latitude: ctx.latitude, longitude: ctx.longitude,
+  });
+  await appendAuditLog(env, request, user, "login_requer_autorizacao", "auth", {
+    email, reason, device: describeUserAgent(ctx.userAgent), location: describeLocation(ctx),
+  });
+  return { response: errorJson(message, 403, { verificationRequired: true }) };
+}
+
+// Login concluído: guarda o dispositivo e o local de referência; avisa se foi após autorização.
+async function recordAdminLogin(env, user, { ctx, deviceHash, verified }) {
+  const email = normalizeEmail(user.email);
+  const now = new Date().toISOString();
+  const devices = (await readSecurityRecord(env, adminDevicesKey(email))) || [];
+  const device = devices.find((item) => item.hash === deviceHash);
+  if (device) {
+    Object.assign(device, { lastSeenAt: now, label: describeUserAgent(ctx.userAgent), lastLocation: describeLocation(ctx) });
+    devices.sort((a, b) => String(b.lastSeenAt || b.approvedAt || "").localeCompare(String(a.lastSeenAt || a.approvedAt || "")));
+    await writeSecurityRecord(env, adminDevicesKey(email), devices.slice(0, ADMIN_TRUSTED_DEVICES_MAX));
+  }
+  if (ctx.country) {
+    await writeSecurityRecord(env, adminLastLoginKey(email), {
+      country: ctx.country, region: ctx.region, city: ctx.city, latitude: ctx.latitude, longitude: ctx.longitude, at: now,
+    });
+  }
+  if (!verified) return false;
+  try {
+    await sendAdminNewDeviceLoginEmail(env, email, ctx);
+    return true;
+  } catch (err) {
+    console.error("New device login email error:", err);
+    return false;
+  }
+}
+
+async function readAdminDeviceApproval(env, token) {
+  const clean = String(token || "").trim();
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(clean)) return null;
+  const tokenHash = await sha256Hex(clean);
+  const approval = await readSecurityRecord(env, adminDeviceApprovalKey(tokenHash));
+  if (!approval || approval.usedAt || Number(approval.expiresAt || 0) < Date.now()) return null;
+  return { approval, tokenHash };
+}
+
+function publicDeviceApproval(approval) {
+  return {
+    device: describeUserAgent(approval.userAgent),
+    location: describeLocation(approval),
+    ip: approval.ip || "",
+    when: describeLoginTime(Date.parse(approval.createdAt) || Date.now()),
+    reason: approval.reason,
+  };
+}
+
+async function approveAdminDevice(env, request, tokenHash, approval) {
+  const email = normalizeEmail(approval.email);
+  const now = new Date();
+  const devices = ((await readSecurityRecord(env, adminDevicesKey(email))) || []).filter((item) => item.hash !== approval.deviceHash);
+  devices.unshift({
+    hash: approval.deviceHash, label: describeUserAgent(approval.userAgent), approvedAt: now.toISOString(),
+    lastSeenAt: null, lastLocation: describeLocation(approval),
+  });
+  await writeSecurityRecord(env, adminDevicesKey(email), devices.slice(0, ADMIN_TRUSTED_DEVICES_MAX));
+  await writeSecurityRecord(env, adminDevicePassKey(email, approval.deviceHash), {
+    expiresAt: now.getTime() + ADMIN_DEVICE_APPROVAL_TTL_MS,
+    country: approval.country, latitude: approval.latitude, longitude: approval.longitude,
+  });
+  await writeSecurityRecord(env, adminDeviceApprovalKey(tokenHash), { ...approval, usedAt: now.toISOString(), result: "approved" });
+  await deleteSecurityRecord(env, adminDevicePendingKey(email, approval.deviceHash));
+  await appendAuditLog(env, request, { email }, "autorizar_dispositivo", "auth", {
+    email, device: describeUserAgent(approval.userAgent), location: describeLocation(approval),
+  });
+}
+
 async function notifyClientAccountLocked(env, email) {
   const [storedUser, clients] = await Promise.all([getClientUser(env, email), listPrivateClients(env)]);
   const client = clients.find((item) => normalizeEmail(item.email || "") === email);
@@ -5466,9 +5753,41 @@ export default {
         () => notifyAdminAccountLocked(env, request, email));
       if (response) return response;
 
+      const device = await verifyAdminLoginDevice(env, request, user, cleanDeviceId(body.deviceId));
+      if (device.response) return device.response;
+
       const session = await createSession(env, user);
-      await appendAuditLog(env, request, user, "login", "auth", { email: user.email });
+      const notified = await recordAdminLogin(env, user, device);
+      await appendAuditLog(env, request, user, "login", "auth", {
+        email: user.email,
+        ...(device.verified ? { novoDispositivo: true, avisoEnviado: notified, location: describeLocation(device.ctx) } : {}),
+      });
       return json(session);
+    }
+
+    if (url.pathname === "/auth/device/approval" && request.method === "GET") {
+      const found = await readAdminDeviceApproval(env, url.searchParams.get("token"));
+      if (!found) return errorJson("Link inválido, expirado ou já usado. Tente entrar de novo para receber outro.", 400);
+      return json({ approval: publicDeviceApproval(found.approval) }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/auth/device/approve" && request.method === "POST") {
+      const body = await readJson(request);
+      const found = await readAdminDeviceApproval(env, body.token);
+      if (!found) return errorJson("Link inválido, expirado ou já usado. Tente entrar de novo para receber outro.", 400);
+      if (await isBlockedByAdmin(env, "admin", found.approval.email)) return errorJson("Conta bloqueada pelo administrador.", 423);
+      const action = String(body.action || "approve");
+      if (action === "deny") {
+        await writeSecurityRecord(env, adminDeviceApprovalKey(found.tokenHash), { ...found.approval, usedAt: new Date().toISOString(), result: "denied" });
+        await appendAuditLog(env, request, { email: found.approval.email }, "recusar_dispositivo", "auth", {
+          email: found.approval.email, device: describeUserAgent(found.approval.userAgent), location: describeLocation(found.approval),
+        });
+        return json({ ok: true, denied: true });
+      }
+      await approveAdminDevice(env, request, found.tokenHash, found.approval);
+      const deviceId = cleanDeviceId(body.deviceId);
+      const sameDevice = Boolean(deviceId) && await sha256Hex(`admin-device:${deviceId}`) === found.approval.deviceHash;
+      return json({ ok: true, sameDevice, approval: publicDeviceApproval(found.approval) });
     }
 
     if (url.pathname === "/auth/me" && request.method === "GET") {

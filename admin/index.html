@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20261111-01">
   <link rel="stylesheet" href="/admin/workspace.css?v=20260915-01">
-  <link rel="stylesheet" href="/admin/ui.css?v=20261120-02">
+  <link rel="stylesheet" href="/admin/ui.css?v=20261120-03">
 </head>
 <body class="workspace-page">
   <a class="skip-link" href="#adminMain">Pular para o conteúdo</a>
@@ -73,6 +73,22 @@
         <button class="btn btn-primary" id="inviteAcceptBtn" type="submit">Criar acesso</button>
         <span class="form-msg" id="inviteAcceptMsg"></span>
       </form>
+
+      <section class="hidden device-approval" id="deviceApproval" aria-labelledby="deviceApprovalTitle">
+        <h2 id="deviceApprovalTitle">Autorizar novo acesso</h2>
+        <p class="reset-copy" id="deviceApprovalCopy">Carregando os dados do acesso...</p>
+        <dl class="device-approval-details hidden" id="deviceApprovalDetails">
+          <div><dt>Dispositivo</dt><dd id="deviceApprovalDevice"></dd></div>
+          <div><dt>Local aproximado</dt><dd id="deviceApprovalLocation"></dd></div>
+          <div><dt>Quando</dt><dd id="deviceApprovalWhen"></dd></div>
+        </dl>
+        <div class="device-approval-actions hidden" id="deviceApprovalActions">
+          <button class="btn btn-primary" id="deviceApproveBtn" type="button">Sim, fui eu — autorizar</button>
+          <button class="btn btn-danger" id="deviceDenyBtn" type="button">Não fui eu</button>
+        </div>
+        <span class="form-msg" id="deviceApprovalMsg" role="status" aria-live="polite"></span>
+        <button class="text-link hidden" id="deviceApprovalLogin" type="button">Ir para o login</button>
+      </section>
     </div>
   </section>
 
@@ -280,6 +296,6 @@
 
   <script src="/theme.js?v=20260915-03"></script>
   <script src="/login-guard.js?v=20261005-02"></script>
-  <script src="/admin/admin.js?v=20261120-01"></script>
+  <script src="/admin/admin.js?v=20261120-02"></script>
 </body>
 </html>

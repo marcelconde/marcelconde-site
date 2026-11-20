@@ -23,6 +23,14 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 
 const loginScreen = $("#loginScreen");
+const deviceApproval = $("#deviceApproval");
+const deviceApprovalCopy = $("#deviceApprovalCopy");
+const deviceApprovalDetails = $("#deviceApprovalDetails");
+const deviceApprovalActions = $("#deviceApprovalActions");
+const deviceApprovalMsg = $("#deviceApprovalMsg");
+const deviceApprovalLogin = $("#deviceApprovalLogin");
+const deviceApproveBtn = $("#deviceApproveBtn");
+const deviceDenyBtn = $("#deviceDenyBtn");
 const adminShell = $("#adminShell");
 const loginForm = $("#loginForm");
 const loginBtn = $("#loginBtn");
@@ -269,7 +277,7 @@ async function getJson(path, options = {}) {
   return res.json();
 }
 
-function showLogin(message = "") {
+function showLogin(message = "", { success = false } = {}) {
   state.currentUser = null;
   currentUserLabel.textContent = "";
   adminShell.classList.add("hidden");
@@ -278,7 +286,9 @@ function showLogin(message = "") {
   forgotForm.classList.add("hidden");
   resetForm.classList.add("hidden");
   inviteAcceptForm.classList.add("hidden");
+  deviceApproval.classList.add("hidden");
   loginMsg.textContent = message;
+  loginMsg.classList.toggle("success", success);
   loginEmail.value = localStorage.getItem("mc_admin_email") || "";
   loginPassword.value = "";
   (loginEmail.value ? loginPassword : loginEmail).focus();
@@ -345,11 +355,20 @@ loginForm.addEventListener("submit", async (event) => {
   loginBtn.disabled = true;
   loginBtn.textContent = "Entrando...";
   loginMsg.textContent = "";
+  loginMsg.classList.remove("success");
 
   try {
-    const { res, data } = await postJson("/auth/login", { email, password, turnstileToken: window.loginCaptcha?.token() || "" });
+    const { res, data } = await postJson("/auth/login", {
+      email, password, turnstileToken: window.loginCaptcha?.token() || "", deviceId: getDeviceId(),
+    });
     if (!res.ok) {
       loginMsg.textContent = data.error || "E-mail ou senha inválidos.";
+      // Senha certa em dispositivo/local novo: a senha fica no campo para entrar depois de autorizar.
+      if (data.verificationRequired) {
+        loginMsg.classList.add("success");
+        window.loginCaptcha?.hide();
+        return;
+      }
       // A wrong password clears the field; a missing captcha keeps what was typed.
       if (res.status !== 403) loginPassword.value = "";
       if (data.locked) window.loginCaptcha?.hide();
@@ -1642,8 +1661,82 @@ inviteAcceptForm?.addEventListener("submit", async (event) => {
   }
 });
 
+// Identifica este navegador para a verificação de novo dispositivo (só o hash vai para o servidor).
+function getDeviceId() {
+  const key = "mc_admin_device";
+  try {
+    const saved = localStorage.getItem(key);
+    if (/^[a-f0-9]{64}$/.test(saved || "")) return saved;
+  } catch {}
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const id = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  try { localStorage.setItem(key, id); } catch {}
+  return id;
+}
+
+async function showDeviceApproval(token) {
+  adminShell.classList.add("hidden");
+  loginScreen.classList.remove("hidden");
+  [loginForm, forgotForm, resetForm, inviteAcceptForm].forEach((form) => form.classList.add("hidden"));
+  deviceApproval.classList.remove("hidden");
+  history.replaceState(null, "", location.pathname);
+
+  const finish = (message, { success = true, showLoginLink = true } = {}) => {
+    deviceApprovalActions.classList.add("hidden");
+    deviceApprovalMsg.textContent = message;
+    deviceApprovalMsg.classList.toggle("success", success);
+    deviceApprovalLogin.classList.toggle("hidden", !showLoginLink);
+  };
+
+  try {
+    const res = await fetch(`${CONFIG.workerUrl}/auth/device/approval?token=${encodeURIComponent(token)}`, { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      deviceApprovalCopy.textContent = "";
+      return finish(data.error || "Link inválido ou expirado.", { success: false });
+    }
+    $("#deviceApprovalDevice").textContent = data.approval.device;
+    $("#deviceApprovalLocation").textContent = data.approval.location;
+    $("#deviceApprovalWhen").textContent = data.approval.when;
+    deviceApprovalCopy.textContent = "Sua senha foi usada para entrar no painel neste dispositivo. Foi você?";
+    deviceApprovalDetails.classList.remove("hidden");
+    deviceApprovalActions.classList.remove("hidden");
+    deviceApproveBtn.focus();
+  } catch {
+    finish("Não consegui conectar ao Worker. Tente abrir o link de novo.", { success: false, showLoginLink: false });
+  }
+
+  const decide = async (action) => {
+    deviceApproveBtn.disabled = true;
+    deviceDenyBtn.disabled = true;
+    try {
+      const { res, data } = await postJson("/auth/device/approve", { token, action, deviceId: getDeviceId() });
+      if (!res.ok) return finish(data.error || "Não consegui registrar sua resposta.", { success: false });
+      if (action === "deny") {
+        return finish("Acesso recusado. Troque sua senha agora: quem tentou entrar sabe a senha atual. Use \"Esqueci minha senha\" no login.", { success: false });
+      }
+      if (data.sameDevice) return showLogin("Acesso autorizado neste dispositivo. Entre com sua senha.", { success: true });
+      finish("Acesso autorizado. Volte ao dispositivo onde tentou entrar e clique em Entrar de novo (vale por 30 minutos).");
+    } catch {
+      finish("Não consegui conectar ao Worker. Tente de novo.", { success: false, showLoginLink: false });
+      deviceApproveBtn.disabled = false;
+      deviceDenyBtn.disabled = false;
+      deviceApprovalActions.classList.remove("hidden");
+    }
+  };
+  deviceApproveBtn.onclick = () => decide("approve");
+  deviceDenyBtn.onclick = () => decide("deny");
+}
+
+deviceApprovalLogin.addEventListener("click", () => showLogin());
+
 (async function init() {
   const params = new URLSearchParams(window.location.search);
+  if (params.get("autorizar")) {
+    await showDeviceApproval(params.get("autorizar"));
+    return;
+  }
   if (params.get("invite")) {
     await showInviteAccept(params.get("invite"));
     return;

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const { webcrypto } = require('node:crypto');
+const { webcrypto, createHash } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
 
 function app() {
@@ -34,8 +34,13 @@ function app() {
   seed('private_gallery_images:g', ['a','b','c'].map(public_id => ({public_id, phase:'selection', url:'https://example.test/'+public_id})));
   seed('private_gallery_selection:g', ['a']);
   seed('client_session:client-token', { email:'client@example.test', expiresAt:Date.now()+100000 });
-  return { ...context.helpers, env, seed, data, request, tasks, context, sqlite };
+  // Marks a browser as an already authorized admin device (login skips the e-mail step).
+  const trustDevice = (email, deviceId = TRUSTED_DEVICE) => sqlite.prepare('INSERT INTO gallery_records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run('admin_devices:' + email, JSON.stringify([{ hash: createHash('sha256').update('admin-device:' + deviceId).digest('hex'), approvedAt: new Date().toISOString() }]));
+  return { ...context.helpers, env, seed, data, request, tasks, context, sqlite, trustDevice };
 }
+
+const TRUSTED_DEVICE = 'a'.repeat(64);
 
 test('D1 imports once, keeps fresh writes despite stale KV, and tombstones prevent resurrection', async () => {
   const a = app();
@@ -654,8 +659,9 @@ test('login asks for captcha after one wrong password, locks after five and unlo
   for (const [path, scope, save] of [['/client-auth/login', 'client', a.saveClientPassword], ['/auth/login', 'admin', a.saveUserPassword]]) {
     const email = scope + '@example.test';
     await save(a.env, email, 'right-password');
+    if (scope === 'admin') a.trustDevice(email);
     const login = async (password, turnstileToken) => {
-      const response = await a.request(path, { email, password, turnstileToken }, '');
+      const response = await a.request(path, { email, password, turnstileToken, deviceId: TRUSTED_DEVICE }, '');
       return { status: response.status, ...(await response.json()) };
     };
 
@@ -682,6 +688,96 @@ test('login asks for captcha after one wrong password, locks after five and unlo
   const unknown = await a.request('/client-auth/login', { email: 'nobody@example.test', password: 'x' }, '');
   assert.equal(unknown.status, 401);
   assert.equal((await unknown.json()).captchaRequired, true);
+});
+
+test('admin login from a new device or far location waits for the e-mailed authorization, then warns once', async () => {
+  const a = app();
+  a.env.RESEND_API_KEY = 'resend-test';
+  const emails = [];
+  a.context.fetch = async (url, options = {}) => {
+    assert.equal(url, 'https://api.resend.com/emails');
+    emails.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({ id: 'email_' + emails.length }));
+  };
+  const email = 'owner@example.test';
+  await a.saveUserPassword(a.env, email, 'right-password', { role: 'admin' });
+  const recife = { country: 'BR', region: 'Pernambuco', city: 'Recife', latitude: '-8.05', longitude: '-34.9' };
+  const send = async (path, body, cf = recife) => {
+    const req = new Request('https://example.test' + path, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    Object.defineProperty(req, 'cf', { value: cf });
+    const res = await a.context.worker.fetch(req, a.env, { waitUntil() {} });
+    return { status: res.status, ...(await res.json().catch(() => ({}))) };
+  };
+  const laptop = 'b'.repeat(64);
+  const login = (password, deviceId = laptop, cf) => send('/auth/login', { email, password, deviceId }, cf);
+  const linkToken = (mail) => decodeURIComponent(mail.html.match(/\?autorizar=([^"&]+)/)[1]);
+
+  // Wrong password never reaches the device step; missing device id asks to reload.
+  assert.equal((await login('wrong')).status, 401);
+  assert.equal((await send('/auth/login', { email, password: 'right-password' })).status, 400);
+  assert.equal(emails.length, 0);
+
+  // New device: no session, one e-mail with the link and the device/location.
+  const blocked = await login('right-password');
+  assert.equal(blocked.status, 403);
+  assert.equal(blocked.verificationRequired, true);
+  assert.match(blocked.error, /Verifique o seu e-mail para autorizar o acesso/);
+  assert.equal(blocked.token, undefined);
+  assert.equal(emails.length, 1);
+  assert.deepEqual(Array.from(emails[0].to), [email]);
+  assert.match(emails[0].subject, /Autorize o acesso/);
+  assert.match(emails[0].html, /Safari no Mac/);
+  assert.match(emails[0].html, /Recife/);
+  // Retrying within the cooldown sends nothing new.
+  assert.equal((await login('right-password')).status, 403);
+  assert.equal(emails.length, 1);
+
+  // The link shows the attempt; approving works once.
+  const token = linkToken(emails[0]);
+  const shown = await send('/auth/device/approval?token=' + encodeURIComponent(token));
+  assert.equal(shown.status, 200);
+  assert.equal(shown.approval.device, 'Safari no Mac');
+  assert.equal((await send('/auth/device/approval?token=bogus-token-that-does-not-exist')).status, 400);
+  const approved = await send('/auth/device/approve', { token, deviceId: 'c'.repeat(64) });
+  assert.equal(approved.sameDevice, false);
+  assert.equal((await send('/auth/device/approve', { token })).status, 400);
+
+  // Next login enters and sends the "new access" warning once.
+  const first = await login('right-password');
+  assert.equal(first.status, 200);
+  assert.ok(first.token);
+  assert.equal(emails.length, 2);
+  assert.match(emails[1].subject, /Novo acesso ao painel/);
+  assert.equal((await login('right-password')).status, 200);
+  assert.equal(emails.length, 2);
+  // Nearby city (Olinda) is fine.
+  assert.equal((await login('right-password', laptop, { ...recife, city: 'Olinda', latitude: '-8.0', longitude: '-34.85' })).status, 200);
+
+  // Trusted device, but another country or far away: verification again.
+  const lisbon = { country: 'PT', city: 'Lisboa', latitude: '38.72', longitude: '-9.14' };
+  assert.equal((await login('right-password', laptop, lisbon)).status, 403);
+  assert.equal(emails.length, 3);
+  const saoPaulo = { country: 'BR', city: 'São Paulo', latitude: '-23.55', longitude: '-46.63' };
+  assert.equal((await login('right-password', laptop, saoPaulo)).status, 403);
+  assert.equal(emails.length, 4);
+
+  // "Not me" closes the link and keeps the login blocked.
+  const denied = await send('/auth/device/approve', { token: linkToken(emails[3]), action: 'deny' });
+  assert.equal(denied.denied, true);
+  assert.equal((await login('right-password', laptop, saoPaulo)).status, 403);
+  assert.equal(emails.length, 4);
+
+  // Approving from the device itself reports it; the pass only works from the approved place.
+  const phone = 'd'.repeat(64);
+  assert.equal((await login('right-password', phone)).status, 403);
+  const phoneToken = linkToken(emails[4]);
+  assert.equal((await send('/auth/device/approve', { token: phoneToken, deviceId: phone })).sameDevice, true);
+  assert.equal((await login('right-password', phone, lisbon)).status, 403);
+  assert.equal((await login('right-password', phone)).status, 200);
+
+  // Only hashes are stored.
+  const stored = JSON.stringify(a.sqlite.prepare("SELECT key, value FROM gallery_records WHERE key LIKE 'admin_%'").all());
+  assert.ok(!stored.includes(laptop) && !stored.includes(phone) && !stored.includes(token));
 });
 
 test('attempt lock e-mails a reset link; an admin block survives resets, ends sessions and is lifted only by the admin', async () => {
@@ -733,10 +829,11 @@ test('attempt lock e-mails a reset link; an admin block survives resets, ends se
 
   // Admin users: block and unblock, never self or the main admin.
   await a.saveUserPassword(a.env, 'editor@example.test', 'editor-password', { role: 'editor' });
+  a.trustDevice('editor@example.test');
   assert.equal((await post('/auth/user-lock', { email: 'editor@example.test', locked: true }, 'local-test-key')).lock.by, 'admin');
-  assert.equal((await post('/auth/login', { email: 'editor@example.test', password: 'editor-password' })).status, 423);
+  assert.equal((await post('/auth/login', { email: 'editor@example.test', password: 'editor-password', deviceId: TRUSTED_DEVICE })).status, 423);
   assert.equal((await post('/auth/user-lock', { email: 'editor@example.test', locked: false }, 'local-test-key')).lock, null);
-  assert.equal((await post('/auth/login', { email: 'editor@example.test', password: 'editor-password' })).status, 200);
+  assert.equal((await post('/auth/login', { email: 'editor@example.test', password: 'editor-password', deviceId: TRUSTED_DEVICE })).status, 200);
   assert.equal((await post('/auth/user-lock', { email: 'nobody@example.test', locked: true }, 'local-test-key')).status, 404);
 });
 
