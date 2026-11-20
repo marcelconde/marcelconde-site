@@ -2,7 +2,7 @@
 
 Remova o item quando resolvido. Registre aqui o que Marcel pedir para lembrar ou deixar para depois.
 
-- **Publicar o Worker da verificação de novo acesso (2026-11-20):** o container do Claude não tem login do Cloudflare. No Mac: `git pull` e `npx wrangler deploy`. Depois, o primeiro login de cada dispositivo vai pedir autorização por e-mail (inclusive os de Marcel); conferir que o e-mail chega, que o link autoriza e que o aviso "Novo acesso ao painel" chega. Ideia ainda não feita: lista de dispositivos autorizados com opção de remover (em Usuários).
+- **Validar a verificação de novo acesso (Worker publicado em 2026-11-19):** o primeiro login de cada dispositivo vai pedir autorização por e-mail (inclusive os de Marcel); conferir que o e-mail chega, que o link autoriza e que o aviso "Novo acesso ao painel" chega. Ideia ainda não feita: lista de dispositivos autorizados com opção de remover (em Usuários).
 - **Orçamento da Sídia (ORC-2026-_HU78G, R$ 600):** republicado em 2026-11-19 (versão 2, "Flávia", sem e-mail de anúncio) e lembrete enviado às 17h33. Acompanhar o aviso de visualização e o aceite.
 - **Ordem dos álbuns:** Worker publicado em 2026-11-16 (rota responde); falta Marcel salvar a ordem e tirar "Animais" do primeiro card.
 - **Fila do webhook Sandbox pausada desde 2026-09-24** ("marcelconde-site-sandbox", conta antiga do Asaas, 503): o código já aceita eventos órfãos (2026-11-16); falta Marcel entrar na conta antiga para reativar a fila em Integrações → Webhooks (editar → "Fila de sincronização ativada") e conferir se `ASAAS_SANDBOX_API_KEY` ainda vale.
