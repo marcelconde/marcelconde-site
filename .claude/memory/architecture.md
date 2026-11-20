@@ -7,7 +7,7 @@
 | Área | Arquivos principais | Responsabilidade |
 | --- | --- | --- |
 | Site público | `index.html`, `categoria.html`, `encontre/`, `contato/`, `theme.js` | Apresentação, portfólio, álbuns públicos e contato |
-| Admin | `admin/` | Login, clientes, orçamentos, galerias, publicação e auditoria |
+| Admin | `admin/` | Login, clientes, orçamentos, galerias, publicação e auditoria. Navegação em `shell.js` (cada página tem `<aside id="appSidebar" data-active>`); visual em `ui.css` sobre `admin.css` + `workspace.css`/`private-admin.css` |
 | Área do cliente | `clientes/login/`, `clientes/dashboard/`, `clientes/orcamento/`, `clientes/galeria/` | Acesso a orçamentos, contratos, seleção e entrega de fotos |
 | API | `worker.js` | Autorização, regras de negócio, integrações, webhooks, e-mails e PDFs |
 | Infraestrutura | `wrangler.jsonc`, `migrations/0001_gallery_records.sql` | Bindings do Worker e tabela D1 |

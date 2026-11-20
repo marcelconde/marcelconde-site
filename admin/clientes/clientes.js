@@ -10,6 +10,7 @@ const state = {
   galleries: [],
   quotes: [],
   selectedClient: null,
+  search: "",
 };
 
 const currentUserLabel = $("#currentUserLabel");
@@ -36,6 +37,11 @@ const clientState = $("#clientState");
 const clientNotes = $("#clientNotes");
 const newClientBtn = $("#newClientBtn");
 const newQuoteBtn = $("#newQuoteBtn");
+const newClientGalleryBtn = $("#newClientGalleryBtn");
+const clientSearch = $("#clientSearch");
+const clientWork = $("#clientWork");
+const clientQuotes = $("#clientQuotes");
+const clientGalleries = $("#clientGalleries");
 const deleteClientBtn = $("#deleteClientBtn");
 const refreshBtn = $("#refreshBtn");
 const saveClientBtn = $("#saveClientBtn");
@@ -205,9 +211,12 @@ function clearForm() {
   deleteClientBtn.disabled = true;
   newQuoteBtn.classList.add("disabled");
   newQuoteBtn.href = "#";
+  newClientGalleryBtn.classList.add("disabled");
+  newClientGalleryBtn.href = "#";
   clientName.focus();
   renderClientAccess();
   renderClients();
+  renderClientWork();
 }
 
 function selectClient(id) {
@@ -215,7 +224,7 @@ function selectClient(id) {
   if (!state.selectedClient) return;
   clientIsTest.checked = state.selectedClient.isTest === true;
   clientIsTest.disabled = true;
-  formTitle.textContent = clientIsTest.checked ? "Editar cliente de teste" : "Editar cliente";
+  formTitle.textContent = state.selectedClient.name || (clientIsTest.checked ? "Cliente de teste" : "Cliente");
   clientName.value = state.selectedClient.name || "";
   clientEmail.value = state.selectedClient.email || "";
   clientPhone.value = state.selectedClient.phone || "";
@@ -237,8 +246,66 @@ function selectClient(id) {
   deleteClientBtn.disabled = false;
   newQuoteBtn.classList.remove("disabled");
   newQuoteBtn.href = `/admin/orcamentos/detalhe/?client=${encodeURIComponent(state.selectedClient.id)}`;
+  newClientGalleryBtn.classList.remove("disabled");
+  newClientGalleryBtn.href = `/admin/galerias/?client=${encodeURIComponent(state.selectedClient.id)}&title=${encodeURIComponent(state.selectedClient.name || "Galeria")}`;
   renderClientAccess();
   renderClients();
+  renderClientWork();
+}
+
+const QUOTE_STATUS = {
+  draft: ["Rascunho", "neutral"],
+  published: ["Enviado", "pending"],
+  viewed: ["Visualizado", "pending"],
+  accepted: ["Aceito", "success"],
+  pending_payment: ["Aguardando pagamento", "pending"],
+  expired: ["Expirado", "danger"],
+  cancelled: ["Cancelado", "danger"],
+};
+const GALLERY_STATUS = {
+  selection: ["Seleção", "pending"],
+  editing: ["Em edição", "neutral"],
+  final: ["Entrega final", "success"],
+};
+
+function formatMoney(cents) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(cents || 0) / 100);
+}
+
+function workRow(href, title, detail, [label, tone]) {
+  return `
+    <a class="client-work-item" href="${href}">
+      <span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(detail)}</small></span>
+      <span class="status-badge ${tone}">${escapeHtml(label)}</span>
+    </a>`;
+}
+
+function renderClientWork() {
+  const client = state.selectedClient;
+  clientWork.hidden = !client;
+  if (!client) return;
+  const quotes = state.quotes.filter((quote) => quote.clientId === client.id);
+  const galleries = state.galleries.filter((gallery) => gallery.clientId === client.id);
+  clientQuotes.innerHTML = quotes.length
+    ? quotes.map((quote) => workRow(
+      `/admin/orcamentos/detalhe/?id=${encodeURIComponent(quote.id)}`,
+      quote.title || "Orçamento",
+      `${quote.number || ""} · ${formatMoney(quote.totalCents)}`,
+      QUOTE_STATUS[quote.status] || QUOTE_STATUS.draft,
+    )).join("")
+    : `<p class="client-work-empty">Nenhum orçamento.</p>`;
+  clientGalleries.innerHTML = galleries.length
+    ? galleries.map((gallery) => workRow(
+      `/admin/galerias/detalhe/?id=${encodeURIComponent(gallery.id)}`,
+      gallery.title || "Galeria",
+      `${["photoCount", "photosCount", "imageCount", "imagesCount"].map((key) => Number(gallery[key])).find((n) => n > 0) || 0} fotos`,
+      GALLERY_STATUS[gallery.status] || GALLERY_STATUS.selection,
+    )).join("")
+    : `<p class="client-work-empty">Nenhuma galeria.</p>`;
+}
+
+function normalizeSearch(value = "") {
+  return String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
 function renderClients() {
@@ -250,15 +317,24 @@ function renderClients() {
     return;
   }
 
-  clientList.innerHTML = state.clients.map((client) => {
+  const search = normalizeSearch(state.search);
+  const clients = search
+    ? state.clients.filter((client) => normalizeSearch(`${client.name} ${client.email} ${client.phone} ${client.companyName}`).includes(search))
+    : state.clients;
+  if (!clients.length) {
+    clientList.innerHTML = `<div class="empty-state"><span>Nenhum cliente encontrado.</span></div>`;
+    return;
+  }
+
+  clientList.innerHTML = clients.map((client) => {
     const galleries = state.galleries.filter((gallery) => gallery.clientId === client.id).length;
     const quotes = state.quotes.filter((quote) => quote.clientId === client.id).length;
     const active = state.selectedClient?.id === client.id ? " active" : "";
     return `
       <button class="private-list-item${active}" type="button" data-client-id="${escapeHtml(client.id)}">
         <strong>${escapeHtml(client.name || "Cliente")}${client.isTest ? ' <span class="status-badge">Teste</span>' : ""}${client.access?.lock ? ' <span class="status-badge danger">Bloqueada</span>' : ""}</strong>
-        <small>${escapeHtml(client.email || "sem e-mail")} · ${galleries} galeria(s) · ${quotes} orçamento(s)</small>
-        <small>${escapeHtml(client.phone || "")}</small>
+        <small>${escapeHtml(client.email || "sem e-mail")}</small>
+        <small class="private-list-meta">${quotes} ${quotes === 1 ? "orçamento" : "orçamentos"} · ${galleries} ${galleries === 1 ? "galeria" : "galerias"}</small>
       </button>
     `;
   }).join("");
@@ -281,7 +357,11 @@ async function loadData() {
   state.clients = clientData.clients?.length ? clientData.clients : (galleryData.clients || quoteData.clients || []);
   state.galleries = galleryData.galleries || [];
   state.quotes = quoteData.quotes || [];
+  if (state.selectedClient) {
+    state.selectedClient = state.clients.find((client) => client.id === state.selectedClient.id) || null;
+  }
   renderClients();
+  renderClientWork();
 }
 
 clientForm.addEventListener("submit", async (event) => {
@@ -482,4 +562,9 @@ copyTemporaryPasswordBtn.addEventListener("click", async () => {
 
 loadData().catch((err) => {
   showToast(err.message || "Erro ao carregar clientes.");
+});
+
+clientSearch.addEventListener("input", () => {
+  state.search = clientSearch.value;
+  renderClients();
 });

@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20261111-01">
   <link rel="stylesheet" href="/admin/workspace.css?v=20260915-01">
+  <link rel="stylesheet" href="/admin/ui.css?v=20261120-01">
 </head>
 <body class="workspace-page">
   <a class="skip-link" href="#adminMain">Pular para o conteúdo</a>
@@ -75,31 +76,10 @@
     </div>
   </section>
 
-  <div class="admin-shell hidden" id="adminShell">
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="Voltar para o site">
-        <span>MC</span>
-        <strong>Estúdio<span class="brand-caption">Marcel Conde</span></strong>
-      </a>
-
-      <div class="top-actions">
-        <span class="user-pill" id="currentUserLabel"></span>
-        <a class="btn btn-ghost" href="/" target="_blank" rel="noopener">Ver site</a>
-        <button class="btn btn-ghost" id="logoutBtn" type="button">Sair</button>
-      </div>
-    </header>
-
-    <nav class="tabs" aria-label="Seções do admin">
-      <button class="tab active" aria-current="page" data-view="albumsView" type="button">Portfólios</button>
-      <button class="tab" data-view="likesView" type="button">Curtidas</button>
-      <a class="tab" href="/admin/clientes/">Clientes</a>
-      <a class="tab" href="/admin/orcamentos/">Orçamentos</a>
-      <a class="tab" href="/admin/galerias/">Galerias</a>
-      <a class="tab" href="/admin/avaliacoes/">Avaliações</a>
-      <a class="tab" href="/admin/configuracoes/">Configurações</a>
-      <button class="tab" data-view="usersView" data-admin-only="true" type="button">Usuários</button>
-      <button class="tab" data-view="auditView" data-admin-only="true" type="button">Auditoria</button>
-    </nav>
+  <div class="admin-shell app hidden" id="adminShell">
+    <aside id="appSidebar" data-active="portfolio"></aside>
+    <script src="/admin/shell.js?v=20261120-01"></script>
+    <div class="app-main">
 
     <main class="admin-main" id="adminMain" tabindex="-1">
       <section class="view grid-view" id="albumsView">
@@ -293,12 +273,13 @@
         </div>
       </section>
     </main>
+    </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="/theme.js?v=20260915-03"></script>
   <script src="/login-guard.js?v=20261005-02"></script>
-  <script src="/admin/admin.js?v=20261116-01"></script>
+  <script src="/admin/admin.js?v=20261120-01"></script>
 </body>
 </html>

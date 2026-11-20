@@ -11,34 +11,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
   <link rel="stylesheet" href="/admin/private-admin.css?v=20261119-01">
+  <link rel="stylesheet" href="/admin/ui.css?v=20261120-01">
 </head>
 <body class="quote-detail-page">
-  <div class="admin-shell" id="adminShell">
-    <header class="topbar">
-      <a class="brand" href="/admin/orcamentos/" aria-label="Voltar para orçamentos">
-        <span>MC</span>
-        <strong>Orçamentos</strong>
-      </a>
-      <div class="stats">
-        <div><strong id="quoteStatusStat">—</strong><span>Status</span></div>
-        <div><strong id="quoteVersionStat">0</strong><span>Versão</span></div>
-        <div><strong id="quoteTotalStat">R$ 0</strong><span>Total</span></div>
-      </div>
-      <div class="top-actions">
-        <span class="user-pill" id="currentUserLabel"></span>
-        <a class="btn btn-ghost" href="/admin/orcamentos/">Todos os orçamentos</a>
-        <a class="btn btn-ghost" href="/admin/">Admin</a>
-      </div>
-    </header>
-
-    <nav class="tabs" aria-label="Seções do admin">
-      <a class="tab" href="/admin/">Portfólios</a>
-      <a class="tab" href="/admin/clientes/">Clientes</a>
-      <a class="tab active" href="/admin/orcamentos/">Orçamentos</a>
-      <a class="tab" href="/admin/galerias/">Galerias</a>
-      <a class="tab" href="/admin/avaliacoes/">Avaliações</a>
-      <a class="tab" href="/admin/configuracoes/">Configurações</a>
-    </nav>
+  <div class="admin-shell app quote-steps" id="adminShell">
+    <aside id="appSidebar" data-active="orcamentos"></aside>
+    <script src="/admin/shell.js?v=20261120-01"></script>
+    <div class="app-main">
 
     <main class="private-admin quote-detail-shell">
       <section class="detail-topbar quote-detail-topbar">
@@ -47,16 +26,26 @@
           <span class="eyebrow" id="quoteNumberLabel">Novo orçamento</span>
           <h1 id="quoteTitleLabel">Nova proposta</h1>
           <p id="quoteMeta">Preencha os dados e salve o rascunho.</p>
+          <div class="stats page-stats">
+            <div><strong id="quoteStatusStat">—</strong><span>Status</span></div>
+            <div><strong id="quoteVersionStat">0</strong><span>Versão</span></div>
+            <div><strong id="quoteTotalStat">R$ 0</strong><span>Total</span></div>
+          </div>
           <p class="quote-offline-notice hidden" id="quoteOfflineNotice" role="status"></p>
         </div>
         <div class="content-actions detail-actions">
-          <button class="btn btn-primary" id="publishQuoteBtn" type="button">Publicar e enviar</button>
-          <button class="btn btn-primary" id="saveQuoteBtn" type="submit" form="quoteForm">Salvar rascunho</button>
-          <a class="btn btn-ghost disabled" id="openQuoteBtn" href="#" target="_blank" rel="noopener">Abrir página</a>
+          <details class="action-menu">
+            <summary class="btn btn-ghost" aria-label="Mais ações">Mais</summary>
+            <div class="action-menu-list">
+              <a class="btn btn-ghost disabled" id="openQuoteBtn" href="#" target="_blank" rel="noopener">Abrir página do cliente</a>
+              <button class="btn btn-ghost" id="downloadPdfBtn" type="button" disabled>Baixar PDF</button>
+              <button class="btn btn-danger" id="deleteQuoteBtn" type="button" disabled>Apagar orçamento</button>
+            </div>
+          </details>
           <button class="btn btn-ghost hidden" id="reminderQuoteBtn" type="button" title="Envia ao cliente um e-mail lembrando deste orçamento">Enviar lembrete</button>
           <a class="btn btn-ghost hidden" id="createGalleryBtn" href="/admin/galerias/">Criar galeria</a>
-          <button class="btn btn-ghost" id="downloadPdfBtn" type="button" disabled>Baixar PDF</button>
-          <button class="btn btn-danger" id="deleteQuoteBtn" type="button" disabled>Apagar</button>
+          <button class="btn btn-secondary" id="saveQuoteBtn" type="submit" form="quoteForm">Salvar rascunho</button>
+          <button class="btn btn-primary" id="publishQuoteBtn" type="button">Publicar e enviar</button>
         </div>
       </section>
 
@@ -213,6 +202,7 @@
         </form>
       </section>
     </main>
+    </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

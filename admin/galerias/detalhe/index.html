@@ -11,34 +11,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
   <link rel="stylesheet" href="/admin/private-admin.css?v=20261004-01">
+  <link rel="stylesheet" href="/admin/ui.css?v=20261120-01">
 </head>
 <body class="gallery-detail-page">
-  <div class="admin-shell" id="adminShell">
-    <header class="topbar">
-      <a class="brand" href="/admin/galerias/" aria-label="Voltar para galerias">
-        <span>MC</span>
-        <strong>Galerias</strong>
-      </a>
-      <div class="stats">
-        <div><strong id="statGalleries">0</strong><span>Galerias</span></div>
-        <div><strong id="statPhotos">0</strong><span>Fotos</span></div>
-        <div><strong id="statSelected">0</strong><span>Selecionadas</span></div>
-      </div>
-      <div class="top-actions">
-        <span class="user-pill" id="currentUserLabel"></span>
-        <a class="btn btn-ghost" href="/admin/galerias/">Todas as galerias</a>
-        <a class="btn btn-ghost" href="/admin/">Admin</a>
-      </div>
-    </header>
-
-    <nav class="tabs" aria-label="Seções do admin">
-      <a class="tab" href="/admin/">Portfólios</a>
-      <a class="tab" href="/admin/clientes/">Clientes</a>
-      <a class="tab" href="/admin/orcamentos/">Orçamentos</a>
-      <a class="tab active" href="/admin/galerias/">Galerias</a>
-      <a class="tab" href="/admin/avaliacoes/">Avaliações</a>
-      <a class="tab" href="/admin/configuracoes/">Configurações</a>
-    </nav>
+  <div class="admin-shell app" id="adminShell">
+    <aside id="appSidebar" data-active="galerias"></aside>
+    <script src="/admin/shell.js?v=20261120-01"></script>
+    <div class="app-main">
 
     <main class="private-admin gallery-detail-shell">
       <section class="detail-topbar">
@@ -47,21 +26,32 @@
           <span class="eyebrow" id="gallerySlugLabel">clientes</span>
           <h1 id="galleryTitle">Carregando galeria</h1>
           <p id="galleryMeta">Aguarde enquanto os dados desta galeria são carregados.</p>
+          <div class="stats page-stats" hidden>
+            <div><strong id="statGalleries">0</strong><span>Galerias</span></div>
+            <div><strong id="statPhotos">0</strong><span>Fotos</span></div>
+            <div><strong id="statSelected">0</strong><span>Selecionadas</span></div>
+          </div>
         </div>
         <div class="content-actions detail-actions">
-          <button class="btn btn-primary disabled" id="publishGalleryBtn" type="button">Publicar e enviar</button>
-          <button class="btn btn-primary" id="saveGalleryBtn" type="submit" form="galleryForm">Salvar galeria</button>
-          <a class="btn btn-ghost disabled" id="openGalleryBtn" href="#" target="_blank" rel="noopener">Ver como cliente</a>
-          <a class="btn btn-ghost disabled" id="exportCsvBtn" href="#">Exportar CSV</a>
+          <details class="action-menu">
+            <summary class="btn btn-ghost" aria-label="Mais ações">Mais</summary>
+            <div class="action-menu-list">
+              <a class="btn btn-ghost disabled" id="exportCsvBtn" href="#">Exportar seleção (CSV)</a>
+              <button class="btn btn-danger disabled" id="pruneUnselectedBtn" type="button">Remover não selecionadas</button>
+              <button class="btn btn-danger disabled" id="deleteGalleryBtn" type="button">Apagar galeria</button>
+            </div>
+          </details>
           <button class="btn btn-ghost hidden" id="reviewRequestBtn" type="button">Pedir avaliação</button>
-          <button class="btn btn-danger disabled" id="pruneUnselectedBtn" type="button">Remover não selecionadas</button>
-          <button class="btn btn-danger disabled" id="deleteGalleryBtn" type="button">Apagar galeria</button>
+          <a class="btn btn-ghost disabled" id="openGalleryBtn" href="#" target="_blank" rel="noopener">Ver como cliente</a>
+          <button class="btn btn-secondary" id="saveGalleryBtn" type="submit" form="galleryForm">Salvar galeria</button>
+          <button class="btn btn-primary disabled" id="publishGalleryBtn" type="button">Publicar e enviar</button>
         </div>
       </section>
 
       <section class="gallery-detail-layout">
         <aside class="detail-sidebar panel" aria-label="Menu da galeria">
           <nav class="detail-side-nav">
+            <span class="detail-nav-label">Fotos</span>
             <button class="detail-nav-item active" type="button" data-detail-section="section-photos">
               <strong>Fotos</strong>
               <span>Visualizar e excluir</span>
@@ -74,6 +64,7 @@
               <strong>Fotos editadas</strong>
               <span>Entrega final</span>
             </button>
+            <span class="detail-nav-label">Configuração</span>
             <button class="detail-nav-item" type="button" data-detail-section="section-info">
               <strong>Dados</strong>
               <span>Cliente, título e status</span>
@@ -86,6 +77,7 @@
               <strong>Marca d'água</strong>
               <span>Proteção da seleção</span>
             </button>
+            <span class="detail-nav-label">Acompanhamento</span>
             <button class="detail-nav-item" type="button" data-detail-section="section-selection">
               <strong>Seleção</strong>
               <span>Log do cliente</span>
@@ -361,6 +353,7 @@
         </section>
       </section>
     </main>
+    </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

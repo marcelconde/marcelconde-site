@@ -310,6 +310,14 @@ function showAdmin() {
   adminShell.classList.remove("hidden");
   currentUserLabel.textContent = state.currentUser?.email || "";
   applyRoleVisibility();
+  openViewFromHash();
+}
+
+// /admin/#curtidas, #usuarios e #auditoria abrem a seção vindo do menu de outra página.
+function openViewFromHash() {
+  const view = { curtidas: "likesView", usuarios: "usersView", auditoria: "auditView" }[location.hash.slice(1)];
+  const tab = view && document.querySelector(`.tab[data-view="${view}"]:not(.hidden)`);
+  if (tab && !tab.classList.contains("active")) tab.click();
 }
 
 async function validateSession() {

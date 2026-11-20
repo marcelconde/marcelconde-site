@@ -11,158 +11,182 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
   <link rel="stylesheet" href="/admin/private-admin.css?v=20260716-02">
+  <link rel="stylesheet" href="/admin/ui.css?v=20261120-01">
 </head>
 <body>
-  <div class="admin-shell" id="adminShell">
-    <header class="topbar">
-      <a class="brand" href="/admin/" aria-label="Voltar para o admin">
-        <span>MC</span>
-        <strong>Clientes</strong>
-      </a>
-      <div class="stats">
-        <div><strong id="statClients">0</strong><span>Clientes</span></div>
-        <div><strong id="statGalleries">0</strong><span>Galerias</span></div>
-      </div>
-      <div class="top-actions">
-        <span class="user-pill" id="currentUserLabel"></span>
-        <a class="btn btn-ghost" href="/admin/galerias/">Galerias</a>
-        <a class="btn btn-ghost" href="/admin/">Admin</a>
-      </div>
-    </header>
+  <div class="admin-shell app" id="adminShell">
+    <aside id="appSidebar" data-active="clientes"></aside>
+    <script src="/admin/shell.js?v=20261120-01"></script>
+    <div class="app-main">
 
-    <nav class="tabs" aria-label="Seções do admin">
-      <a class="tab" href="/admin/">Portfólios</a>
-      <a class="tab active" href="/admin/clientes/">Clientes</a>
-      <a class="tab" href="/admin/orcamentos/">Orçamentos</a>
-      <a class="tab" href="/admin/galerias/">Galerias</a>
-      <a class="tab" href="/admin/avaliacoes/">Avaliações</a>
-      <a class="tab" href="/admin/configuracoes/">Configurações</a>
-    </nav>
-
-    <main class="private-admin">
-      <section class="private-grid">
-        <aside class="panel sidebar">
-          <div class="panel-head">
-            <div>
-              <span class="eyebrow">Módulo privado</span>
-              <h2>Clientes</h2>
-            </div>
-            <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar">↻</button>
+    <main class="private-admin clients-page">
+      <section class="library-hero">
+        <div>
+          <span class="eyebrow">Trabalhos</span>
+          <h1>Clientes</h1>
+          <p>Cadastro, acesso à área do cliente e todos os orçamentos e galerias de cada um.</p>
+          <div class="stats page-stats">
+            <div><strong id="statClients">0</strong><span>Clientes</span></div>
+            <div><strong id="statGalleries">0</strong><span>Galerias</span></div>
           </div>
+        </div>
+        <div class="content-actions">
+          <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar" aria-label="Atualizar">↻</button>
+          <button class="btn btn-primary" id="newClientBtn" type="button">Novo cliente</button>
+        </div>
+      </section>
+
+      <section class="private-grid clients-layout">
+        <aside class="panel sidebar client-list-panel" aria-label="Lista de clientes">
+          <label class="sr-only" for="clientSearch">Buscar cliente</label>
+          <input class="list-search" id="clientSearch" type="search" placeholder="Buscar nome, e-mail ou telefone" autocomplete="off">
           <div class="private-list" id="clientList"></div>
         </aside>
 
-        <section class="content">
-          <div class="content-head">
+        <section class="content client-detail">
+          <div class="content-head client-detail-head">
             <div>
               <span class="eyebrow">Cadastro</span>
-              <h1 id="formTitle">Novo cliente</h1>
-              <p>Cadastre clientes que terão galerias privadas independentes do portfólio público.</p>
+              <h2 id="formTitle">Novo cliente</h2>
             </div>
             <div class="content-actions">
-              <a class="btn btn-ghost disabled" id="newQuoteBtn" href="#">Novo orçamento</a>
-              <button class="btn btn-ghost" id="newClientBtn" type="button">Novo cliente</button>
               <button class="btn btn-danger" id="deleteClientBtn" type="button" disabled>Apagar cliente</button>
             </div>
           </div>
 
+          <section class="client-work" id="clientWork" aria-labelledby="clientWorkTitle" hidden>
+            <div class="client-work-head">
+              <h3 id="clientWorkTitle">Trabalhos</h3>
+              <div class="content-actions">
+                <a class="btn btn-ghost disabled" id="newQuoteBtn" href="#">Novo orçamento</a>
+                <a class="btn btn-ghost disabled" id="newClientGalleryBtn" href="#">Nova galeria</a>
+              </div>
+            </div>
+            <div class="client-work-grid">
+              <div>
+                <h4>Orçamentos</h4>
+                <div class="client-work-list" id="clientQuotes"></div>
+              </div>
+              <div>
+                <h4>Galerias</h4>
+                <div class="client-work-list" id="clientGalleries"></div>
+              </div>
+            </div>
+          </section>
+
           <form class="private-form" id="clientForm">
-            <label class="check-field">
-              <input id="clientIsTest" type="checkbox">
-              <span>Cliente de teste</span>
-            </label>
-            <p class="field-status">Definido na criação. Orçamentos de teste podem ser editados e apagados mesmo após o aceite. Ao publicar, os e-mails continuam sendo enviados ao endereço cadastrado.</p>
-            <div class="form-grid">
-              <label>
-                Nome
-                <input id="clientName" type="text" placeholder="Ex: Beatriz" required>
+            <fieldset class="form-card">
+              <legend>Dados do cliente</legend>
+              <label class="check-field">
+                <input id="clientIsTest" type="checkbox">
+                <span>Cliente de teste</span>
               </label>
-              <label>
-                E-mail
-                <input id="clientEmail" type="email" placeholder="cliente@email.com">
-              </label>
-              <label>
-                Telefone / WhatsApp
-                <input id="clientPhone" type="text" placeholder="(81) 9 0000-0000">
-              </label>
-              <label>
-                CPF / CNPJ
-                <input id="clientDocument" type="text" inputmode="numeric" maxlength="18" placeholder="000.000.000-00" data-document-mask>
-              </label>
+              <p class="field-status">Definido na criação. Orçamentos de teste podem ser editados e apagados mesmo após o aceite. Ao publicar, os e-mails continuam sendo enviados ao endereço cadastrado.</p>
+              <div class="form-grid">
+                <label>
+                  Nome
+                  <input id="clientName" type="text" placeholder="Ex: Beatriz" required>
+                </label>
+                <label>
+                  E-mail
+                  <input id="clientEmail" type="email" placeholder="cliente@email.com">
+                </label>
+                <label>
+                  Telefone / WhatsApp
+                  <input id="clientPhone" type="text" placeholder="(81) 9 0000-0000">
+                </label>
+                <label>
+                  CPF / CNPJ
+                  <input id="clientDocument" type="text" inputmode="numeric" maxlength="18" placeholder="000.000.000-00" data-document-mask>
+                </label>
+                <label class="full">
+                  Empresa / razão social
+                  <input id="clientCompanyName" type="text" placeholder="Opcional">
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="form-card">
+              <legend>Endereço</legend>
+              <div class="form-grid address-grid">
+                <label>
+                  CEP
+                  <span class="input-action-row">
+                    <input id="clientPostalCode" type="text" inputmode="numeric" maxlength="9" autocomplete="postal-code" placeholder="00000-000">
+                    <button class="btn btn-ghost btn-compact" id="lookupPostalCodeBtn" type="button">Buscar</button>
+                  </span>
+                  <small class="field-status" id="postalCodeStatus" role="status" aria-live="polite"></small>
+                </label>
+                <label class="span-2">
+                  Rua / avenida
+                  <input id="clientStreet" type="text" placeholder="Endereço">
+                </label>
+                <label>
+                  Número
+                  <input id="clientAddressNumber" type="text" placeholder="Nº">
+                </label>
+                <label>
+                  Complemento
+                  <input id="clientComplement" type="text" placeholder="Apto, sala...">
+                </label>
+                <label>
+                  Bairro
+                  <input id="clientNeighborhood" type="text" placeholder="Bairro">
+                </label>
+                <label>
+                  Cidade
+                  <input id="clientCity" type="text" placeholder="Recife">
+                </label>
+                <label>
+                  UF
+                  <input id="clientState" type="text" maxlength="2" placeholder="PE">
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="form-card">
+              <legend>Observações internas</legend>
               <label class="full">
-                Empresa / razão social
-                <input id="clientCompanyName" type="text" placeholder="Opcional">
-              </label>
-              <label>
-                CEP
-                <span class="input-action-row">
-                  <input id="clientPostalCode" type="text" inputmode="numeric" maxlength="9" autocomplete="postal-code" placeholder="00000-000">
-                  <button class="btn btn-ghost btn-compact" id="lookupPostalCodeBtn" type="button">Buscar</button>
-                </span>
-                <small class="field-status" id="postalCodeStatus" role="status" aria-live="polite"></small>
-              </label>
-              <label>
-                Rua / avenida
-                <input id="clientStreet" type="text" placeholder="Endereço">
-              </label>
-              <label>
-                Número
-                <input id="clientAddressNumber" type="text" placeholder="Nº">
-              </label>
-              <label>
-                Complemento
-                <input id="clientComplement" type="text" placeholder="Apto, sala...">
-              </label>
-              <label>
-                Bairro
-                <input id="clientNeighborhood" type="text" placeholder="Bairro">
-              </label>
-              <label>
-                Cidade
-                <input id="clientCity" type="text" placeholder="Recife">
-              </label>
-              <label>
-                UF
-                <input id="clientState" type="text" maxlength="2" placeholder="PE">
-              </label>
-              <label class="full">
-                Observações internas
+                <span class="sr-only">Observações internas</span>
                 <textarea id="clientNotes" placeholder="Preferências, tipo de trabalho, detalhes do atendimento..."></textarea>
               </label>
-              <section class="client-access-panel full" aria-labelledby="clientAccessTitle">
-                <div>
-                  <span class="eyebrow">Área do cliente</span>
-                  <h2 id="clientAccessTitle">Acesso e senha</h2>
-                  <p id="clientAccessStatus">Salve o cliente com um e-mail para criar o acesso.</p>
+            </fieldset>
+
+            <section class="form-card client-access-panel" aria-labelledby="clientAccessTitle">
+              <div>
+                <h3 id="clientAccessTitle">Acesso à área do cliente</h3>
+                <p id="clientAccessStatus">Salve o cliente com um e-mail para criar o acesso.</p>
+              </div>
+              <div class="content-actions">
+                <button class="btn btn-secondary" id="generateTemporaryPasswordBtn" type="button" disabled>Gerar e enviar senha temporária</button>
+                <button class="btn btn-ghost" id="sendPasswordResetBtn" type="button" disabled>Enviar redefinição</button>
+                <button class="btn btn-danger" id="toggleClientBlockBtn" type="button" disabled>Bloquear acesso</button>
+              </div>
+              <div class="temporary-password-result" id="temporaryPasswordResult" hidden>
+                <label for="temporaryPasswordValue">Senha temporária gerada</label>
+                <div class="input-action-row">
+                  <input id="temporaryPasswordValue" type="text" readonly>
+                  <button class="btn btn-ghost btn-compact" id="copyTemporaryPasswordBtn" type="button">Copiar</button>
                 </div>
-                <div class="content-actions">
-                  <button class="btn btn-primary" id="generateTemporaryPasswordBtn" type="button" disabled>Gerar e enviar senha temporária</button>
-                  <button class="btn btn-ghost" id="sendPasswordResetBtn" type="button" disabled>Enviar redefinição</button>
-                  <button class="btn btn-danger" id="toggleClientBlockBtn" type="button" disabled>Bloquear acesso</button>
-                </div>
-                <div class="temporary-password-result" id="temporaryPasswordResult" hidden>
-                  <label for="temporaryPasswordValue">Senha temporária gerada</label>
-                  <div class="input-action-row">
-                    <input id="temporaryPasswordValue" type="text" readonly>
-                    <button class="btn btn-ghost btn-compact" id="copyTemporaryPasswordBtn" type="button">Copiar</button>
-                  </div>
-                  <small>Mostrada somente nesta tela. O cliente também recebe a senha por e-mail.</small>
-                </div>
-                <span class="field-status" id="clientAccessMessage" role="status" aria-live="polite"></span>
-              </section>
-            </div>
-            <div class="content-actions">
+                <small>Mostrada somente nesta tela. O cliente também recebe a senha por e-mail.</small>
+              </div>
+              <span class="field-status" id="clientAccessMessage" role="status" aria-live="polite"></span>
+            </section>
+
+            <div class="form-savebar">
+              <span class="form-savebar-hint">Alterações só valem depois de salvar.</span>
               <button class="btn btn-primary" id="saveClientBtn" type="submit">Salvar cliente</button>
             </div>
           </form>
         </section>
       </section>
     </main>
+    </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
   <script src="/document-mask.js?v=20261116-01"></script>
-  <script src="/admin/clientes/clientes.js?v=20261116-01"></script>
+  <script src="/admin/clientes/clientes.js?v=20261120-01"></script>
 </body>
 </html>

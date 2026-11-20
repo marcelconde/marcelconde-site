@@ -11,41 +11,25 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
   <link rel="stylesheet" href="/admin/private-admin.css?v=20260716-02">
+  <link rel="stylesheet" href="/admin/ui.css?v=20261120-01">
 </head>
 <body class="reviews-page">
-  <div class="admin-shell" id="adminShell">
-    <header class="topbar">
-      <a class="brand" href="/admin/" aria-label="Voltar para o admin">
-        <span>MC</span>
-        <strong>Avaliações</strong>
-      </a>
-      <div class="stats">
-        <div><strong id="statReceived">0</strong><span>Recebidas</span></div>
-        <div><strong id="statPublished">0</strong><span>No site</span></div>
-        <div><strong id="statRequests">0</strong><span>Pedidos</span></div>
-      </div>
-      <div class="top-actions">
-        <span class="user-pill" id="currentUserLabel"></span>
-        <a class="btn btn-ghost" href="/admin/galerias/">Galerias</a>
-        <a class="btn btn-ghost" href="/admin/">Admin</a>
-      </div>
-    </header>
-
-    <nav class="tabs" aria-label="Seções do admin">
-      <a class="tab" href="/admin/">Portfólios</a>
-      <a class="tab" href="/admin/clientes/">Clientes</a>
-      <a class="tab" href="/admin/orcamentos/">Orçamentos</a>
-      <a class="tab" href="/admin/galerias/">Galerias</a>
-      <a class="tab active" href="/admin/avaliacoes/" aria-current="page">Avaliações</a>
-      <a class="tab" href="/admin/configuracoes/">Configurações</a>
-    </nav>
+  <div class="admin-shell app" id="adminShell">
+    <aside id="appSidebar" data-active="avaliacoes"></aside>
+    <script src="/admin/shell.js?v=20261120-01"></script>
+    <div class="app-main">
 
     <main class="private-admin">
       <section class="library-hero">
         <div>
-          <span class="eyebrow">Clientes</span>
+          <span class="eyebrow">Site</span>
           <h1>Avaliações</h1>
           <p>As avaliações ficam num lugar só: o Google. O pedido sai sozinho no dia seguinte à entrega final, às 10h, e leva o cliente direto à página de avaliação do Google; o site mostra essas avaliações.</p>
+          <div class="stats page-stats">
+            <div><strong id="statReceived">0</strong><span>Recebidas</span></div>
+            <div><strong id="statPublished">0</strong><span>No site</span></div>
+            <div><strong id="statRequests">0</strong><span>Pedidos</span></div>
+          </div>
         </div>
         <div class="content-actions">
           <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar" aria-label="Atualizar">↻</button>
@@ -70,6 +54,7 @@
         <div class="admin-list" id="reviewRequestsList"></div>
       </div>
     </main>
+    </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
