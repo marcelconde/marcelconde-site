@@ -686,8 +686,37 @@
       .lightbox-counter { top: 16px; left: 14px; font-size: .78rem; padding: 7px 12px; }
     }
 
-    @media (max-width: 480px) {
-      .grid { columns: 1; }
+    /* Celular: grade de miniaturas quadradas (3 por linha); o toque abre a foto em tela cheia. */
+    @media (max-width: 600px) {
+      .grid {
+        columns: auto;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3px;
+        margin: 0 -10px;
+      }
+      .grid:has(.folder-card) {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 0;
+      }
+      .img-wrap {
+        aspect-ratio: 1;
+        margin: 0;
+        border-radius: 2px;
+        box-shadow: none;
+      }
+      .img-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .img-wrap:hover { transform: none; box-shadow: none; }
+      .img-wrap:hover img { transform: none; filter: none; }
+      .img-wrap:active img { filter: brightness(.82); }
+      /* Os botões só aparecem com o mouse; no toque eles não podem roubar o clique da miniatura. */
+      .photo-overlay { display: none; }
+      .folder-card { margin: 0; }
     }
 
     @media (orientation: landscape) and (max-height: 500px) {
@@ -1148,9 +1177,11 @@
 
       setAlbumMeta(data.title || slugTitle, slugDecoded, list[0]?.url);
 
-      // A grade é em colunas: o topo de cada coluna aparece primeiro e carrega na hora.
+      // No computador a grade é em colunas: o topo de cada coluna aparece primeiro e carrega na hora.
+      // No celular é uma grade por linhas (3 por linha): as primeiras 4 linhas carregam na hora.
+      const rowGrid = getComputedStyle(gridEl).display === "grid";
       const columns = parseInt(getComputedStyle(gridEl).columnCount, 10) || 1;
-      const perColumn = Math.ceil(list.length / columns);
+      const perColumn = rowGrid ? list.length : Math.ceil(list.length / columns);
 
       list.forEach((item, index) => {
         const src = item.url;
@@ -1159,13 +1190,13 @@
         wrap.className = "img-wrap";
 
         const img    = document.createElement("img");
-        const topOfColumn = index % perColumn < 2;
+        const topOfColumn = rowGrid ? index < 12 : index % perColumn < 2;
         img.src      = cloudUrl(src, 'f_auto,q_auto,w_960');
         img.srcset   = [480, 720, 960, 1280].map((w) => `${cloudUrl(src, `f_auto,q_auto,w_${w}`)} ${w}w`).join(", ");
-        img.sizes    = "(max-width: 480px) 100vw, (max-width: 800px) 50vw, (max-width: 1200px) 33vw, 25vw";
+        img.sizes    = "(max-width: 600px) 34vw, (max-width: 800px) 50vw, (max-width: 1200px) 33vw, 25vw";
         if (item.width && item.height) { img.width = item.width; img.height = item.height; }
         img.loading  = topOfColumn ? "eager" : "lazy";
-        if (index % perColumn === 0) img.fetchPriority = "high";
+        if (rowGrid ? index < 3 : index % perColumn === 0) img.fetchPriority = "high";
         img.decoding = "async";
         img.alt      = `${slugTitle} — foto ${index + 1} de Marcel Conde, fotógrafo em Recife e Olinda`;
 
