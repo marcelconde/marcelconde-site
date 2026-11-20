@@ -367,6 +367,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 1.5rem;
       background: transparent;
       transition: background 0.4s var(--ease),
                   padding 0.4s var(--ease),
@@ -431,8 +432,14 @@
     .nav-links {
       display: flex;
       align-items: center;
-      gap: 2.8rem;
+      gap: clamp(1.4rem, 2.4vw, 2.8rem);
       list-style: none;
+    }
+
+    .nav-logo,
+    .nav-links a,
+    .nav-cta {
+      white-space: nowrap;
     }
 
     .nav-links a {
@@ -541,8 +548,8 @@
       --hero-ink-dim: rgba(240, 236, 227, 0.48);
       --hero-ink-faint: rgba(240, 236, 227, 0.12);
       position: relative;
-      height: 100vh;
-      min-height: 600px;
+      min-height: max(600px, 100vh);
+      min-height: max(600px, 100svh);
       display: grid;
       grid-template-rows: 1fr auto;
       overflow: hidden;
@@ -577,7 +584,8 @@
       grid-row: 1;
       position: relative;
       z-index: 2;
-      padding: 0 8%;
+      /* topo reserva a altura do menu fixo: em janelas baixas o texto não sobe por baixo dele */
+      padding: 8.5rem 8% 3rem;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -1622,6 +1630,12 @@
     /* =============================================
        RESPONSIVE
        ============================================= */
+    @media (min-width: 1025px) and (max-width: 1200px) {
+      nav { padding-left: 4%; padding-right: 4%; }
+      .nav-links a,
+      .nav-cta { letter-spacing: .12em; }
+    }
+
     @media (max-width: 1100px) {
       .instagram-feed {
         grid-template-columns: repeat(3, 1fr);
@@ -1645,47 +1659,8 @@
       }
     }
 
-    @media (max-width: 768px) {
-      .hero {
-        height: auto;
-        min-height: 100svh;
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr auto;
-      }
-
-      .hero-inner { grid-column: 1; }
-
-      .hero-photo-reel {
-        display: block;
-        z-index: 0;
-      }
-
-      .hero-photo-reel::before {
-        background:
-          linear-gradient(to bottom, rgba(8,8,8,0.55) 0%, rgba(8,8,8,0.28) 35%, rgba(8,8,8,0.78) 100%),
-          linear-gradient(to right, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.58) 58%, rgba(8,8,8,0.82) 100%);
-      }
-
-      .hero-photo-reel::after {
-        background:
-          radial-gradient(circle at 74% 28%, rgba(184,149,106,0.12) 0%, transparent 42%),
-          linear-gradient(to top, var(--bg) 0%, transparent 24%);
-      }
-
-      .hero-reel-img {
-        left: 0;
-        width: 100%;
-        -webkit-mask-image: none;
-        mask-image: none;
-        object-position: center center;
-        filter: brightness(0.58) saturate(0.76) contrast(0.98) blur(1px);
-        transform: scale(1.04);
-      }
-
-      .hero-reel-img.active {
-        opacity: 0.52;
-      }
-
+    /* Menu recolhido: abaixo de 1025px os links + Reservar não cabem numa linha */
+    @media (max-width: 1024px) {
       nav {
         padding: 1.4rem 5%;
       }
@@ -1731,6 +1706,48 @@
 
       .nav-toggle {
         display: flex;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .hero {
+        height: auto;
+        min-height: 100svh;
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+
+      .hero-inner { grid-column: 1; }
+
+      .hero-photo-reel {
+        display: block;
+        z-index: 0;
+      }
+
+      .hero-photo-reel::before {
+        background:
+          linear-gradient(to bottom, rgba(8,8,8,0.55) 0%, rgba(8,8,8,0.28) 35%, rgba(8,8,8,0.78) 100%),
+          linear-gradient(to right, rgba(8,8,8,0.92) 0%, rgba(8,8,8,0.58) 58%, rgba(8,8,8,0.82) 100%);
+      }
+
+      .hero-photo-reel::after {
+        background:
+          radial-gradient(circle at 74% 28%, rgba(184,149,106,0.12) 0%, transparent 42%),
+          linear-gradient(to top, var(--bg) 0%, transparent 24%);
+      }
+
+      .hero-reel-img {
+        left: 0;
+        width: 100%;
+        -webkit-mask-image: none;
+        mask-image: none;
+        object-position: center center;
+        filter: brightness(0.58) saturate(0.76) contrast(0.98) blur(1px);
+        transform: scale(1.04);
+      }
+
+      .hero-reel-img.active {
+        opacity: 0.52;
       }
 
       .hero-inner {
