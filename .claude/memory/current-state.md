@@ -1,6 +1,6 @@
 # Estado atual
 
-Verificado em 2026-11-19: Worker `cloudinary` publicado a partir da `main` em `7db70b9` (verificação de novo acesso ao admin); 11 secrets preservados. Reconfirme após novos commits ou trabalho feito em outro computador.
+Verificado em 2026-11-20: Worker `cloudinary` publicado a partir da `main` (versão `31115f97`, Visão geral e `deliveryAlertDays`; anterior `b0dd43eb`); 11 secrets preservados. Reconfirme após novos commits ou trabalho feito em outro computador.
 
 ## Funcionando
 
