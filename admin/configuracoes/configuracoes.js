@@ -11,6 +11,9 @@ const reminderEnabled = $("#quoteReminderEnabled");
 const reminderDays = $("#quoteReminderDays");
 const reminderSummary = $("#quoteReminderSummary");
 const saveSettingsBtn = $("#saveSettingsBtn");
+const deliveryForm = $("#deliveryForm");
+const deliveryDays = $("#deliveryAlertDays");
+const saveDeliveryBtn = $("#saveDeliveryBtn");
 const toastEl = $("#toast");
 
 function getToken() {
@@ -57,6 +60,7 @@ function renderSummary() {
 function fillForm(settings = {}) {
   reminderEnabled.checked = settings.quoteReminderEnabled !== false;
   reminderDays.value = settings.quoteReminderDays || 3;
+  deliveryDays.value = settings.deliveryAlertDays || 15;
   renderSummary();
 }
 
@@ -65,8 +69,10 @@ async function loadSettings() {
     const [me, data] = await Promise.all([getJson("/auth/me"), getJson("/private/settings")]);
     currentUserLabel.textContent = me.user?.email || "";
     if (data.limits?.quoteReminderMaxDays) reminderDays.max = data.limits.quoteReminderMaxDays;
+    if (data.limits?.deliveryAlertMaxDays) deliveryDays.max = data.limits.deliveryAlertMaxDays;
     fillForm(data.settings);
     saveSettingsBtn.disabled = false;
+    saveDeliveryBtn.disabled = false;
   } catch (err) {
     reminderSummary.textContent = err.message || "Erro ao carregar as configurações.";
   }
@@ -94,6 +100,25 @@ settingsForm.addEventListener("submit", async (event) => {
   } finally {
     saveSettingsBtn.disabled = false;
     saveSettingsBtn.textContent = "Salvar";
+  }
+});
+
+deliveryForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  saveDeliveryBtn.disabled = true;
+  saveDeliveryBtn.textContent = "Salvando...";
+  try {
+    const data = await getJson("/private/settings", {
+      method: "POST",
+      body: JSON.stringify({ deliveryAlertDays: Number(deliveryDays.value) }),
+    });
+    fillForm(data.settings);
+    showToast("Prazo salvo.");
+  } catch (err) {
+    showToast(err.message || "Erro ao salvar.");
+  } finally {
+    saveDeliveryBtn.disabled = false;
+    saveDeliveryBtn.textContent = "Salvar";
   }
 });
 

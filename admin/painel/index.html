@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Visão geral — Admin Marcel Conde</title>
+  <link rel="icon" href="/images/favicon.png">
+  <link rel="manifest" href="/admin/manifest.webmanifest">
+  <meta name="theme-color" content="#0d0e0f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MC Painel">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="apple-touch-icon" href="/images/admin-icon-180.png">
+  <script src="/pwa.js?v=20261120-01" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css?v=20260716-02">
+  <link rel="stylesheet" href="/admin/private-admin.css?v=20261119-01">
+  <link rel="stylesheet" href="/admin/ui.css?v=20261120-03">
+  <link rel="stylesheet" href="/admin/painel/painel.css?v=20261120-01">
+</head>
+<body class="dashboard-page" data-install-prompt>
+  <div class="admin-shell app" id="adminShell">
+    <aside id="appSidebar" data-active="painel"></aside>
+    <script src="/admin/shell.js?v=20261120-03"></script>
+    <div class="app-main">
+
+    <main class="private-admin dash" aria-busy="true">
+      <section class="library-hero">
+        <div>
+          <span class="eyebrow">Visão geral</span>
+          <h1 id="dashGreeting">Visão do negócio</h1>
+          <p id="dashSubtitle">Carregando os números do estúdio…</p>
+        </div>
+        <div class="content-actions">
+          <button class="icon-btn" id="refreshBtn" type="button" title="Atualizar" aria-label="Atualizar">↻</button>
+        </div>
+      </section>
+
+      <section class="dash-kpis" aria-label="Indicadores principais">
+        <article class="dash-kpi">
+          <span class="dash-kpi-label">Recebido no mês</span>
+          <strong class="dash-kpi-value" id="kpiReceived">—</strong>
+          <span class="dash-kpi-note" id="kpiReceivedNote">&nbsp;</span>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi-label">Fechado no mês</span>
+          <strong class="dash-kpi-value" id="kpiContracted">—</strong>
+          <span class="dash-kpi-note" id="kpiContractedNote">&nbsp;</span>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi-label">Saldos a combinar</span>
+          <strong class="dash-kpi-value" id="kpiToReceive">—</strong>
+          <span class="dash-kpi-note" id="kpiToReceiveNote">&nbsp;</span>
+        </article>
+        <article class="dash-kpi">
+          <span class="dash-kpi-label">Orçamentos aceitos</span>
+          <strong class="dash-kpi-value" id="kpiConversion">—</strong>
+          <span class="dash-kpi-note" id="kpiConversionNote">&nbsp;</span>
+        </article>
+      </section>
+
+      <div class="dash-grid">
+        <section class="dash-card dash-actions-card" aria-labelledby="actionsTitle">
+          <header class="dash-card-head">
+            <h2 id="actionsTitle">Próximas ações</h2>
+            <span class="dash-count" id="actionsCount"></span>
+          </header>
+          <ol class="dash-actions" id="actionsList"></ol>
+        </section>
+
+        <div class="dash-stack">
+          <section class="dash-card" aria-labelledby="agendaTitle">
+            <header class="dash-card-head">
+              <h2 id="agendaTitle">Agenda</h2>
+              <span class="dash-card-hint">próximos 60 dias</span>
+            </header>
+            <ol class="dash-agenda" id="agendaList"></ol>
+          </section>
+
+          <section class="dash-card" aria-labelledby="pipelineTitle">
+            <header class="dash-card-head">
+              <h2 id="pipelineTitle">Galerias em andamento</h2>
+              <a class="dash-card-link" href="/admin/galerias/">Ver todas</a>
+            </header>
+            <div class="dash-pipeline-summary" id="pipelineSummary"></div>
+            <ol class="dash-pipeline" id="pipelineList"></ol>
+          </section>
+        </div>
+      </div>
+
+      <section class="dash-card dash-chart-card" aria-labelledby="chartTitle">
+        <header class="dash-card-head">
+          <div>
+            <h2 id="chartTitle">Faturamento dos últimos 12 meses</h2>
+            <p class="dash-card-hint" id="chartSummary"></p>
+          </div>
+          <div class="dash-legend" aria-hidden="true">
+            <span><i class="dash-swatch dash-swatch--contracted"></i>Fechado</span>
+            <span><i class="dash-swatch dash-swatch--received"></i>Recebido pelo site</span>
+          </div>
+        </header>
+        <div class="dash-chart" id="revenueChart" role="img" aria-label="Gráfico de faturamento mensal"></div>
+        <details class="dash-table-toggle">
+          <summary>Ver em tabela</summary>
+          <div class="dash-table-wrap"><table class="dash-table" id="revenueTable"></table></div>
+        </details>
+      </section>
+
+      <div class="dash-grid dash-grid--even">
+        <section class="dash-card" aria-labelledby="funnelTitle">
+          <header class="dash-card-head">
+            <h2 id="funnelTitle">Funil de orçamentos</h2>
+            <span class="dash-card-hint">últimos 12 meses</span>
+          </header>
+          <div class="dash-funnel" id="funnel"></div>
+          <p class="dash-funnel-foot" id="funnelFoot"></p>
+        </section>
+
+        <section class="dash-card" aria-labelledby="likesTitle">
+          <header class="dash-card-head">
+            <h2 id="likesTitle">Mais curtidas do portfólio</h2>
+            <a class="dash-card-link" href="/admin/#curtidas">Ver curtidas</a>
+          </header>
+          <p class="dash-card-hint" id="likesSummary"></p>
+          <div class="dash-likes" id="likesGrid"></div>
+        </section>
+      </div>
+
+      <p class="dash-footnote">Orçamentos e clientes de teste não entram nos números. “Recebido pelo site” soma as cobranças pagas pelo Asaas (entradas e fotos extras); o que você recebe por fora não aparece. O prazo de edição se ajusta em <a href="/admin/configuracoes/">Configurações</a>.</p>
+    </main>
+    </div>
+  </div>
+
+  <div class="dash-tooltip" id="chartTooltip" role="status" hidden></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/theme.js?v=20260915-03"></script>
+  <script src="/admin/painel/painel.js?v=20261120-01"></script>
+</body>
+</html>

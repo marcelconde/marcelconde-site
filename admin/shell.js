@@ -13,6 +13,7 @@
 
   const icon = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${path}</svg>`;
   const ICONS = {
+    painel: icon('<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'),
     clientes: icon('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M16 4.8a3.3 3.3 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.4 3.5 5.2"/>'),
     orcamentos: icon('<path d="M6 2.8h8.5L19 7.3V21H6z"/><path d="M14 3v5h5M9 12.5h6M9 16.5h6"/>'),
     galerias: icon('<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="9.5" r="1.8"/><path d="m3.5 18 5.2-5 3.8 3.5 3-2.6 5 4.4"/>'),
@@ -31,6 +32,9 @@
 
   // view: seção dentro de /admin/ (trocada pelo admin.js); hash: endereço dela vindo de outra página.
   const GROUPS = [
+    { label: "Início", items: [
+      { key: "painel", label: "Visão geral", href: "/admin/painel/" },
+    ] },
     { label: "Trabalhos", items: [
       { key: "clientes", label: "Clientes", href: "/admin/clientes/" },
       { key: "orcamentos", label: "Orçamentos", href: "/admin/orcamentos/" },
@@ -68,12 +72,12 @@
   sidebar.innerHTML = `
     <div class="app-mobilebar">
       <button class="app-menu-btn" type="button" aria-controls="appNavPanel" aria-expanded="false" aria-label="Abrir menu">${ICONS.menu}</button>
-      <a class="app-brand app-brand--compact" href="/admin/"><span class="app-brand-mark">MC</span><strong>Admin</strong></a>
+      <a class="app-brand app-brand--compact" href="/admin/painel/"><span class="app-brand-mark">MC</span><strong>Admin</strong></a>
     </div>
     <div class="app-nav-backdrop" data-close-nav></div>
     <div class="app-nav-panel" id="appNavPanel">
       <div class="app-nav-head">
-        <a class="app-brand" href="/admin/" aria-label="Admin Marcel Conde — início">
+        <a class="app-brand" href="/admin/painel/" aria-label="Admin Marcel Conde — início">
           <span class="app-brand-mark">MC</span>
           <span><strong>Marcel Conde</strong><small>Painel do estúdio</small></span>
         </a>

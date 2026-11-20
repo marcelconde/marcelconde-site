@@ -6,6 +6,14 @@
   <meta name="robots" content="noindex, nofollow">
   <title>Configurações — Admin Marcel Conde</title>
   <link rel="icon" href="/images/favicon.png">
+  <link rel="manifest" href="/admin/manifest.webmanifest">
+  <meta name="theme-color" content="#0d0e0f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MC Painel">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="apple-touch-icon" href="/images/admin-icon-180.png">
+  <script src="/pwa.js?v=20261120-01" defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,7 +30,7 @@
 <body class="settings-page">
   <div class="admin-shell app" id="adminShell">
     <aside id="appSidebar" data-active="configuracoes"></aside>
-    <script src="/admin/shell.js?v=20261120-02"></script>
+    <script src="/admin/shell.js?v=20261120-03"></script>
     <div class="app-main">
 
     <main class="private-admin">
@@ -30,7 +38,7 @@
         <div>
           <span class="eyebrow">Sistema</span>
           <h1>Configurações</h1>
-          <p>Automações dos e-mails enviados aos clientes.</p>
+          <p>Automações dos e-mails enviados aos clientes e prazos do painel.</p>
         </div>
       </section>
 
@@ -52,12 +60,26 @@
           </div>
         </form>
       </div>
+
+      <div class="admin-card-panel">
+        <h2>Prazo de edição</h2>
+        <p>Quantos dias você costuma levar para entregar as fotos editadas depois que o cliente conclui a seleção. Na Visão geral, a galeria fica amarela perto do prazo e vermelha quando passa dele.</p>
+        <form class="private-form settings-form" id="deliveryForm">
+          <label class="settings-days">
+            Dias para entregar
+            <input id="deliveryAlertDays" type="number" inputmode="numeric" min="1" max="120" step="1" value="15" required>
+          </label>
+          <div class="settings-actions">
+            <button class="btn btn-primary" id="saveDeliveryBtn" type="submit" disabled>Salvar</button>
+          </div>
+        </form>
+      </div>
     </main>
     </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/theme.js?v=20260915-03"></script>
-  <script src="/admin/configuracoes/configuracoes.js?v=20261119-01"></script>
+  <script src="/admin/configuracoes/configuracoes.js?v=20261120-01"></script>
 </body>
 </html>

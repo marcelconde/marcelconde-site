@@ -1026,12 +1026,16 @@ function quoteReminderApp() {
 test('settings default to a 3-day quote reminder and only accept whole days from 1 to 60', async () => {
   const a = app();
   const get = async () => (await (await a.request('/private/settings')).json()).settings;
-  assert.deepEqual({ ...await get() }, { quoteReminderEnabled: true, quoteReminderDays: 3 });
+  assert.deepEqual({ ...await get() }, { quoteReminderEnabled: true, quoteReminderDays: 3, deliveryAlertDays: 15 });
   for (const bad of [0, 61, 2.5, 'x']) {
     assert.equal((await a.request('/private/settings', { quoteReminderDays: bad })).status, 400);
   }
+  for (const bad of [0, 121, 1.5]) {
+    assert.equal((await a.request('/private/settings', { deliveryAlertDays: bad })).status, 400);
+  }
   assert.equal((await a.request('/private/settings', { quoteReminderDays: 5, quoteReminderEnabled: false })).status, 200);
-  assert.deepEqual({ ...await get() }, { quoteReminderEnabled: false, quoteReminderDays: 5 });
+  assert.equal((await a.request('/private/settings', { deliveryAlertDays: 20 })).status, 200);
+  assert.deepEqual({ ...await get() }, { quoteReminderEnabled: false, quoteReminderDays: 5, deliveryAlertDays: 20 });
   assert.equal((await a.request('/private/settings', undefined, 'client-token')).status, 401);
 });
 
@@ -1086,4 +1090,73 @@ test('republishing restarts the reminder and can skip the announcement e-mail', 
   assert.equal(a.emails.length, 2);
   assert.match(a.emails[1].subject, /^Orçamento ORC-old/);
   assert.equal((await a.readKvJson(a.env, 'private_quote:old', null)).reminderSentAt, null);
+});
+
+test('the business dashboard sums real money, ranks next actions and leaves test clients out', async () => {
+  const a = app();
+  a.env.CLOUDINARY_CLOUD_NAME = 'demo';
+  const now = Date.now();
+  const ago = (days) => new Date(now - days * 86400000).toISOString();
+  const recifeDay = (offset) => new Date(now - 3 * 3600000 + offset * 86400000).toISOString().slice(0, 10);
+  const justNow = new Date(now - 60000).toISOString();
+
+  a.seed('private_clients_index', ['c', 't']);
+  a.seed('private_client:t', { id: 't', name: 'Tester', email: 'tester@example.test', isTest: true });
+  a.seed('private_quotes_index', ['q1', 'q2', 'q3', 'q4']);
+  a.seed('private_quote:q1', { id: 'q1', clientId: 'c', title: 'Casamento', status: 'accepted', publishedSnapshot: { totalCents: 100000 },
+    publishedAt: ago(3), viewedAt: ago(2), acceptedAt: justNow, paymentStatus: 'approved', paymentApprovedAt: justNow,
+    paymentAmountCents: 30000, paymentBalanceCents: 70000, serviceDate: recifeDay(5), serviceLocation: 'Olinda' });
+  a.seed('private_quote:q2', { id: 'q2', clientId: 'c', title: 'Ensaio', status: 'viewed', publishedSnapshot: { totalCents: 50000 },
+    publishedAt: ago(5), viewedAt: ago(4), validUntil: recifeDay(20) });
+  a.seed('private_quote:q3', { id: 'q3', clientId: 't', isTest: true, title: 'Teste', status: 'accepted', publishedSnapshot: { totalCents: 999900 },
+    publishedAt: ago(2), acceptedAt: justNow, paymentStatus: 'approved', paymentApprovedAt: justNow, paymentAmountCents: 999900 });
+  a.seed('private_quote:q4', { id: 'q4', clientId: 'c', title: 'Evento', status: 'published', publishedSnapshot: { totalCents: 20000 },
+    publishedAt: ago(5), validUntil: recifeDay(2) });
+
+  a.seed('private_galleries_index', ['g', 'g2', 'g3', 'gt']);
+  a.seed('private_gallery:g', { id: 'g', slug: 'race', clientId: 'c', title: 'Race', status: 'editing', selectionCompletedAt: ago(20) });
+  a.seed('private_gallery:g2', { id: 'g2', clientId: 'c', title: 'Formatura', status: 'final', selectionCompletedAt: ago(12), updatedAt: ago(2) });
+  a.seed('private_gallery_events:g2', [
+    { action: 'admin_concluiu_entrega', createdAt: ago(2) },
+    { action: 'pagamento_aprovado', createdAt: justNow, details: { paymentId: 'p1', amountCents: 2000 } },
+    { action: 'pagamento_aprovado', createdAt: justNow, details: { paymentId: 'p1', amountCents: 2000 } },
+  ]);
+  a.seed('private_gallery:g3', { id: 'g3', clientId: 'c', title: 'Aniversário', status: 'selection', createdAt: ago(10) });
+  a.seed('private_gallery_events:g3', [{ action: 'admin_publicou_galeria', createdAt: ago(8) }]);
+  a.seed('private_gallery:gt', { id: 'gt', clientId: 't', title: 'Galeria teste', status: 'editing', selectionCompletedAt: ago(90) });
+  const put = a.sqlite.prepare('INSERT INTO gallery_records (key, value) VALUES (?, ?)');
+  put.run('photo_like:portfolio/Casamento:portfolio/Casamento/a', '5');
+  put.run('photo_like:portfolio/Casamento:portfolio/Casamento/b', '2');
+
+  const res = await a.request('/private/dashboard');
+  assert.equal(res.status, 200);
+  const { dashboard } = await res.json();
+  assert.doesNotMatch(JSON.stringify(dashboard), /Tester|Galeria teste/);
+  assert.equal(dashboard.money.receivedMonthCents, 32000); // entrada + fotos extras (pagamento repetido conta uma vez)
+  assert.equal(dashboard.money.extrasYearCents, 2000);
+  assert.equal(dashboard.money.contractedMonthCents, 100000);
+  assert.equal(dashboard.money.toReceiveCents, 70000);
+  assert.equal(dashboard.money.openPipelineCents, 70000);
+  assert.deepEqual({ ...dashboard.funnel }, { sent: 3, viewed: 2, accepted: 1, paid: 1, conversionPercent: 33, averageDaysToAccept: 3 });
+  assert.equal(dashboard.monthly.length, 12);
+  assert.equal(dashboard.monthly[11].receivedCents, 32000);
+  assert.deepEqual([dashboard.galleries.editing, dashboard.galleries.selection, dashboard.galleries.late], [1, 1, 1]);
+  assert.deepEqual([dashboard.galleries.deliveredYear, dashboard.galleries.averageDeliveryDays], [1, 10]);
+  assert.deepEqual([dashboard.agenda.length, dashboard.agenda[0].daysUntil, dashboard.agenda[0].balanceCents], [1, 5, 70000]);
+
+  const kinds = dashboard.actions.map((action) => action.kind);
+  assert.equal(dashboard.actions[0].tone, 'danger');
+  assert.equal(kinds[0], 'editing');
+  for (const kind of ['quote_viewed', 'quote_unopened', 'quote_expiring', 'gallery_unopened', 'review', 'session', 'balance']) {
+    assert.ok(kinds.includes(kind), kind);
+  }
+  assert.ok(dashboard.actions.every((action) => action.href.startsWith('/admin/')));
+  assert.deepEqual([dashboard.likes.total, dashboard.likes.top[0].likes, dashboard.likes.top[0].albumName], [7, 5, 'Casamento']);
+  assert.match(dashboard.likes.top[0].thumbUrl, /^https:\/\/res\.cloudinary\.com\/demo\/image\/upload\/.+portfolio\/Casamento\/a$/);
+
+  // Pedido de avaliação já agendado tira a sugestão; cliente não vê o painel.
+  put.run('review_request:g2', JSON.stringify({ galleryId: 'g2', sendAt: ago(0) }));
+  const again = (await (await a.request('/private/dashboard')).json()).dashboard;
+  assert.ok(!again.actions.some((action) => action.kind === 'review'));
+  assert.equal((await a.request('/private/dashboard', undefined, 'client-token')).status, 401);
 });

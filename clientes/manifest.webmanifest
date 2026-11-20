@@ -1,0 +1,19 @@
+{
+  "id": "/clientes/",
+  "name": "Marcel Conde Fotografia",
+  "short_name": "Marcel Conde",
+  "description": "Seus orçamentos, galerias e fotos com Marcel Conde.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/clientes/dashboard/",
+  "scope": "/clientes/",
+  "display": "standalone",
+  "background_color": "#0d0e0f",
+  "theme_color": "#0d0e0f",
+  "categories": ["photo", "lifestyle"],
+  "icons": [
+    { "src": "/images/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/images/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/images/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

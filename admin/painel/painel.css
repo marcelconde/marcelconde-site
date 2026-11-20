@@ -1,0 +1,628 @@
+/* Painel "Visão do negócio". Usa os tokens de admin/ui.css. */
+:root {
+  /* Séries do gráfico, validadas (contraste, daltonismo) sobre a superfície escura. */
+  --series-contracted: #b8842f;
+  --series-received: #4f8fd6;
+}
+
+:root[data-theme="light"] {
+  --series-contracted: #9a6a1e;
+  --series-received: #2563c4;
+}
+
+:root .app .dash {
+  display: grid;
+  gap: 18px;
+}
+
+/* ── Indicadores ── */
+:root .app .dash-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+:root .app .dash-kpi {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+:root .app .dash-kpi-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+:root .app .dash-kpi-value {
+  color: var(--ink);
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+:root .app .dash-kpi-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* ── Cartões ── */
+:root .app .dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+:root .app .dash-grid--even { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+:root .app .dash-stack {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+:root .app .dash-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+:root .app .dash-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+:root .app .dash-card-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+:root .app .dash-card-hint {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+:root .app .dash-card-link {
+  flex-shrink: 0;
+  color: var(--gold);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+:root .app .dash-card-link:hover { text-decoration: underline; }
+
+:root .app .dash-count {
+  min-width: 26px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+:root .app .dash-count:empty { display: none; }
+
+:root .app .dash ol {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+:root .app .dash-empty {
+  display: grid;
+  gap: 4px;
+  padding: 18px 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+:root .app .dash-empty strong { color: var(--ink); }
+:root .app .dash-muted { color: var(--muted); }
+
+/* ── Próximas ações ── */
+:root .app .dash-action,
+:root .app .dash-event,
+:root .app .dash-gallery {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -8px;
+  padding: 10px 8px;
+  border-radius: var(--r);
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+:root .app .dash-action:hover,
+:root .app .dash-event:hover,
+:root .app .dash-gallery:hover { background: var(--surface-2); }
+
+:root .app .dash-action:focus-visible,
+:root .app .dash-event:focus-visible,
+:root .app .dash-gallery:focus-visible,
+:root .app .dash-chart-col:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+:root .app .dash-action-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+:root .app .dash-action--danger .dash-action-icon { background: var(--danger-soft); color: var(--danger); }
+:root .app .dash-action--warning .dash-action-icon { background: var(--warning-soft); color: var(--warning); }
+:root .app .dash-action--info .dash-action-icon { background: var(--surface-3); color: var(--ink-soft); }
+
+:root .app .dash-action-body,
+:root .app .dash-event-body,
+:root .app .dash-gallery-body {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+:root .app .dash-action-tone {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:root .app .dash-action--danger .dash-action-tone { color: var(--danger); }
+:root .app .dash-action--warning .dash-action-tone { color: var(--warning); }
+:root .app .dash-action--info .dash-action-tone { color: var(--muted); }
+
+:root .app .dash-action-body strong,
+:root .app .dash-event-body strong,
+:root .app .dash-gallery-top strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+:root .app .dash-action-body small,
+:root .app .dash-event-body small,
+:root .app .dash-gallery-body small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .app .dash-action-go {
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+:root .app .dash-more {
+  padding: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* ── Agenda ── */
+:root .app .dash-date {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 46px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  line-height: 1;
+}
+
+:root .app .dash-date b { color: var(--ink); font-size: 1.05rem; }
+:root .app .dash-date small { color: var(--gold); font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
+
+:root .app .dash-event-meta {
+  display: grid;
+  gap: 2px;
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+:root .app .dash-event-meta small { color: var(--muted); }
+:root .app .dash-soon { color: var(--warning); font-weight: 700; }
+
+/* ── Galerias ── */
+:root .app .dash-pipeline-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 8px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+:root .app .dash-pipeline-summary b { color: var(--ink); }
+
+:root .app .dash-gallery { align-items: flex-start; }
+
+:root .app .dash-gallery-cover {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  overflow: hidden;
+  border-radius: var(--r);
+  background: var(--surface-3);
+}
+
+:root .app .dash-gallery-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+:root .app .dash-gallery-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+:root .app .dash-gallery-top strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .app .dash-gallery-top .status-badge { flex-shrink: 0; }
+
+:root .app .dash-progress {
+  display: block;
+  height: 4px;
+  margin: 4px 0 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+:root .app .dash-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--warning);
+}
+
+:root .app .dash-progress.is-late i { background: var(--danger); }
+
+/* ── Gráfico ── */
+:root .app .dash-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+:root .app .dash-legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.dash-swatch {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.dash-swatch--contracted { background: var(--series-contracted); }
+.dash-swatch--received { background: var(--series-received); }
+
+:root .app .dash-chart {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  height: 240px;
+  margin-top: 8px;
+}
+
+:root .app .dash-chart-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 24px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+:root .app .dash-chart-axis span { transform: translateY(-50%); }
+:root .app .dash-chart-axis span:last-child { transform: translateY(50%); }
+
+:root .app .dash-chart-plot {
+  position: relative;
+  min-width: 0;
+}
+
+:root .app .dash-chart-grid {
+  position: absolute;
+  inset: 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+:root .app .dash-chart-grid i { display: block; height: 1px; background: var(--line); }
+:root .app .dash-chart-grid i:last-child { background: var(--line-strong); }
+
+:root .app .dash-chart-bars {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+:root .app .dash-chart-col {
+  display: grid;
+  grid-template-rows: 1fr 24px;
+  min-width: 0;
+  border-radius: var(--r-sm);
+  cursor: default;
+}
+
+:root .app .dash-chart-col.is-hover .dash-chart-pair { background: var(--surface-2); }
+
+:root .app .dash-chart-pair {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  transition: background 0.12s ease;
+}
+
+:root .app .dash-bar {
+  display: block;
+  width: min(14px, 34%);
+  min-height: 0;
+  border-radius: 4px 4px 0 0;
+}
+
+:root .app .dash-bar--contracted { background: var(--series-contracted); }
+:root .app .dash-bar--received { background: var(--series-received); }
+
+:root .app .dash-chart-label {
+  align-self: end;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: center;
+}
+
+:root .app .dash-chart-col.is-current .dash-chart-label { color: var(--ink); font-weight: 700; }
+
+:root .app .dash-chart-empty {
+  grid-column: 1 / -1;
+  align-content: center;
+  justify-items: center;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r);
+  text-align: center;
+}
+
+.dash-tooltip {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 4px;
+  min-width: 190px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.dash-tooltip[hidden] { display: none; }
+.dash-tooltip strong { color: var(--ink); }
+.dash-tooltip span { display: flex; align-items: center; gap: 6px; }
+.dash-tooltip b { margin-left: auto; padding-left: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+:root .app .dash-table-toggle { margin-top: 14px; }
+
+:root .app .dash-table-toggle summary {
+  width: max-content;
+  color: var(--gold);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+:root .app .dash-table-wrap { margin-top: 10px; overflow-x: auto; }
+
+:root .app .dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+}
+
+:root .app .dash-table th,
+:root .app .dash-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  text-align: right;
+  white-space: nowrap;
+}
+
+:root .app .dash-table th:first-child { text-align: left; }
+:root .app .dash-table thead th { color: var(--muted); font-weight: 600; }
+:root .app .dash-table tbody th { color: var(--ink); font-weight: 500; }
+
+/* ── Funil ── */
+:root .app .dash-funnel { display: grid; gap: 12px; }
+
+:root .app .dash-funnel-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.9fr) minmax(0, 2fr) 58px;
+  align-items: center;
+  gap: 12px;
+}
+
+:root .app .dash-funnel-label { color: var(--ink-soft); font-size: 0.85rem; }
+
+:root .app .dash-funnel-track {
+  display: block;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+:root .app .dash-funnel-track i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 999px;
+  background: var(--series-contracted);
+}
+
+:root .app .dash-funnel-value {
+  display: grid;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  text-align: right;
+}
+
+:root .app .dash-funnel-value small { color: var(--muted); font-size: 0.72rem; }
+
+:root .app .dash-funnel-foot {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* ── Curtidas ── */
+:root .app .dash-likes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+:root .app .dash-like {
+  position: relative;
+  aspect-ratio: 1;
+  margin: 0;
+  overflow: hidden;
+  border-radius: var(--r);
+  background: var(--surface-3);
+}
+
+:root .app .dash-like img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+:root .app .dash-like figcaption {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 18px 8px 6px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+  color: #fff;
+  font-size: 0.74rem;
+}
+
+:root .app .dash-like figcaption span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root .app .dash-like figcaption b { flex-shrink: 0; white-space: nowrap; }
+
+:root .app .dash-footnote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+:root .app .dash-footnote a { color: var(--gold); }
+
+/* Enquanto carrega, os valores ficam esmaecidos. */
+:root .app .dash:not(.is-ready) .dash-kpi-value { color: var(--muted); }
+
+@media (max-width: 1180px) {
+  :root .app .dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 980px) {
+  :root .app .dash-grid,
+  :root .app .dash-grid--even { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  :root .app .dash-kpis { gap: 8px; }
+  :root .app .dash-kpi { padding: 14px; }
+  :root .app .dash-kpi-value { font-size: 1.3rem; }
+  :root .app .dash-card { padding: 14px; }
+  :root .app .dash-chart-card .dash-card-head { flex-direction: column; }
+  :root .app .dash-chart { height: 200px; gap: 6px; }
+  :root .app .dash-chart-col:nth-child(odd):not(.is-current) .dash-chart-label { visibility: hidden; }
+  :root .app .dash-funnel-row { grid-template-columns: minmax(0, 1fr) 52px; }
+  :root .app .dash-funnel-track { grid-column: 1 / -1; grid-row: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root .app .dash-action,
+  :root .app .dash-event,
+  :root .app .dash-gallery,
+  :root .app .dash-chart-pair { transition: none; }
+}

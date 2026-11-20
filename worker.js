@@ -3347,17 +3347,368 @@ async function sendQuotePublishedEmail(env, email, quote = {}, client = {}, acce
 // Admin settings (aba Configurações). Stored as one record; missing fields
 // fall back to the defaults so new settings never need a migration.
 const SITE_SETTINGS_KEY = "site_settings";
-const DEFAULT_SITE_SETTINGS = { quoteReminderEnabled: true, quoteReminderDays: 3 };
+const DEFAULT_SITE_SETTINGS = { quoteReminderEnabled: true, quoteReminderDays: 3, deliveryAlertDays: 15 };
 const QUOTE_REMINDER_MAX_DAYS = 60;
 const QUOTE_REMINDER_MAX_ATTEMPTS = 3;
+const DELIVERY_ALERT_MAX_DAYS = 120;
 
 async function readSiteSettings(env) {
   const stored = await readKvJson(env, SITE_SETTINGS_KEY, null) || {};
   const days = Math.round(Number(stored.quoteReminderDays));
+  const deliveryDays = Math.round(Number(stored.deliveryAlertDays));
   return {
     quoteReminderEnabled: stored.quoteReminderEnabled !== false,
     quoteReminderDays: days >= 1 && days <= QUOTE_REMINDER_MAX_DAYS ? days : DEFAULT_SITE_SETTINGS.quoteReminderDays,
+    deliveryAlertDays: deliveryDays >= 1 && deliveryDays <= DELIVERY_ALERT_MAX_DAYS ? deliveryDays : DEFAULT_SITE_SETTINGS.deliveryAlertDays,
   };
+}
+
+// ── Painel "Visão do negócio" ───────────────────────────────────────────
+// Dinheiro, funil de orçamentos, prazos das galerias, agenda e próximas ações,
+// calculados a partir dos registros que o site já guarda. Orçamentos e clientes
+// de teste ficam de fora. Recife é UTC-3 o ano todo.
+const DAY_MS = 86400000;
+const RECIFE_OFFSET_MS = 3 * 3600000;
+
+function recifeDateKey(time) {
+  return new Date(time - RECIFE_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function recifeMonthKey(value) {
+  const time = typeof value === "number" ? value : Date.parse(value || "");
+  return Number.isFinite(time) ? recifeDateKey(time).slice(0, 7) : "";
+}
+
+function daysSince(value, now) {
+  const time = Date.parse(value || "");
+  return Number.isFinite(time) ? Math.max(0, Math.floor((now - time) / DAY_MS)) : null;
+}
+
+// Dias de calendário (em Recife) até uma data AAAA-MM-DD; negativo se já passou.
+function daysUntilDate(dateKey, now) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey || "")) return null;
+  const today = Date.parse(`${recifeDateKey(now)}T00:00:00Z`);
+  return Math.round((Date.parse(`${dateKey}T00:00:00Z`) - today) / DAY_MS);
+}
+
+function plural(count, one, many) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+function buildDashboard({
+  quotes = [], clients = [], galleries = [], galleryEvents = {}, reviewRequests = {}, reviews = {},
+  likes = { top: [], total: 0, photos: 0 }, settings = {}, cloudName = "", now = Date.now(),
+} = {}) {
+  const clientById = new Map(clients.filter(Boolean).map((client) => [client.id, client]));
+  const isTestClient = (id) => clientById.get(id)?.isTest === true;
+  const clientName = (id) => clientById.get(id)?.name || "Cliente";
+  const alertDays = Number(settings.deliveryAlertDays) || DEFAULT_SITE_SETTINGS.deliveryAlertDays;
+  const yearAgo = now - 365 * DAY_MS;
+  const monthNow = recifeMonthKey(now);
+  const yearNow = monthNow.slice(0, 4);
+  const [year, month] = monthNow.split("-").map(Number);
+  const months = Array.from({ length: 12 }, (_, index) => (
+    new Date(Date.UTC(year, month - 12 + index, 1)).toISOString().slice(0, 7)
+  ));
+  const series = new Map(months.map((key) => [key, { month: key, contractedCents: 0, receivedCents: 0 }]));
+  const addToMonth = (when, field, cents) => {
+    const entry = series.get(recifeMonthKey(when));
+    if (entry) entry[field] += cents;
+  };
+
+  const quoteHref = (quote) => `/admin/orcamentos/detalhe/?id=${encodeURIComponent(quote.id)}`;
+  const galleryHref = (gallery) => `/admin/galerias/detalhe/?id=${encodeURIComponent(gallery.id)}`;
+  const quoteTotal = (quote) => Number(quote.publishedSnapshot?.totalCents ?? calculateQuoteTotals(quote).totalCents) || 0;
+  const realQuotes = quotes
+    .filter((quote) => quote && quote.isTest !== true && !isTestClient(quote.clientId))
+    .map((quote) => ({ quote, status: effectiveQuoteStatus(quote), total: quoteTotal(quote) }));
+
+  const money = {
+    receivedMonthCents: 0, receivedYearCents: 0, contractedMonthCents: 0, contractedYearCents: 0,
+    extrasYearCents: 0, openPipelineCents: 0, toReceiveCents: 0, averageTicketCents: 0,
+  };
+  const funnel = { sent: 0, viewed: 0, accepted: 0, paid: 0, conversionPercent: 0, averageDaysToAccept: null };
+  const acceptDays = [];
+  const ticketTotals = [];
+  const actions = [];
+  const agenda = [];
+  const balances = [];
+  const latestAcceptedByClient = new Map();
+
+  const receive = (when, cents, { extra = false } = {}) => {
+    if (!cents || !when) return;
+    addToMonth(when, "receivedCents", cents);
+    if (recifeMonthKey(when) === monthNow) money.receivedMonthCents += cents;
+    if (recifeMonthKey(when).startsWith(yearNow)) {
+      money.receivedYearCents += cents;
+      if (extra) money.extrasYearCents += cents;
+    }
+  };
+
+  for (const { quote, status, total } of realQuotes) {
+    const client = clientName(quote.clientId);
+    const paid = quote.paymentStatus === "approved";
+    if (status === "accepted" && quote.acceptedAt) {
+      addToMonth(quote.acceptedAt, "contractedCents", total);
+      if (recifeMonthKey(quote.acceptedAt) === monthNow) money.contractedMonthCents += total;
+      if (recifeMonthKey(quote.acceptedAt).startsWith(yearNow)) money.contractedYearCents += total;
+      if (Date.parse(quote.acceptedAt) >= yearAgo) ticketTotals.push(total);
+      const previous = latestAcceptedByClient.get(quote.clientId);
+      if (!previous || String(quote.acceptedAt) > String(previous.acceptedAt)) latestAcceptedByClient.set(quote.clientId, quote);
+    }
+    if (paid) receive(quote.paymentApprovedAt || quote.acceptedAt, Number(quote.paymentAmountCents) || 0);
+    if (["published", "viewed"].includes(status)) money.openPipelineCents += total;
+
+    if (quote.publishedAt && Date.parse(quote.publishedAt) >= yearAgo) {
+      const agreed = ["accepted", "pending_payment"].includes(status);
+      funnel.sent += 1;
+      if (quote.viewedAt || agreed) funnel.viewed += 1;
+      if (agreed) funnel.accepted += 1;
+      if (paid) funnel.paid += 1;
+      const days = quote.acceptedAt ? (Date.parse(quote.acceptedAt) - Date.parse(quote.publishedAt)) / DAY_MS : NaN;
+      if (agreed && Number.isFinite(days) && days >= 0) acceptDays.push(days);
+    }
+
+    const serviceIn = daysUntilDate(quote.serviceDate, now);
+    if (["accepted", "pending_payment"].includes(status) && serviceIn !== null && serviceIn >= 0 && serviceIn <= 60) {
+      agenda.push({
+        quoteId: quote.id, href: quoteHref(quote), title: quote.title || "Serviço fotográfico", client,
+        date: quote.serviceDate, location: quote.serviceLocation || "", daysUntil: serviceIn,
+        balanceCents: paid ? Number(quote.paymentBalanceCents) || 0 : 0,
+      });
+      if (serviceIn <= 7) {
+        actions.push({
+          tone: "info", kind: "session", href: quoteHref(quote), sort: 7 - serviceIn,
+          title: serviceIn === 0 ? `Sessão de ${client} é hoje` : `Sessão de ${client} em ${plural(serviceIn, "dia", "dias")}`,
+          detail: [quote.title, quote.serviceLocation].filter(Boolean).join(" · "),
+        });
+      }
+    }
+
+    // Saldo das entradas: some do painel 30 dias depois da data do serviço.
+    const balance = paid ? Number(quote.paymentBalanceCents) || 0 : 0;
+    const recentNoDate = serviceIn === null && daysSince(quote.acceptedAt, now) !== null && daysSince(quote.acceptedAt, now) <= 90;
+    if (status === "accepted" && balance > 0 && ((serviceIn !== null && serviceIn >= -30) || recentNoDate)) {
+      money.toReceiveCents += balance;
+      balances.push({ quoteId: quote.id, href: quoteHref(quote), client, title: quote.title || "", balanceCents: balance, date: quote.serviceDate || "" });
+      if (serviceIn !== null && serviceIn <= 7) {
+        actions.push({
+          tone: "warning", kind: "balance", href: quoteHref(quote), sort: 30 - serviceIn,
+          title: `Combinar o saldo de ${formatCurrencyFromCents(balance)} com ${client}`,
+          detail: serviceIn < 0 ? `Serviço foi há ${plural(-serviceIn, "dia", "dias")}` : serviceIn === 0 ? "Serviço é hoje" : `Serviço em ${plural(serviceIn, "dia", "dias")}`,
+        });
+      }
+    }
+
+    if (status === "viewed") {
+      const days = daysSince(quote.viewedAt, now);
+      if (days !== null && days >= 2) {
+        actions.push({
+          tone: "warning", kind: "quote_viewed", href: quoteHref(quote), sort: days,
+          title: `${client} viu o orçamento há ${plural(days, "dia", "dias")} e não respondeu`,
+          detail: `${quote.title || "Orçamento"} · ${formatCurrencyFromCents(total)}`,
+        });
+      }
+    }
+    if (status === "published") {
+      const days = daysSince(quote.publishedAt, now);
+      if (days !== null && days >= 3) {
+        actions.push({
+          tone: "info", kind: "quote_unopened", href: quoteHref(quote), sort: days,
+          title: `${client} ainda não abriu o orçamento`,
+          detail: `Enviado há ${plural(days, "dia", "dias")} · ${formatCurrencyFromCents(total)}`,
+        });
+      }
+    }
+    const expiresIn = daysUntilDate(quote.validUntil, now);
+    if (["published", "viewed"].includes(status) && expiresIn !== null && expiresIn <= 3) {
+      actions.push({
+        tone: "warning", kind: "quote_expiring", href: quoteHref(quote), sort: 10 - expiresIn,
+        title: expiresIn === 0 ? `Orçamento de ${client} vence hoje` : `Orçamento de ${client} vence em ${plural(expiresIn, "dia", "dias")}`,
+        detail: `${quote.title || "Orçamento"} · ${formatCurrencyFromCents(total)}`,
+      });
+    }
+    if (status === "pending_payment") {
+      const days = daysSince(quote.acceptedAt || quote.updatedAt, now);
+      if (days !== null && days >= 1) {
+        actions.push({
+          tone: "warning", kind: "quote_unpaid", href: quoteHref(quote), sort: days,
+          title: `${client} aceitou, mas não pagou`,
+          detail: `Aceito há ${plural(days, "dia", "dias")} · ${formatCurrencyFromCents(Number(quote.paymentAmountCents) || total)}`,
+        });
+      }
+    }
+    if (status === "expired" && quote.validUntil) {
+      const days = -daysUntilDate(quote.validUntil, now);
+      if (days >= 1 && days <= 14) {
+        actions.push({
+          tone: "info", kind: "quote_expired", href: quoteHref(quote), sort: 0,
+          title: `Orçamento de ${client} expirou sem resposta`,
+          detail: `Venceu há ${plural(days, "dia", "dias")} · vale um contato?`,
+        });
+      }
+    }
+  }
+
+  funnel.conversionPercent = funnel.sent ? Math.round((funnel.accepted / funnel.sent) * 100) : 0;
+  funnel.averageDaysToAccept = acceptDays.length
+    ? Math.round((acceptDays.reduce((sum, days) => sum + days, 0) / acceptDays.length) * 10) / 10
+    : null;
+  money.averageTicketCents = ticketTotals.length ? Math.round(ticketTotals.reduce((sum, cents) => sum + cents, 0) / ticketTotals.length) : 0;
+
+  const pipeline = [];
+  const deliveryDays = [];
+  let deliveredYear = 0;
+  for (const gallery of galleries) {
+    if (!gallery?.id || isTestClient(gallery.clientId)) continue;
+    const events = Array.isArray(galleryEvents[gallery.id]) ? galleryEvents[gallery.id] : [];
+    const client = clientName(gallery.clientId);
+    const seenPayments = new Set();
+    for (const event of events) {
+      if (!["pagamento_aprovado", "pix_aprovado"].includes(event?.action)) continue;
+      const paymentId = event.details?.paymentId || event.id;
+      if (seenPayments.has(paymentId)) continue;
+      seenPayments.add(paymentId);
+      receive(event.createdAt, Number(event.details?.amountCents) || 0, { extra: true });
+    }
+
+    const status = ["selection", "editing", "final"].includes(gallery.status) ? gallery.status : "selection";
+    if (status === "final") {
+      const deliveredAt = events.find((event) => event?.action === "admin_concluiu_entrega")?.createdAt || gallery.updatedAt;
+      if (Date.parse(deliveredAt) >= yearAgo) {
+        deliveredYear += 1;
+        const days = (Date.parse(deliveredAt) - Date.parse(gallery.selectionCompletedAt || "")) / DAY_MS;
+        if (Number.isFinite(days) && days >= 0) deliveryDays.push(days);
+      }
+      const sinceDelivery = daysSince(deliveredAt, now);
+      if (!reviews[gallery.id] && !reviewRequests[gallery.id] && sinceDelivery !== null && sinceDelivery <= 60) {
+        actions.push({
+          tone: "info", kind: "review", href: galleryHref(gallery), sort: 0,
+          title: `Pedir avaliação no Google para ${client}`,
+          detail: `${gallery.title || "Galeria"} entregue há ${plural(sinceDelivery, "dia", "dias")}`,
+        });
+      }
+      continue;
+    }
+
+    const publishedAt = events.find((event) => event?.action === "admin_publicou_galeria")?.createdAt || "";
+    const opened = events.some((event) => event?.action === "cliente_abriu_galeria");
+    const stage = status === "editing" ? "editing" : publishedAt ? "selection" : "preparing";
+    const since = stage === "editing" ? gallery.selectionCompletedAt || gallery.updatedAt
+      : stage === "selection" ? (gallery.selectionReopenedAt && gallery.selectionReopenedAt > publishedAt ? gallery.selectionReopenedAt : publishedAt)
+        : gallery.createdAt;
+    const days = daysSince(since, now) ?? 0;
+    const late = stage === "editing" && days > alertDays;
+    pipeline.push({
+      id: gallery.id, href: galleryHref(gallery), title: gallery.title || "Galeria", client, stage, days, late,
+      dueInDays: stage === "editing" ? alertDays - days : null, opened,
+      coverUrl: gallery.coverUrl || "", deliveryEstimate: latestAcceptedByClient.get(gallery.clientId)?.deliveryEstimate || "",
+    });
+
+    if (stage === "editing") {
+      actions.push({
+        tone: late ? "danger" : days >= alertDays - 3 ? "warning" : "info", kind: "editing", href: galleryHref(gallery), sort: days,
+        title: late ? `Galeria de ${client} atrasada: ${plural(days, "dia", "dias")} em edição` : `Editar a galeria de ${client}`,
+        detail: late ? `Prazo de ${alertDays} dias passou` : `Seleção feita há ${plural(days, "dia", "dias")} · prazo de ${alertDays} dias`,
+      });
+    } else if (stage === "selection" && days >= 7) {
+      actions.push({
+        tone: opened ? "info" : "warning", kind: opened ? "selection_waiting" : "gallery_unopened", href: galleryHref(gallery), sort: days,
+        title: opened ? `${client} ainda não terminou a seleção` : `${client} ainda não abriu a galeria`,
+        detail: `${gallery.title || "Galeria"} publicada há ${plural(days, "dia", "dias")}`,
+      });
+    } else if (stage === "preparing" && days >= 3) {
+      actions.push({
+        tone: "info", kind: "gallery_unpublished", href: galleryHref(gallery), sort: days,
+        title: `Publicar a galeria de ${client}`,
+        detail: `${gallery.title || "Galeria"} criada há ${plural(days, "dia", "dias")} e ainda não enviada`,
+      });
+    }
+  }
+
+  const stageOrder = { editing: 0, selection: 1, preparing: 2 };
+  pipeline.sort((a, b) => (Number(b.late) - Number(a.late)) || (stageOrder[a.stage] - stageOrder[b.stage]) || (b.days - a.days));
+  const toneOrder = { danger: 0, warning: 1, info: 2 };
+  actions.sort((a, b) => (toneOrder[a.tone] - toneOrder[b.tone]) || (b.sort - a.sort));
+  agenda.sort((a, b) => a.daysUntil - b.daysUntil);
+  const realClients = clients.filter((client) => client && client.isTest !== true);
+  const thumb = (publicId) => (cloudName && publicId
+    ? `https://res.cloudinary.com/${cloudName}/image/upload/c_fill,g_auto,w_320,h_320,q_auto,f_auto/${encodeURI(publicId)}`
+    : "");
+
+  return {
+    generatedAt: new Date(now).toISOString(),
+    month: monthNow,
+    year: yearNow,
+    settings: { deliveryAlertDays: alertDays },
+    money,
+    monthly: [...series.values()],
+    funnel,
+    galleries: {
+      editing: pipeline.filter((item) => item.stage === "editing").length,
+      selection: pipeline.filter((item) => item.stage === "selection").length,
+      preparing: pipeline.filter((item) => item.stage === "preparing").length,
+      late: pipeline.filter((item) => item.late).length,
+      deliveredYear,
+      averageDeliveryDays: deliveryDays.length
+        ? Math.round((deliveryDays.reduce((sum, days) => sum + days, 0) / deliveryDays.length) * 10) / 10
+        : null,
+      items: pipeline,
+    },
+    agenda: agenda.slice(0, 10),
+    balances,
+    actions: actions.slice(0, 15).map(({ sort, ...action }) => action),
+    actionsTotal: actions.length,
+    clients: {
+      total: realClients.length,
+      newThisYear: realClients.filter((client) => recifeMonthKey(client.createdAt).startsWith(yearNow)).length,
+    },
+    likes: {
+      total: Number(likes.total) || 0,
+      photos: Number(likes.photos) || 0,
+      top: (likes.top || []).map((item) => ({
+        ...item,
+        albumName: String(item.album || "").split("/").filter(Boolean).pop() || "Portfólio",
+        thumbUrl: thumb(item.publicId),
+      })),
+    },
+  };
+}
+
+async function loadDashboardData(env) {
+  const [quotes, clients, galleries, settings] = await Promise.all([
+    listPrivateQuotes(env), listPrivateClients(env), listPrivateGalleries(env), readSiteSettings(env),
+  ]);
+  const galleryEvents = Object.fromEntries(await Promise.all(galleries.map(async (gallery) => (
+    [gallery.id, await readKvJson(env, privateGalleryEventsKey(gallery.id), [])]
+  ))));
+  const data = { quotes, clients, galleries, settings, galleryEvents, reviewRequests: {}, reviews: {}, likes: { top: [], total: 0, photos: 0 } };
+  if (!env.GALLERY_DB) return data;
+
+  const db = env.GALLERY_DB;
+  const range = (prefix) => db.prepare("SELECT key, value FROM gallery_records WHERE key >= ? AND key < ?")
+    .bind(`${prefix}:`, `${prefix};`).all();
+  const [requests, reviews, top, likeTotals] = await Promise.all([
+    range("review_request"),
+    range("review"),
+    db.prepare("SELECT key, value FROM gallery_records WHERE key >= 'photo_like:' AND key < 'photo_like;' ORDER BY CAST(value AS INTEGER) DESC, key LIMIT 8").all(),
+    db.prepare("SELECT COALESCE(SUM(CAST(value AS INTEGER)), 0) AS total, COUNT(*) AS photos FROM gallery_records WHERE key >= 'photo_like:' AND key < 'photo_like;'").first(),
+  ]);
+  const byGallery = (rows, prefix) => Object.fromEntries((rows.results || [])
+    .map((row) => [row.key.slice(prefix.length), JSON.parse(row.value)])
+    .filter(([, value]) => value));
+  data.reviewRequests = byGallery(requests, "review_request:");
+  data.reviews = byGallery(reviews, "review:");
+  data.likes = {
+    total: Number(likeTotals?.total) || 0,
+    photos: Number(likeTotals?.photos) || 0,
+    top: (top.results || []).map((row) => {
+      const rest = row.key.slice("photo_like:".length);
+      const split = rest.indexOf(":");
+      return { album: rest.slice(0, split), publicId: rest.slice(split + 1), likes: Number(JSON.parse(row.value)) || 0 };
+    }).filter((item) => item.likes > 0 && item.publicId),
+  };
+  return data;
 }
 
 async function sendQuoteReminderEmail(env, email, quote = {}, client = {}, accessUrl = "", firstAccess = false) {
@@ -6227,7 +6578,19 @@ export default {
     if (url.pathname === "/private/settings" && request.method === "GET") {
       const { error } = await requireAdminUser(request, env);
       if (error) return error;
-      return json({ settings: await readSiteSettings(env), limits: { quoteReminderMaxDays: QUOTE_REMINDER_MAX_DAYS } }, 200, { "Cache-Control": "no-store" });
+      return json({
+        settings: await readSiteSettings(env),
+        limits: { quoteReminderMaxDays: QUOTE_REMINDER_MAX_DAYS, deliveryAlertMaxDays: DELIVERY_ALERT_MAX_DAYS },
+      }, 200, { "Cache-Control": "no-store" });
+    }
+
+    if (url.pathname === "/private/dashboard" && request.method === "GET") {
+      const { error } = await requireAdminUser(request, env);
+      if (error) return error;
+      const data = await loadDashboardData(env);
+      return json({
+        dashboard: buildDashboard({ ...data, cloudName: env.CLOUDINARY_CLOUD_NAME || "", now: Date.now() }),
+      }, 200, { "Cache-Control": "no-store" });
     }
 
     if (url.pathname === "/private/settings" && request.method === "POST") {
@@ -6243,6 +6606,13 @@ export default {
           return errorJson(`Informe um número inteiro de dias entre 1 e ${QUOTE_REMINDER_MAX_DAYS}.`, 400);
         }
         next.quoteReminderDays = days;
+      }
+      if ("deliveryAlertDays" in body) {
+        const days = Number(body.deliveryAlertDays);
+        if (!Number.isInteger(days) || days < 1 || days > DELIVERY_ALERT_MAX_DAYS) {
+          return errorJson(`Informe um prazo de entrega entre 1 e ${DELIVERY_ALERT_MAX_DAYS} dias.`, 400);
+        }
+        next.deliveryAlertDays = days;
       }
       await writeKvJson(env, SITE_SETTINGS_KEY, { ...next, updatedAt: new Date().toISOString() });
       await appendAuditLog(env, request, user, "alterar_configuracoes", "site_settings", next);

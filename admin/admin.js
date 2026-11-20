@@ -381,6 +381,11 @@ loginForm.addEventListener("submit", async (event) => {
     localStorage.setItem("mc_admin_email", email);
     state.currentUser = data.user || null;
     setToken(data.token);
+    // Depois do login, o painel abre na Visão geral (ou na seção pedida em /admin/#...).
+    if (!location.hash) {
+      location.replace("/admin/painel/");
+      return;
+    }
     showAdmin();
     await loadAlbums(true);
   } catch (err) {
