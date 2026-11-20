@@ -26,6 +26,7 @@
     sair: icon('<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3"/>'),
     menu: icon('<path d="M4 7h16M4 12h16M4 17h16"/>'),
     fechar: icon('<path d="M6 6l12 12M18 6 6 18"/>'),
+    recolher: icon('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16M15.5 9.5 13 12l2.5 2.5"/>'),
   };
 
   // view: seção dentro de /admin/ (trocada pelo admin.js); hash: endereço dela vindo de outra página.
@@ -52,6 +53,7 @@
     const attrs = [
       `class="app-nav-item tab${isActive ? " active" : ""}${item.adminOnly ? " hidden" : ""}"`,
       isActive ? 'aria-current="page"' : "",
+      `title="${item.label}"`,
       item.adminOnly ? 'data-admin-only="true"' : "",
     ];
     const content = `${ICONS[item.key] || ""}<span>${item.label}</span>`;
@@ -85,13 +87,41 @@
           </div>`).join("")}
       </nav>
       <div class="app-nav-foot">
-        <a class="app-nav-item app-nav-item--muted" href="/" target="_blank" rel="noopener">${ICONS.site}<span>Ver site</span></a>
+        <button class="app-nav-item app-nav-item--muted app-collapse-btn" type="button" aria-pressed="false" title="Recolher menu (Ctrl+B)">${ICONS.recolher}<span>Recolher menu</span></button>
+        <a class="app-nav-item app-nav-item--muted" href="/" target="_blank" rel="noopener" title="Ver site">${ICONS.site}<span>Ver site</span></a>
         <div class="app-user top-actions">
           <span class="user-pill" id="currentUserLabel"></span>
         </div>
-        <button class="app-nav-item app-nav-item--muted" id="logoutBtn" type="button">${ICONS.sair}<span>Sair</span></button>
+        <button class="app-nav-item app-nav-item--muted" id="logoutBtn" type="button" title="Sair">${ICONS.sair}<span>Sair</span></button>
       </div>
     </div>`;
+
+  // Menu recolhido (só ícones) no computador: preferência deste navegador.
+  const COLLAPSE_KEY = "mc_admin_nav_collapsed";
+  const collapseBtn = sidebar.querySelector(".app-collapse-btn");
+  function setCollapsed(collapsed, save) {
+    document.documentElement.classList.toggle("app-nav-collapsed", collapsed);
+    collapseBtn.setAttribute("aria-pressed", String(collapsed));
+    const label = collapsed ? "Expandir menu" : "Recolher menu";
+    collapseBtn.querySelector("span").textContent = label;
+    collapseBtn.title = `${label} (Ctrl+B)`;
+    if (save) {
+      try { localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0"); } catch {}
+    }
+  }
+  let savedCollapsed = false;
+  try { savedCollapsed = localStorage.getItem(COLLAPSE_KEY) === "1"; } catch {}
+  setCollapsed(savedCollapsed, false);
+  collapseBtn.addEventListener("click", () => {
+    setCollapsed(!document.documentElement.classList.contains("app-nav-collapsed"), true);
+  });
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "b") {
+      if (window.matchMedia("(max-width: 960px)").matches) return;
+      event.preventDefault();
+      setCollapsed(!document.documentElement.classList.contains("app-nav-collapsed"), true);
+    }
+  });
 
   const menuBtn = sidebar.querySelector(".app-menu-btn");
   function setNav(open) {
