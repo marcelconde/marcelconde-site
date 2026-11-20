@@ -391,6 +391,60 @@
       box-shadow: 0 50px 140px rgba(0,0,0,0.65);
     }
 
+    /* ─── CURTIR NO VISUALIZADOR (botão e toque duplo na foto) ─── */
+    .lightbox-like {
+      position: fixed;
+      right: 24px;
+      bottom: max(24px, env(safe-area-inset-bottom));
+      z-index: 10001;
+      width: 54px;
+      height: 54px;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: background .2s ease, transform .2s ease, border-color .2s ease;
+    }
+    .lightbox-like svg { width: 24px; height: 24px; }
+    .lightbox-like:hover { background: rgba(220,50,50,0.35); }
+    .lightbox-like:focus-visible { outline: 3px solid rgba(212,165,116,0.75); outline-offset: 3px; }
+    .lightbox-like.liked { background: rgba(220,50,50,0.85); border-color: rgba(255,255,255,0.32); }
+    .lightbox-like.liked svg { fill: #fff; stroke: none; }
+    .lightbox-like.pop { animation: likePop .45s cubic-bezier(.22,1,.36,1); }
+    @keyframes likePop { 0% { transform: scale(1); } 40% { transform: scale(1.22); } 100% { transform: scale(1); } }
+
+    .lightbox-item { touch-action: manipulation; }
+
+    .like-burst {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      z-index: 10002;
+      width: 110px;
+      height: 110px;
+      margin: -55px 0 0 -55px;
+      pointer-events: none;
+      color: #fff;
+      filter: drop-shadow(0 8px 28px rgba(0,0,0,0.45));
+      animation: likeBurst .8s cubic-bezier(.22,1,.36,1) forwards;
+    }
+    .like-burst svg { width: 100%; height: 100%; fill: currentColor; }
+    @keyframes likeBurst {
+      0% { opacity: 0; transform: scale(.4); }
+      25% { opacity: .95; transform: scale(1.08); }
+      60% { opacity: .95; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.15); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .lightbox-like.pop, .like-burst { animation: none; }
+    }
+
     /* ─── SCROLL HINT ─── */
     .scroll-hint {
       position: fixed;
@@ -526,7 +580,7 @@
       position: fixed;
       right: 28px;
       bottom: 92px;
-      z-index: 550;
+      z-index: 10003; /* aparece também sobre o visualizador, ao curtir por lá */
       width: 300px;
       padding: 16px 18px;
       background: #161616;
@@ -684,6 +738,7 @@
       }
       .lightbox-close { top: 14px; right: 14px; width: 42px; height: 42px; font-size: 22px; }
       .lightbox-counter { top: 16px; left: 14px; font-size: .78rem; padding: 7px 12px; }
+      .lightbox-like { right: 16px; bottom: max(18px, env(safe-area-inset-bottom)); width: 50px; height: 50px; }
     }
 
     /* Celular: grade de miniaturas quadradas (3 por linha); o toque abre a foto em tela cheia. */
@@ -795,6 +850,9 @@
       <div id="lightbox-bg-inner" class="lightbox-bg-inner"></div>
     </div>
     <button class="lightbox-close" id="btn-close" aria-label="Fechar" type="button">×</button>
+    <button class="lightbox-like" id="btn-like" aria-label="Curtir esta foto" aria-pressed="false" type="button" title="Curtir (ou toque duas vezes na foto)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+    </button>
     <div class="lightbox-counter" id="lightbox-counter">1 / 1</div>
     <div class="lightbox-scroll" id="lightbox-scroll">
       <div class="lightbox-track" id="lightbox-track"></div>
@@ -877,6 +935,7 @@
     document.getElementById("like-prompt-dismiss").addEventListener("click", closeLikePrompt);
     document.getElementById("like-prompt-go").addEventListener("click", () => {
       closeLikePrompt();
+      if (lightboxEl.classList.contains("is-open")) closeLightbox();
       const msgField = document.getElementById("q-msg");
       const photo = likePrompt.dataset.photo;
       if (msgField && !msgField.value.trim()) msgField.value = photo ? `Curti a foto ${photo}.` : "Curti uma foto deste álbum.";
@@ -901,6 +960,89 @@
     let currentList  = [];
     let viewerObserver = null;
     let cachedItemPositions = [];
+
+    // ─── Curtidas: uma função para a miniatura, o botão do visualizador e o toque duplo ───
+    const likeBtn = document.getElementById("btn-like");
+    const HEART_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>';
+    let currentItems = [];      // { url, public_id, display_name, filename } de cada foto
+    let likeAlbum = "";         // caminho do álbum, igual ao usado pelo Worker
+    const tileHearts = [];      // botão de coração de cada miniatura
+    const tileCounts = [];      // contagem (só aparece para o admin)
+
+    function likedKeyFor(index) {
+      return `liked:${likeAlbum}:${currentItems[index]?.public_id || index}`;
+    }
+
+    function isLiked(index) {
+      try { return localStorage.getItem(likedKeyFor(index)) === "1"; } catch { return false; }
+    }
+
+    function syncLikeButton() {
+      const liked = isLiked(currentIndex);
+      likeBtn.classList.toggle("liked", liked);
+      likeBtn.setAttribute("aria-pressed", String(liked));
+      likeBtn.setAttribute("aria-label", liked ? "Você curtiu esta foto" : "Curtir esta foto");
+    }
+
+    // Conta uma vez por visitante (o Worker confere de novo pelo IP); curtir outra vez não descurte.
+    async function likePhoto(index) {
+      const item = currentItems[index];
+      if (!item) return;
+      tileHearts[index]?.classList.add("liked");
+      if (index === currentIndex) syncLikeButton();
+      if (isLiked(index)) return;
+      try { localStorage.setItem(likedKeyFor(index), "1"); } catch {}
+      if (index === currentIndex) syncLikeButton();
+      offerQuoteAfterLike(item.display_name || item.filename || "");
+      try {
+        const headers = { "content-type": "application/json" };
+        if (adminToken) headers["X-Admin-Token"] = adminToken;
+        const r = await fetch(`${WORKER_BASE}/like`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ album: likeAlbum, albumName: titleEl.textContent, index, publicId: item.public_id || "" }),
+        });
+        if (r.ok) {
+          const { likes, isAdmin: adminConfirmed } = await r.json();
+          // Só exibe contagem se o Worker confirmou que o token é válido
+          const countEl = tileCounts[index];
+          if (adminConfirmed && countEl && likes > 0) { countEl.textContent = likes; countEl.style.display = "inline"; }
+        }
+      } catch {}
+    }
+
+    function popLikeButton() {
+      likeBtn.classList.remove("pop");
+      void likeBtn.offsetWidth;
+      likeBtn.classList.add("pop");
+    }
+
+    likeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      likePhoto(currentIndex);
+      popLikeButton();
+    });
+
+    // Toque duplo (ou clique duplo) na foto aberta curte, como nas redes sociais.
+    let lastTap = { time: 0, index: -1 };
+    function onViewerTap(event) {
+      const section = event.target.closest(".lightbox-item");
+      if (!section || event.target.tagName !== "IMG") return;
+      const index = Number(section.dataset.index || 0);
+      const now = Date.now();
+      if (now - lastTap.time < 320 && lastTap.index === index) {
+        lastTap = { time: 0, index: -1 };
+        likePhoto(index);
+        popLikeButton();
+        const burst = document.createElement("div");
+        burst.className = "like-burst";
+        burst.innerHTML = HEART_SVG;
+        lightboxEl.appendChild(burst);
+        setTimeout(() => burst.remove(), 850);
+        return;
+      }
+      lastTap = { time: now, index };
+    }
 
     // Injeta transforms Cloudinary sem duplicar — reduz tamanho das imagens em 70-90%
     function cloudUrl(src, t) {
@@ -957,6 +1099,7 @@
             const idx = Number(entry.target.dataset.index || 0);
             currentIndex = idx;
             lightboxCounter.textContent = `${idx + 1} / ${currentList.length}`;
+            syncLikeButton();
           } else {
             entry.target.classList.remove("is-visible");
           }
@@ -1039,6 +1182,7 @@
     }
 
     btnClose.addEventListener("click", closeLightbox);
+    lightboxTrack.addEventListener("click", onViewerTap);
 
     lightboxEl.addEventListener("click", (e) => {
       if (e.target === lightboxEl) closeLightbox();
@@ -1167,6 +1311,8 @@
       const fallbackItems = data.thumbnail ? [{ url: data.thumbnail, public_id: "", display_name: "" }] : [];
       const list  = imageItems.length ? imageItems : fallbackItems;
       currentList = list.map(item => item.url);
+      currentItems = list;
+      likeAlbum = slugDecoded;
 
       gridEl.innerHTML = "";
 
@@ -1217,11 +1363,10 @@
             <span class="like-count" id="lc-${index}"></span>
           </div>`;
 
-        const likedKey = `liked:${slugDecoded}:${publicId || index}`;
-        const alreadyLiked = localStorage.getItem(likedKey) === '1';
         const heartBtn = overlay.querySelector(".photo-heart");
-        const countEl  = overlay.querySelector(".like-count");
-        if (alreadyLiked) heartBtn.classList.add("liked");
+        tileHearts[index] = heartBtn;
+        tileCounts[index] = overlay.querySelector(".like-count");
+        if (isLiked(index)) heartBtn.classList.add("liked");
 
         overlay.querySelectorAll(".photo-social").forEach(btn => {
           btn.addEventListener("click", e => {
@@ -1230,31 +1375,9 @@
           });
         });
 
-        heartBtn.addEventListener("click", async e => {
+        heartBtn.addEventListener("click", e => {
           e.stopPropagation();
-          if (localStorage.getItem(likedKey) === '1') {
-            // Já curtiu: só alterna visual, não decrementa backend
-            heartBtn.classList.toggle("liked");
-            return;
-          }
-          // Primeira curtida: salva localmente e manda pro servidor
-          heartBtn.classList.add("liked");
-          localStorage.setItem(likedKey, '1');
-          offerQuoteAfterLike(item.display_name || item.filename || "");
-          try {
-            const headers = { 'content-type': 'application/json' };
-            if (adminToken) headers['X-Admin-Token'] = adminToken;
-            const r = await fetch(`${WORKER_BASE}/like`, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({ album: slugDecoded, albumName: titleEl.textContent, index, publicId })
-            });
-            if (r.ok) {
-              const { likes, isAdmin: adminConfirmed } = await r.json();
-              // Só exibe contagem se o Worker confirmou que o token é válido
-              if (adminConfirmed && countEl && likes > 0) { countEl.textContent = likes; countEl.style.display = 'inline'; }
-            }
-          } catch {}
+          likePhoto(index);
         });
 
         wrap.addEventListener("click", () => openLightboxAt(index));
